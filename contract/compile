@@ -33,7 +33,7 @@ const buildCmd = debug
   ? 'cargo build --target wasm32-unknown-unknown'
   : 'cargo build --target wasm32-unknown-unknown --release'
 const outFile =
-  `./target/wasm32-unknown-unknown/${debug ? 'debug' : 'release'}/greeter.wasm`
+  `./target/wasm32-unknown-unknown/${debug ? 'debug' : 'release'}/oysterpack_near_stake_token.wasm`
 
 if (verbose) console.log(`  build command:    ${buildCmd}`)
 if (verbose) console.log(`  output file: ${path.resolve(outFile)}`)

@@ -11,6 +11,10 @@
  *
  */
 
+pub(crate) mod collections;
+pub mod stake;
+pub(crate) mod state;
+
 // To conserve gas, efficient serialization is achieved through Borsh (http://borsh.io/)
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::wee_alloc;
