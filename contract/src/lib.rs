@@ -11,7 +11,6 @@
  *
  */
 
-pub(crate) mod collections;
 pub mod stake;
 pub(crate) mod state;
 

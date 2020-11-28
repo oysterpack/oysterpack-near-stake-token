@@ -10,7 +10,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 near-sdk = "2.0.0"
 primitive-types = "0.7.3"
-hashbrown = {version="0.9.1", features=["serde"]}
+deflate = "0.8.6"
 
 [profile.release]
 codegen-units = 1

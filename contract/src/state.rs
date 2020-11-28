@@ -1,9 +1,9 @@
-use hashbrown::HashMap;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     AccountId, Balance, BlockHeight, EpochHeight,
 };
 use primitive_types::U256;
+use std::collections::HashMap;
 
 #[derive(Debug, BorshSerialize, BorshDeserialize, PartialEq, Eq, Clone)]
 pub struct Stake {
