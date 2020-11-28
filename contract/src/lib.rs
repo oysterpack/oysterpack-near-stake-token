@@ -11,6 +11,7 @@
  *
  */
 
+pub mod events;
 pub mod stake;
 pub(crate) mod state;
 

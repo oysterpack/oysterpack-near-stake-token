@@ -1,15 +1,13 @@
 use crate::state;
 use near_sdk::{
-    json_types::{U128, U64},
+    json_types::{ValidAccountId, U128, U64},
     serde::{Deserialize, Serialize},
-    AccountId, Balance, EpochHeight, PromiseOrValue,
+    AccountId, Balance, BlockHeight, EpochHeight, Promise, PromiseOrValue,
 };
-use std::collections::HashMap;
+use primitive_types::U256;
+use std::collections::{HashMap, VecDeque};
 
-/// Units
-/// - yoctoSTAKE - smallest non-divisible amount of STAKE token.
-/// - STAKE - 10^24 yoctoSTAKE
-pub const STAKE_YOCTO_UNITS: u128 = 1_000_000_000_000_000_000_000_000;
+pub const YOCTO: u128 = 1_000_000_000_000_000_000_000_000;
 
 /// 1E20 yoctoNEAR per byte, or 10kb per NEAR token
 pub const STORAGE_AMOUNT_PER_BYTE: u128 = 100_000_000_000_000_000_000;
@@ -18,6 +16,7 @@ pub type YoctoNEAR = U128;
 pub type YoctoSTAKE = U128;
 pub type Epoch = U64;
 pub type Block = U64;
+pub type StakingPoolAccountId = ValidAccountId;
 
 /// StakingTokenService is used to stake NEAR via delegation to a staking pool and is tracked by
 /// STAKE token. STAKE tokens are tracked at the staking pool level, i.e., there is one STAKE token
@@ -49,8 +48,9 @@ pub type Block = U64;
 ///
 /// The customer will only be charged for storage for storage dedicated to managing the customer account.
 /// Global storage fees are paid by OysterPack, e.g., staking pool related storage.
-trait StakingTokenService {
+trait StakeManagementService {
     /// Stakes the attached deposit with the specified staking pool.
+    /// Returns a Promise with StakeReceipt result
     ///
     /// Any applicable storage account fees will be deducted from the deposit, i.e., the amount stakes
     /// will be less the amount to pay for storage fees.
@@ -71,9 +71,16 @@ trait StakingTokenService {
     /// - if [staking_pool_account_id] is not a valid account ID
     /// - if no deposit was attached
     /// - if not enough deposit was made to cover account storage fees
-    fn deposit_and_stake(&mut self, staking_pool_account_id: AccountId) -> StakeReceipt;
+    fn stake_deposit(&mut self, staking_pool: StakingPoolAccountId) -> Promise;
 
     /// Stakes the given NEAR amount with the specified staking pool.
+    /// Returns a Promise with StakeReceipt result
+    ///
+    /// ## Use Case
+    /// Can be used to cancel / update queued unstaking receipt. For example:
+    /// - customer requests 100 NEAR to be unstaked, which is scheduled to be submitted in 3 epochs
+    /// - customer then requests 40 NEAR to be staked, which will update the unstaking receipt debit
+    ///   amount to 60 NEAR. Thus, eliminating the need to submit a staking pool request.
     ///
     /// ## Use Case
     /// Customer wants to reposition his stake with different staking pools.
@@ -92,31 +99,33 @@ trait StakingTokenService {
     /// ## Panics
     /// - If staking pool account ID is not valid
     /// - If the customer available NEAR account balance is too low, i.e., not enough to cover the requested amount to stake.
-    fn stake(&mut self, staking_pool_account_id: AccountId, amount: YoctoNEAR) -> StakeReceipt;
+    fn stake(&mut self, staking_pool: StakingPoolAccountId, amount: YoctoNEAR) -> Promise;
 
     /// Stakes all available unstaked balance with the specified staking pool.
-    fn stake_all(&mut self, staking_pool_account_id: AccountId) -> StakeReceipt;
+    /// Returns a Promise with StakeReceipt result
+    fn stake_all(&mut self, staking_pool: StakingPoolAccountId) -> Promise;
 
     /// Unstakes the given yoctoNEAR amount from the customer account.
     /// The customer account should have enough staked balance.
     /// The new total unstaked balance will be available for withdrawal in 4-7 epochs.
     ///
+    /// Returns a Promise with UnstakeReceipt result
+    ///
     /// ## Panics
     /// - if the staking pool account ID is not valid
     /// - if the current staked balance is not enough to cover the unstake request
     /// - if there are already 3 pending unstake requests
-    fn unstake(&mut self, staking_pool_account_id: AccountId, amount: YoctoNEAR) -> UnstakeReceipt;
+    fn unstake(&mut self, staking_pool: StakingPoolAccountId, amount: YoctoNEAR) -> Promise;
 
     /// Unstakes all current staked NEAR.
     /// The new total unstaked balance will be available for withdrawal in 4-7 epochs.
     ///
-    /// There is a limit of 3 pending unstake requests.
+    /// Returns a Promise with UnstakeReceipt result
     ///
     /// ## Panics
     /// - if the staking pool account ID is not valid
-    /// - if the current staked balance is not enough to cover the unstake request
     /// - if there are already 3 pending unstake requests
-    fn unstake_all(&mut self, staking_pool_account_id: AccountId) -> UnstakeReceipt;
+    fn unstake_all(&mut self, staking_pool: StakingPoolAccountId) -> Promise;
 
     /// Withdraws from the customer's account available NEAR balance.
     ///
@@ -130,14 +139,18 @@ trait StakingTokenService {
 
     /// Withdraws all available NEAR balance.
     ///
+    /// Returns Promise with YoctoNEAR result
+    ///
     /// ## Notes
     /// - if the account has no stake and has been fully withdrawn, then the account will be auto-deleted
     ///   and the storage fees will be refunded from escrow.
     ///
     /// ## Panics
     /// - if account is not registered
-    fn withdraw_all(&mut self) -> YoctoNEAR;
+    fn withdraw_all(&mut self) -> Promise;
+}
 
+trait StakingPoolRegistry {
     /// Returns information for the specified staking pool.
     /// Returns None if nothing is staked with the specified staking pool.
     ///
@@ -146,15 +159,127 @@ trait StakingTokenService {
     ///
     /// ## Panics
     /// - if account ID is not valid    
-    fn staking_pool(&self, staking_pool_account_id: AccountId) -> Option<StakingPool>;
+    fn staking_pool(&self, staking_pool: StakingPoolAccountId) -> Option<StakingPool>;
 
-    /// Returns staking pool account IDs that are being staked with
-    fn staking_pool_account_ids(&self) -> Vec<AccountId>;
+    /// Enables a batch of staking pools to be retrieved at once.
+    /// If no staking pool was returned for a specified account ID, then it means there is no stake
+    /// in it.
+    fn staking_pools(&self, staking_pool: Vec<StakingPoolAccountId>) -> Vec<StakingPool>;
 
+    /// Returns staking pool account IDs that are being staked with.
+    /// Range can be specified to page through the results.
+    fn staking_pool_account_ids(&self, range: Option<Range>) -> Vec<StakingPoolAccountId>;
+
+    /// Returns number of staking pools that are currently staked with across all customer accounts.
     fn staking_pool_count(&self) -> u32;
+}
 
-    /// Looks up and returns account info using predecessor account ID
-    fn stake_account(&self) -> Option<StakeOwnerAccount>;
+trait StakeToken {
+    fn total_supply(&self, staking_pool: StakingPoolAccountId) -> YoctoSTAKE;
+
+    /// Returns how much is 1 STAKE is worth in NEAR
+    fn stake_token_value(&self, staking_pool: StakingPoolAccountId) -> Option<StakeTokenValue>;
+}
+
+/// Returns the STAKE token value at the specified block height.
+/// STAKE token value is computed as [total_staked] / [total_supply]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct StakeTokenValue {
+    pub token_supply: YoctoSTAKE,
+    pub staked_balance: YoctoNEAR,
+    pub block_height: Block,
+}
+
+impl StakeTokenValue {
+    pub fn value(&self) -> YoctoNEAR {
+        if self.staked_balance.0 == 0 || self.token_supply.0 == 0 {
+            return YOCTO.into();
+        }
+        let value =
+            U256::from(YOCTO) * U256::from(self.staked_balance.0) / U256::from(self.token_supply.0);
+        value.as_u128().into()
+    }
+}
+
+trait StakeAccountQueryService {
+    /// Returns true if the account is registered.
+    ///
+    /// NOTE: accounts automatically register and unregister, triggered by staking and withdrawal events.
+    ///
+    /// ## Panics
+    /// - if account ID is not valid
+    fn account_registered(&self, account_id: ValidAccountId) -> bool;
+
+    /// Returns STAKE balance for the specified account ID within the specified staking pool.
+    ///
+    /// ## Panics
+    /// - if account ID is not valid
+    fn account_stake_balance(
+        &self,
+        account_id: ValidAccountId,
+        staking_pool: StakingPoolAccountId,
+    ) -> YoctoSTAKE;
+
+    /// Returns STAKE balances for the specified account ID within the specified staking pools.
+    /// staking_pools is used to filter staking pool balances. If empty, then all STAKE balances are
+    /// returned.
+    ///
+    /// ## Panics
+    /// - if account ID is not valid
+    fn account_stake_balances(
+        &self,
+        account_id: ValidAccountId,
+        staking_pools: Vec<StakingPoolAccountId>,
+    ) -> HashMap<StakingPoolAccountId, YoctoSTAKE>;
+
+    /// Returns staking pool account IDs that are being staked with.
+    /// Range can be specified to page through the results.
+    ///
+    /// ## Panics
+    /// - if account ID is not valid
+    fn account_staking_pool_account_ids(
+        &self,
+        account_id: ValidAccountId,
+        range: Option<Range>,
+    ) -> Vec<StakingPoolAccountId>;
+
+    /// Returns the number of staking pools for the specified account ID
+    ///
+    /// ## Panics
+    /// - if account ID is not valid
+    fn account_staking_pool_count(&self, account_id: ValidAccountId) -> u32;
+
+    /// Returns the amount escrowed to cover account storage fees.
+    ///
+    /// ## Panics
+    /// - if account ID is not valid
+    fn account_storage_fee_escrow_near_balance(&self, account_id: ValidAccountId) -> YoctoNEAR;
+
+    /// Returns amount of unstaked NEAR that is available to withdraw.
+    ///
+    /// ## Panics
+    /// - if account ID is not valid
+    fn account_available_unstaked_balance(&self, account_id: ValidAccountId) -> YoctoNEAR;
+
+    /// Returns any active unstake receipts. Active receipts are:
+    /// 1. funds have been unstaked, and we are waiting for funds to clear to be withdrawn
+    /// 2. pending unstaking request that is waiting for unstaked funds to be withdrawn
+    ///
+    /// ## Panics
+    /// - if account ID is not valid
+    fn account_active_unstake_receipts(
+        &self,
+        account_id: ValidAccountId,
+        staking_pool: StakingPoolAccountId,
+    ) -> Vec<UnstakeReceipt>;
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Default)]
+#[serde(crate = "near_sdk::serde")]
+pub struct Range {
+    pub start: Option<u32>,
+    pub end: Option<u32>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -180,7 +305,7 @@ pub struct UnstakeReceipt {
     pub stake_debit: YoctoSTAKE,
     /// when the unstaked NEAR will be available for withdrawal
     pub epoch_availability: Epoch,
-    /// all funds are unstaked from the staking pool, then storage fees will be refunded from escrow
+    /// if all funds are unstaked from the staking pool, then storage fees will be refunded from escrow
     /// once the withdrawal is complete
     pub storage_fee_refund: YoctoNEAR,
 }
@@ -194,6 +319,16 @@ pub struct StakingPool {
     pub block_height: Block,
 }
 
+impl StakingPool {
+    pub fn stake_token_value(&self) -> StakeTokenValue {
+        StakeTokenValue {
+            staked_balance: self.balances.staked,
+            token_supply: self.token_supply,
+            block_height: self.block_height,
+        }
+    }
+}
+
 /// NEAR transitions: staked -> unstaked -> withdrawn
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 #[serde(crate = "near_sdk::serde")]
@@ -203,53 +338,31 @@ pub struct StakingPoolBalances {
     /// ## Notes
     /// STAKE tokens are backed by staked NEAR
     pub staked: YoctoNEAR,
+
     /// unstaked yoctoNEAR balance
     ///
     /// ## Notes
-    /// When NEAR is unstaked, the STAKE token supply is decreased.
+    /// - when NEAR is unstaked, the STAKE token supply is decreased.
+    /// - when amount > 0, then it means funds have been unstaked and we are waiting for the funds
+    ///   to become available for withdrawal - [unstaked_epoch_height_availability] should specify
+    ///   when the funds will become available
     pub unstaked: YoctoNEAR,
+
     /// when the unstaked NEAR can be withdrawn, i.e., transferred from the staking pool account
     /// to this contract's account
     ///
     /// NOTE: while awaiting for the unstaked balance to clear for withdrawal, unstaking requests
     /// are put on hold and scheduled until the unstaked balance is withdrawn
     pub unstaked_epoch_height_availability: Option<Epoch>,
+
     /// NEAR that has been unstaked and withdrawn to the contract and now available for withdrawal
     /// by customer accounts
-    pub withdrawn: YoctoNEAR,
+    pub available_unstaked_balance: YoctoNEAR,
 
     /// How much yoctoNEAR will be unstaked at the next available unstaking epoch.
     /// If balance > 0, then this means we are waiting on currently unstaked NEAR balance withdrawal
     /// to complete, i.e., more NEAR can be unstaked only when the current unstaked balance is zero.
     pub pending_unstaked_balance: YoctoNEAR,
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
-#[serde(crate = "near_sdk::serde")]
-pub struct StakeOwnerAccount {
-    pub account_id: AccountId,
-    pub staking_pool_accounts: HashMap<AccountId, StakingPoolAccount>,
-    /// NEAR that has been escrowed for account storage fees
-    pub storage_fee_escrow_balance: YoctoNEAR,
-    /// NEAR that is available for withdrawal
-    ///
-    /// ## Notes
-    /// - credits from funds that are unstaked and withdrawn from staling pool - [UnstakeReceipt]
-    /// - debits from customer withdrawals, i.e., NEAR is transferred out to customer account
-    pub near_available_balance: YoctoNEAR,
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
-#[serde(crate = "near_sdk::serde")]
-pub struct StakingPoolAccount {
-    /// yoctoSTAKE
-    pub stake_token_balance: YoctoSTAKE,
-    /// unstake request that has been scheduled because it is waiting for a previous unstake request
-    /// to complete at the staking pool level
-    pub unstake_request_scheduled: Option<UnstakeReceipt>,
-    /// unstake requests that have been submitted to the staking pool and waiting for the NEAR funcs
-    /// to become available for withdrawal
-    pub unstake_request_in_progress: Option<UnstakeReceipt>,
 }
 
 #[cfg(test)]

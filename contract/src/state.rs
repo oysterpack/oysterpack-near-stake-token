@@ -155,7 +155,7 @@ impl Stake {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::stake::STAKE_YOCTO_UNITS;
+    use crate::stake::YOCTO;
     use std::{
         convert::TryFrom,
         io::{self, Write},
@@ -174,10 +174,7 @@ mod test {
         assert_eq!(stake.block_height, 0);
 
         assert_eq!(stake.stake_token_value(), 1);
-        assert_eq!(
-            stake.near_to_stake(10 * STAKE_YOCTO_UNITS),
-            10 * STAKE_YOCTO_UNITS
-        );
+        assert_eq!(stake.near_to_stake(10 * YOCTO), 10 * YOCTO);
     }
 
     #[test]
