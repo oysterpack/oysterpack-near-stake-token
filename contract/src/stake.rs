@@ -48,7 +48,7 @@ pub type StakingPoolAccountId = ValidAccountId;
 ///
 /// The customer will only be charged for storage for storage dedicated to managing the customer account.
 /// Global storage fees are paid by OysterPack, e.g., staking pool related storage.
-trait StakeManagementService {
+trait StakingService {
     /// Stakes the attached deposit with the specified staking pool.
     /// Returns a Promise with StakeReceipt result
     ///
@@ -71,7 +71,7 @@ trait StakeManagementService {
     /// - if [staking_pool_account_id] is not a valid account ID
     /// - if no deposit was attached
     /// - if not enough deposit was made to cover account storage fees
-    fn stake_deposit(&mut self, staking_pool: StakingPoolAccountId) -> Promise;
+    fn deposit_and_stake(&mut self, staking_pool: StakingPoolAccountId) -> Promise;
 
     /// Stakes the given NEAR amount with the specified staking pool.
     /// Returns a Promise with StakeReceipt result
@@ -368,6 +368,7 @@ pub struct StakingPoolBalances {
 #[cfg(test)]
 mod test {
     use super::*;
+    use near_sdk::borsh::{self, try_from_slice_with_schema, try_to_vec_with_schema};
     use near_sdk::{serde_json, Balance};
 
     #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
@@ -390,5 +391,33 @@ mod test {
         map.insert("staking-pool.near".to_string(), 100);
         let json = serde_json::to_string_pretty(&map).unwrap();
         println!("map: {}", json);
+    }
+
+    use borsh::{BorshDeserialize, BorshSerialize};
+
+    #[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug)]
+    struct A {
+        x: u64,
+        y: String,
+        z: u128,
+    }
+
+    #[derive(BorshSerialize, BorshDeserialize, PartialEq, Debug)]
+    struct A2 {
+        x: u64,
+        y: String,
+        z: u128,
+    }
+
+    #[test]
+    fn test_simple_struct() {
+        let a = A2 {
+            x: 3301,
+            y: "liber primus".to_string(),
+            z: 10,
+        };
+        let encoded_a = a.try_to_vec().unwrap();
+        let decoded_a2 = A::try_from_slice(&encoded_a).unwrap();
+        println!("{:?}", decoded_a2);
     }
 }
