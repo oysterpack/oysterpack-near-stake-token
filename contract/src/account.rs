@@ -60,8 +60,8 @@ impl Default for Account {
     }
 }
 
-trait AccountRepository {
-    fn account_exists(&self, account_id: AccountId) -> bool;
+trait AccountRegistry {
+    fn account_registered(&self, account_id: AccountId) -> bool;
 
     /// If no account exists for the predecessor account ID, then a new one is created and registered.
     /// The account is required to pay for its storage. Storage fees will be escrowed and refunded
@@ -89,8 +89,8 @@ trait AccountRepository {
 }
 
 #[near_bindgen]
-impl AccountRepository for StakeTokenService {
-    fn account_exists(&self, account_id: AccountId) -> bool {
+impl AccountRegistry for StakeTokenService {
+    fn account_registered(&self, account_id: AccountId) -> bool {
         self.accounts
             .accounts
             .contains_key(&Hash::from(account_id.as_str()))
@@ -180,8 +180,8 @@ pub enum UnregisterAccountResult {
 mod test {
     use super::*;
     use crate::stake::YOCTO;
-
-    const CONTRACT_ACCOUNT: &str = "stake.oysterpack.near";
+    use crate::test_utils::near;
+    use near_sdk::{testing_env, MockedBlockchain, VMContext};
 
     #[test]
     fn register_account_result_json() {
@@ -199,6 +199,7 @@ mod test {
     #[test]
     fn register_new_account_success() {
         let account_id = "alfio-zappala.near".to_string();
+        unimplemented!()
     }
 
     #[test]
