@@ -59,7 +59,9 @@ impl Default for Account {
         }
     }
 }
-
+/// Hi Evgeny - on your last contract review video you were asking for contracts to review ... I will gladly volunteer : https://github.com/oysterpack/oysterpack-near-stake-token
+//
+// It's my personal project and I just
 trait AccountRegistry {
     fn account_registered(&self, account_id: AccountId) -> bool;
 
@@ -81,8 +83,6 @@ trait AccountRegistry {
     /// An account can only be unregistered if the account has zero token balance, i.e., zero STAKE
     /// and NEAR balances. In order to unregister the account all NEAR must be unstaked and withdrawn
     /// from the account.
-    ///
-    ///
     fn unregister_account(&mut self) -> UnregisterAccountResult;
 
     fn registered_accounts_count(&self) -> U128;
@@ -154,7 +154,25 @@ impl AccountRegistry for StakeTokenService {
     }
 
     fn unregister_account(&mut self) -> UnregisterAccountResult {
-        unimplemented!()
+        let account_id = env::predecessor_account_id();
+        let account_hash = Hash::from(account_id.as_str());
+        match self.accounts.accounts.get(&account_hash) {
+            None => UnregisterAccountResult::NotRegistered,
+            Some(account) => {
+                if account.near_balance > 0 || !account.stake_balances.is_empty() {
+                    UnregisterAccountResult::AccountHasFunds
+                } else {
+                    // TODO: Is it safe to transfer async?
+                    // What happens to the funds if the transfer fails?
+                    // - Are the funds refunded back to this contract?
+                    Promise::new(account_id).transfer(account.storage_escrow);
+                    self.accounts.accounts.remove(&account_hash);
+                    UnregisterAccountResult::Unregistered {
+                        storage_fee_refund: account.storage_escrow.into(),
+                    }
+                }
+            }
+        }
     }
 
     fn registered_accounts_count(&self) -> U128 {
@@ -173,7 +191,11 @@ pub enum RegisterAccountResult {
 #[serde(crate = "near_sdk::serde")]
 pub enum UnregisterAccountResult {
     NotRegistered,
-    Unregistered { storage_fee_refund: YoctoNEAR },
+    /// account must first unstake and withdraw all funds before being able to unregister the account
+    AccountHasFunds,
+    Unregistered {
+        storage_fee_refund: YoctoNEAR,
+    },
 }
 
 #[cfg(test)]
