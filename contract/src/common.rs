@@ -7,6 +7,7 @@ use near_sdk::{
 use std::ops::Deref;
 
 pub type YoctoNEAR = U128;
+pub type YoctoSTAKE = U128;
 
 pub type StakingPoolAccountId = AccountId;
 

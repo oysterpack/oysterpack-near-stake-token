@@ -6,17 +6,21 @@ pub mod common;
 pub mod config;
 pub mod events;
 pub mod stake;
+pub mod staking;
 pub mod state;
 
 #[cfg(test)]
 pub mod test_utils;
 
 use crate::account::Accounts;
+use crate::common::StakingPoolAccountId;
 use crate::config::Config;
-use near_sdk::json_types::{ValidAccountId, U64};
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    env, near_bindgen, wee_alloc, AccountId, BlockHeight,
+    collections::UnorderedSet,
+    env,
+    json_types::{ValidAccountId, U64},
+    near_bindgen, wee_alloc, AccountId, BlockHeight,
 };
 
 #[global_allocator]
@@ -35,6 +39,8 @@ pub struct StakeTokenService {
     config_updated_on_block_index: BlockHeight,
 
     accounts: Accounts,
+    // staking pools that are in use across all accounts, i.e., which have staked NEAR
+    staking_pools: UnorderedSet<StakingPoolAccountId>,
 }
 
 impl Default for StakeTokenService {
@@ -53,6 +59,7 @@ impl StakeTokenService {
             config: config.unwrap_or_else(Config::default),
             config_updated_on_block_index: env::block_index(),
             accounts: Accounts::default(),
+            staking_pools: UnorderedSet::new(state::STAKING_POOLS_STATE_ID.to_vec()),
         };
         env::state_write(&contract);
         contract

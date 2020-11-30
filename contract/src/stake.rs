@@ -1,3 +1,4 @@
+use crate::common::{YoctoNEAR, YoctoSTAKE};
 use crate::state;
 use near_sdk::{
     json_types::{ValidAccountId, U128, U64},
@@ -12,8 +13,6 @@ pub const YOCTO: u128 = 1_000_000_000_000_000_000_000_000;
 /// 1E20 yoctoNEAR per byte, or 10kb per NEAR token
 pub const STORAGE_AMOUNT_PER_BYTE: u128 = 100_000_000_000_000_000_000;
 
-pub type YoctoNEAR = U128;
-pub type YoctoSTAKE = U128;
 pub type Epoch = U64;
 pub type Block = U64;
 pub type StakingPoolAccountId = ValidAccountId;

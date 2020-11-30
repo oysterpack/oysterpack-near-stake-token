@@ -1,5 +1,5 @@
-use crate::common::{Hash, StakingPoolAccountId, YoctoNEAR};
-use crate::stake::YoctoSTAKE;
+use crate::common::{Hash, StakingPoolAccountId, YoctoNEAR, YoctoSTAKE};
+use crate::state;
 use crate::StakeTokenService;
 use near_sdk::json_types::U128;
 use near_sdk::{
@@ -38,7 +38,7 @@ impl Default for Accounts {
     fn default() -> Self {
         Self {
             count: 0,
-            accounts: LookupMap::new(b"b".to_vec()),
+            accounts: LookupMap::new(state::ACCOUNTS_STATE_ID.to_vec()),
         }
     }
 }
@@ -56,12 +56,12 @@ impl Default for Account {
         Self {
             storage_escrow: 0,
             available_near_balance: 0,
-            stake_balances: UnorderedMap::new(b"c".to_vec()),
+            stake_balances: UnorderedMap::new(state::STAKE_BALANCES_STATE_ID.to_vec()),
         }
     }
 }
 
-trait AccountRegistry {
+pub trait AccountRegistry {
     fn account_registered(&self, account_id: AccountId) -> bool;
 
     /// If no account exists for the predecessor account ID, then a new one is created and registered.
@@ -168,6 +168,7 @@ impl AccountRegistry for StakeTokenService {
                     // - Are the funds refunded back to this contract?
                     Promise::new(account_id).transfer(account.storage_escrow);
                     self.accounts.accounts.remove(&account_hash);
+                    self.accounts.count -= 1;
                     UnregisterAccountResult::Unregistered {
                         storage_fee_refund: account.storage_escrow.into(),
                     }
@@ -318,7 +319,8 @@ mod test {
             RegisterAccountResult::Registered { storage_fee } => {
                 match contract.unregister_account() {
                     UnregisterAccountResult::Unregistered { storage_fee_refund } => {
-                        assert_eq!(storage_fee.0, storage_fee_refund.0)
+                        assert_eq!(storage_fee.0, storage_fee_refund.0);
+                        assert_eq!(contract.registered_accounts_count().0, 0);
                     }
                     result => panic!("unexpected result: {:?}", result),
                 }
