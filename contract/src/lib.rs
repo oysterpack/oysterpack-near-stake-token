@@ -21,7 +21,7 @@ use near_sdk::{
     collections::UnorderedSet,
     env,
     json_types::{ValidAccountId, U64},
-    near_bindgen, wee_alloc, AccountId, Balance, BlockHeight,
+    near_bindgen, wee_alloc, AccountId, Balance, BlockHeight, StorageUsage,
 };
 
 #[global_allocator]
@@ -98,6 +98,25 @@ impl StakeTokenService {
             self.operator_id,
             "function can only be invoked by the operator"
         );
+    }
+
+    /// computes if any storage fees need to be applied
+    ///
+    /// # Panics
+    /// if not enough deposit was attached to pay for account storage
+    fn compute_storage_fees(&self, initial_storage: StorageUsage) -> Balance {
+        let current_storage = env::storage_usage();
+        let attached_deposit = env::attached_deposit();
+        let required_deposit =
+            Balance::from(current_storage - initial_storage) * self.config.storage_cost_per_byte();
+        assert!(
+            required_deposit <= attached_deposit,
+            "The attached deposit ({}) is short {} to cover account storage fees: {}",
+            attached_deposit,
+            required_deposit - attached_deposit,
+            required_deposit,
+        );
+        required_deposit
     }
 }
 

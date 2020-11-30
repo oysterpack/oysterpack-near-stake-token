@@ -2,18 +2,24 @@ use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env,
     json_types::U128,
-    AccountId,
+    AccountId, Balance,
 };
 use std::ops::Deref;
 
 pub const YOCTO: u128 = 1_000_000_000_000_000_000_000_000;
 
+pub const ZERO_BALANCE: Balance = 0;
+
 pub mod json_types {
-    use near_sdk::json_types::U128;
+    use near_sdk::json_types::{U128, U64};
 
     pub type YoctoNEAR = U128;
     pub type YoctoSTAKE = U128;
-    pub type BlockHeight = U128;
+
+    pub type BlockHeight = U64;
+    pub type BlockTimestamp = U64;
+
+    pub type Balance = U128;
 }
 
 pub type StakingPoolId = AccountId;
@@ -41,6 +47,12 @@ impl From<&str> for Hash {
         buf.copy_from_slice(&hash.as_slice()[..Hash::LENGTH]);
         Self(buf)
     }
+}
+
+/// asserts that predecessor account is the contract itself - used to enforce that callbacks
+/// should only be called internally - even though they are exposed on the public contract interface
+pub fn assert_self() {
+    assert_eq!(env::predecessor_account_id(), env::current_account_id());
 }
 
 #[cfg(test)]

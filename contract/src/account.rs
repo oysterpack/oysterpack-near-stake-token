@@ -1,6 +1,6 @@
 use crate::common::{
     json_types::{YoctoNEAR, YoctoSTAKE},
-    Hash, StakingPoolId,
+    Hash, StakingPoolId, ZERO_BALANCE,
 };
 use crate::state;
 use crate::StakeTokenService;
@@ -25,15 +25,18 @@ pub struct Accounts {
 }
 
 impl Accounts {
-    pub fn remove_account(&mut self, account_id: AccountId) -> Option<Account> {
-        let account_hash = Hash::from(account_id.as_str());
-        match self.accounts.remove(&account_hash) {
+    pub fn remove(&mut self, account_id: &str) -> Option<Account> {
+        match self.accounts.remove(&account_id.into()) {
             None => None,
             Some(account) => {
                 self.count -= 1;
                 Some(account)
             }
         }
+    }
+
+    pub fn get(&self, account_id: &str) -> Option<Account> {
+        self.accounts.get(&account_id.into())
     }
 }
 
@@ -60,6 +63,26 @@ impl Default for Account {
             storage_escrow: 0,
             available_near_balance: 0,
             stake_balances: UnorderedMap::new(state::STAKE_BALANCES_STATE_ID.to_vec()),
+        }
+    }
+}
+
+impl Account {
+    /// Returns the number of STAKE tokens owned for the specified staking pool.
+    /// Returns None, if no record exists for the staking pool.
+    pub fn stake_balance(&self, staking_pool_id: &StakingPoolId) -> Option<Balance> {
+        self.stake_balances.get(staking_pool_id)
+    }
+
+    /// If a record for the staking pool does not exist, then insert a record with a zero balance.
+    /// Returns false if a record for the specified staking pool already exists.
+    pub fn init_staking_pool(&mut self, staking_pool_id: &StakingPoolId) -> bool {
+        match self.stake_balances.get(staking_pool_id) {
+            None => {
+                self.stake_balances.insert(staking_pool_id, &ZERO_BALANCE);
+                true
+            }
+            Some(_) => false,
         }
     }
 }
@@ -117,18 +140,8 @@ impl AccountRegistry for StakeTokenService {
             contract: &StakeTokenService,
             initial_storage: StorageUsage,
         ) -> Balance {
-            let current_storage = env::storage_usage();
-            let attached_deposit = env::attached_deposit();
-            let required_deposit = Balance::from(current_storage - initial_storage)
-                * contract.config.storage_cost_per_byte();
-            assert!(
-                required_deposit <= attached_deposit,
-                "The attached deposit ({}) is short {} to cover account storage fees: {}",
-                attached_deposit,
-                required_deposit - attached_deposit,
-                required_deposit,
-            );
-            let refund_amount = attached_deposit - required_deposit;
+            let required_deposit = contract.compute_storage_fees(initial_storage);
+            let refund_amount = env::attached_deposit() - required_deposit;
             env::log(format!("Storage fee refund: {}", refund_amount).as_bytes());
             Promise::new(env::predecessor_account_id()).transfer(refund_amount);
             required_deposit
@@ -182,6 +195,15 @@ impl AccountRegistry for StakeTokenService {
 
     fn registered_accounts_count(&self) -> U128 {
         self.accounts.count.into()
+    }
+}
+
+impl StakeTokenService {
+    pub(crate) fn assert_predecessor_account_registered(&self) -> Account {
+        let account_id = env::predecessor_account_id();
+        self.accounts
+            .get(&account_id)
+            .expect("account is not registered")
     }
 }
 
