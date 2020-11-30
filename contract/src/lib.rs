@@ -13,10 +13,10 @@ pub mod test_utils;
 
 use crate::account::Accounts;
 use crate::config::Config;
-use near_sdk::json_types::ValidAccountId;
+use near_sdk::json_types::{ValidAccountId, U64};
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    env, near_bindgen, wee_alloc, AccountId,
+    env, near_bindgen, wee_alloc, AccountId, BlockHeight,
 };
 
 #[global_allocator]
@@ -28,6 +28,8 @@ pub struct StakeTokenService {
     /// Operator is allowed to perform operator actions on the contract
     pub operator_id: AccountId,
     pub config: Config,
+    pub config_updated_on: BlockHeight,
+
     pub accounts: Accounts,
 }
 
@@ -45,6 +47,7 @@ impl StakeTokenService {
         let contract = Self {
             operator_id: StakeTokenService::check_operator_id(operator_id),
             config: config.unwrap_or_else(Config::default),
+            config_updated_on: env::block_index(),
             accounts: Accounts::default(),
         };
         env::state_write(&contract);
@@ -53,6 +56,10 @@ impl StakeTokenService {
 
     pub fn operator_id(&self) -> &str {
         &self.operator_id
+    }
+
+    pub fn config_updated_on_block(&self) -> U64 {
+        self.config_updated_on.into()
     }
 }
 
@@ -70,6 +77,15 @@ impl StakeTokenService {
         );
         operator_id
     }
+
+    /// asserts that the predecessor account ID must be the operator
+    fn assert_is_operator(&self) {
+        assert_eq!(
+            env::predecessor_account_id(),
+            self.operator_id,
+            "function can only be invoked by the operator"
+        );
+    }
 }
 
 #[cfg(test)]
@@ -82,10 +98,29 @@ mod test {
 
     #[test]
     fn contract_init_with_default_config() {
-        let context = near::new_context(near::stake_contract_account_id());
+        let mut context = near::new_context(near::stake_contract_account_id());
+        context.block_index = 10;
         testing_env!(context);
         let contract =
             StakeTokenService::new(near::to_account_id("operator.stake.oysterpack.near"), None);
+        assert_eq!(
+            contract.config.storage_cost_per_byte(),
+            100_000_000_000_000_000_000
+        );
+        assert_eq!(env::block_index(), 10);
+        assert_eq!(contract.config_updated_on_block().0, env::block_index());
+    }
+
+    #[test]
+    fn contract_init_with_config() {
+        let context = near::new_context(near::stake_contract_account_id());
+        testing_env!(context);
+        let config = Config::new(100);
+        let contract = StakeTokenService::new(
+            near::to_account_id("operator.stake.oysterpack.near"),
+            Some(config),
+        );
+        assert_eq!(contract.config.storage_cost_per_byte(), 100);
     }
 
     #[test]

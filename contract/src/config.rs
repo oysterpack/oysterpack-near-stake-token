@@ -11,6 +11,12 @@ pub struct Config {
 }
 
 impl Config {
+    pub fn new(storage_cost_per_byte: u128) -> Self {
+        Self {
+            storage_cost_per_byte: storage_cost_per_byte.into(),
+        }
+    }
+
     pub fn storage_cost_per_byte(&self) -> u128 {
         self.storage_cost_per_byte.into()
     }

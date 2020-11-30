@@ -196,24 +196,91 @@ mod test {
         println!("RegisterAccountResult::Registered JSON: {}", json);
     }
 
+    fn operator_id() -> AccountId {
+        near::to_account_id("operator.stake.oysterpack.near")
+    }
+
     #[test]
     fn register_new_account_success() {
-        let account_id = "alfio-zappala.near".to_string();
-        unimplemented!()
+        let account_id = near::to_account_id("alfio-zappala.near");
+        let mut context = near::new_context(account_id.clone());
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context);
+        let mut contract = StakeTokenService::new(operator_id(), None);
+        assert!(
+            !contract.account_registered(account_id.clone()),
+            "account should not be registered"
+        );
+        assert_eq!(
+            contract.registered_accounts_count().0,
+            0,
+            "There should be no accounts registered"
+        );
+
+        match contract.register_account() {
+            RegisterAccountResult::Registered { storage_fee } => {
+                println!(
+                    "account storage fee: {:?} NEAR",
+                    storage_fee.0 as f64 / YOCTO as f64
+                );
+            }
+            RegisterAccountResult::AlreadyRegistered => {
+                panic!("account should not be already registered");
+            }
+        }
+
+        assert!(
+            contract.account_registered(account_id.clone()),
+            "account should be registered"
+        );
+        assert_eq!(
+            contract.registered_accounts_count().0,
+            1,
+            "There should be 1 account registered"
+        );
     }
 
     #[test]
     fn register_preexisting_account() {
-        unimplemented!()
+        let account_id = near::to_account_id("alfio-zappala.near");
+        let mut context = near::new_context(account_id.clone());
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context);
+        let mut contract = StakeTokenService::new(operator_id(), None);
+
+        match contract.register_account() {
+            RegisterAccountResult::Registered { storage_fee } => {
+                // when trying to register the same account again
+                match contract.register_account() {
+                    RegisterAccountResult::AlreadyRegistered => (), // expected
+                    _ => panic!("expected AlreadyRegistered result"),
+                }
+            }
+            RegisterAccountResult::AlreadyRegistered => {
+                panic!("account should not be already registered");
+            }
+        }
     }
 
     #[test]
+    #[should_panic]
     fn register_new_account_with_no_deposit() {
-        unimplemented!()
+        let account_id = near::to_account_id("alfio-zappala.near");
+        let mut context = near::new_context(account_id.clone());
+        context.attached_deposit = 0;
+        testing_env!(context);
+        let mut contract = StakeTokenService::new(operator_id(), None);
+        contract.register_account();
     }
 
     #[test]
+    #[should_panic]
     fn register_new_account_with_not_enough_deposit() {
-        unimplemented!()
+        let account_id = near::to_account_id("alfio-zappala.near");
+        let mut context = near::new_context(account_id.clone());
+        context.attached_deposit = 1;
+        testing_env!(context);
+        let mut contract = StakeTokenService::new(operator_id(), None);
+        contract.register_account();
     }
 }
