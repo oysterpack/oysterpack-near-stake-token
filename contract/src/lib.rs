@@ -26,11 +26,11 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct StakeTokenService {
     /// Operator is allowed to perform operator actions on the contract
-    pub operator_id: AccountId,
-    pub config: Config,
-    pub config_updated_on: BlockHeight,
+    operator_id: AccountId,
+    config: Config,
+    config_updated_on: BlockHeight,
 
-    pub accounts: Accounts,
+    accounts: Accounts,
 }
 
 impl Default for StakeTokenService {

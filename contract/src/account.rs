@@ -140,12 +140,14 @@ impl AccountRegistry for StakeTokenService {
         // account needs to pay for its storage
         // the amount of storage will be determined dynamically
         let initial_storage_usage = env::storage_usage();
-        let account = Account::default();
+        let mut account = Account::default();
         self.accounts.accounts.insert(&account_hash, &account);
         // this has the potential to overflow in the far distant future ...
         self.accounts.count += 1;
 
         let storage_fee = apply_storage_fees(self, initial_storage_usage);
+        account.storage_escrow = storage_fee;
+        self.accounts.accounts.insert(&account_hash, &account);
         RegisterAccountResult::Registered {
             storage_fee: storage_fee.into(),
         }
@@ -302,5 +304,82 @@ mod test {
         testing_env!(context);
         let mut contract = StakeTokenService::new(operator_id(), None);
         contract.register_account();
+    }
+
+    #[test]
+    fn unregister_account_with_zero_funds() {
+        let account_id = near::to_account_id("alfio-zappala.near");
+        let mut context = near::new_context(account_id.clone());
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context);
+        let mut contract = StakeTokenService::new(operator_id(), None);
+        match contract.register_account() {
+            RegisterAccountResult::Registered { storage_fee } => {
+                match contract.unregister_account() {
+                    UnregisterAccountResult::Unregistered { storage_fee_refund } => {
+                        assert_eq!(storage_fee.0, storage_fee_refund.0)
+                    }
+                    result => panic!("unexpected result: {:?}", result),
+                }
+            }
+            _ => panic!("registration failed"),
+        }
+    }
+
+    #[test]
+    fn unregister_non_existent_account() {
+        let account_id = near::to_account_id("alfio-zappala.near");
+        let mut context = near::new_context(account_id.clone());
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context);
+        let mut contract = StakeTokenService::new(operator_id(), None);
+        match contract.unregister_account() {
+            UnregisterAccountResult::NotRegistered => (), // expected
+            result => panic!("unexpected result: {:?}", result),
+        }
+    }
+
+    #[test]
+    fn unregister_account_with_near_funds() {
+        let account_id = near::to_account_id("alfio-zappala.near");
+        let mut context = near::new_context(account_id.clone());
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context);
+        let mut contract = StakeTokenService::new(operator_id(), None);
+        match contract.register_account() {
+            RegisterAccountResult::Registered { storage_fee } => {
+                let account_hash = Hash::from(account_id.as_bytes());
+                let mut account = contract.accounts.accounts.get(&account_hash).unwrap();
+                account.near_balance = 10;
+                contract.accounts.accounts.insert(&account_hash, &account);
+                match contract.unregister_account() {
+                    UnregisterAccountResult::AccountHasFunds => (), // expected
+                    result => panic!("unexpected result: {:?}", result),
+                }
+            }
+            _ => panic!("registration failed"),
+        }
+    }
+
+    #[test]
+    fn unregister_account_with_stake_funds() {
+        let account_id = near::to_account_id("alfio-zappala.near");
+        let mut context = near::new_context(account_id.clone());
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context);
+        let mut contract = StakeTokenService::new(operator_id(), None);
+        match contract.register_account() {
+            RegisterAccountResult::Registered { storage_fee } => {
+                let account_hash = Hash::from(account_id.as_bytes());
+                let mut account = contract.accounts.accounts.get(&account_hash).unwrap();
+                account.stake_balances.insert(&account_id, &10);
+                contract.accounts.accounts.insert(&account_hash, &account);
+                match contract.unregister_account() {
+                    UnregisterAccountResult::AccountHasFunds => (), // expected
+                    result => panic!("unexpected result: {:?}", result),
+                }
+            }
+            _ => panic!("registration failed"),
+        }
     }
 }
