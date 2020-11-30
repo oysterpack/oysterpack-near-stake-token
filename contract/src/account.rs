@@ -59,9 +59,7 @@ impl Default for Account {
         }
     }
 }
-/// Hi Evgeny - on your last contract review video you were asking for contracts to review ... I will gladly volunteer : https://github.com/oysterpack/oysterpack-near-stake-token
-//
-// It's my personal project and I just
+
 trait AccountRegistry {
     fn account_registered(&self, account_id: AccountId) -> bool;
 
