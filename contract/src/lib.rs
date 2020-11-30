@@ -26,9 +26,13 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct StakeTokenService {
     /// Operator is allowed to perform operator actions on the contract
+    /// TODO: support multiple operator and role management
     operator_id: AccountId,
+
     config: Config,
-    config_updated_on: BlockHeight,
+    /// TODO: should the block timestamp be recorded as well?
+    /// the block info can be looked up via its block index: https://docs.near.org/docs/api/rpc#block
+    config_updated_on_block_index: BlockHeight,
 
     accounts: Accounts,
 }
@@ -47,7 +51,7 @@ impl StakeTokenService {
         let contract = Self {
             operator_id: StakeTokenService::check_operator_id(operator_id),
             config: config.unwrap_or_else(Config::default),
-            config_updated_on: env::block_index(),
+            config_updated_on_block_index: env::block_index(),
             accounts: Accounts::default(),
         };
         env::state_write(&contract);
@@ -58,8 +62,8 @@ impl StakeTokenService {
         &self.operator_id
     }
 
-    pub fn config_updated_on_block(&self) -> U64 {
-        self.config_updated_on.into()
+    pub fn config_updated_on_block_index(&self) -> U64 {
+        self.config_updated_on_block_index.into()
     }
 }
 
@@ -108,7 +112,10 @@ mod test {
             100_000_000_000_000_000_000
         );
         assert_eq!(env::block_index(), 10);
-        assert_eq!(contract.config_updated_on_block().0, env::block_index());
+        assert_eq!(
+            contract.config_updated_on_block_index().0,
+            env::block_index()
+        );
     }
 
     #[test]

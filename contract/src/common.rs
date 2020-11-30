@@ -2,10 +2,13 @@ use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env,
     json_types::U128,
+    AccountId,
 };
 use std::ops::Deref;
 
 pub type YoctoNEAR = U128;
+
+pub type StakingPoolAccountId = AccountId;
 
 #[derive(BorshDeserialize, BorshSerialize, Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Hash([u8; 32]);

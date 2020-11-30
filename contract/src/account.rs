@@ -1,4 +1,4 @@
-use crate::common::{Hash, YoctoNEAR};
+use crate::common::{Hash, StakingPoolAccountId, YoctoNEAR};
 use crate::stake::YoctoSTAKE;
 use crate::StakeTokenService;
 use near_sdk::json_types::U128;
@@ -46,15 +46,16 @@ impl Default for Accounts {
 #[derive(BorshSerialize, BorshDeserialize)]
 pub struct Account {
     storage_escrow: Balance,
-    stake_balances: UnorderedMap<AccountId, Balance>,
-    near_balance: Balance,
+    /// STAKE token balances per staking pool
+    stake_balances: UnorderedMap<StakingPoolAccountId, Balance>,
+    available_near_balance: Balance,
 }
 
 impl Default for Account {
     fn default() -> Self {
         Self {
             storage_escrow: 0,
-            near_balance: 0,
+            available_near_balance: 0,
             stake_balances: UnorderedMap::new(b"c".to_vec()),
         }
     }
@@ -159,7 +160,7 @@ impl AccountRegistry for StakeTokenService {
         match self.accounts.accounts.get(&account_hash) {
             None => UnregisterAccountResult::NotRegistered,
             Some(account) => {
-                if account.near_balance > 0 || !account.stake_balances.is_empty() {
+                if account.available_near_balance > 0 || !account.stake_balances.is_empty() {
                     UnregisterAccountResult::AccountHasFunds
                 } else {
                     // TODO: Is it safe to transfer async?
@@ -350,7 +351,7 @@ mod test {
             RegisterAccountResult::Registered { storage_fee } => {
                 let account_hash = Hash::from(account_id.as_bytes());
                 let mut account = contract.accounts.accounts.get(&account_hash).unwrap();
-                account.near_balance = 10;
+                account.available_near_balance = 10;
                 contract.accounts.accounts.insert(&account_hash, &account);
                 match contract.unregister_account() {
                     UnregisterAccountResult::AccountHasFunds => (), // expected
