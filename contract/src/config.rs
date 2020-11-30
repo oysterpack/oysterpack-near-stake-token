@@ -1,5 +1,8 @@
-use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use primitive_types::U128;
+use near_sdk::{
+    borsh::{self, BorshDeserialize, BorshSerialize},
+    json_types::U128,
+    serde::{self, Deserialize, Serialize},
+};
 
 #[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]

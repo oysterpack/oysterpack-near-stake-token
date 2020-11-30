@@ -96,6 +96,7 @@ impl AccountRepository for StakeTokenService {
             .contains_key(&Hash::from(account_id.as_str()))
     }
 
+    #[payable]
     fn register_account(&mut self) -> RegisterAccountResult {
         fn check_args() -> (AccountId, Balance) {
             let deposit = env::attached_deposit();
