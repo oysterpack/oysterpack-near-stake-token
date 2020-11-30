@@ -6,10 +6,17 @@ use near_sdk::{
 };
 use std::ops::Deref;
 
-pub type YoctoNEAR = U128;
-pub type YoctoSTAKE = U128;
+pub const YOCTO: u128 = 1_000_000_000_000_000_000_000_000;
 
-pub type StakingPoolAccountId = AccountId;
+pub mod json_types {
+    use near_sdk::json_types::U128;
+
+    pub type YoctoNEAR = U128;
+    pub type YoctoSTAKE = U128;
+    pub type BlockHeight = U128;
+}
+
+pub type StakingPoolId = AccountId;
 
 #[derive(BorshDeserialize, BorshSerialize, Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Hash([u8; 32]);

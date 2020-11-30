@@ -1,4 +1,7 @@
-use crate::common::{YoctoNEAR, YoctoSTAKE};
+use crate::common::{
+    json_types::{YoctoNEAR, YoctoSTAKE},
+    YOCTO,
+};
 use crate::state;
 use near_sdk::{
     json_types::{ValidAccountId, U128, U64},
@@ -7,8 +10,6 @@ use near_sdk::{
 };
 use primitive_types::U256;
 use std::collections::{HashMap, VecDeque};
-
-pub const YOCTO: u128 = 1_000_000_000_000_000_000_000_000;
 
 /// 1E20 yoctoNEAR per byte, or 10kb per NEAR token
 pub const STORAGE_AMOUNT_PER_BYTE: u128 = 100_000_000_000_000_000_000;

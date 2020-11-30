@@ -6,4 +6,4 @@
 
 pub(crate) const ACCOUNTS_STATE_ID: [u8; 1] = [0];
 pub(crate) const STAKE_BALANCES_STATE_ID: [u8; 1] = [1];
-pub(crate) const STAKING_POOLS_STATE_ID: [u8; 1] = [2];
+pub(crate) const STAKE_SUPPLY_STATE_ID: [u8; 1] = [2];

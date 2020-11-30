@@ -13,14 +13,15 @@ pub mod state;
 pub mod test_utils;
 
 use crate::account::Accounts;
-use crate::common::StakingPoolAccountId;
+use crate::common::StakingPoolId;
 use crate::config::Config;
+use near_sdk::collections::UnorderedMap;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     collections::UnorderedSet,
     env,
     json_types::{ValidAccountId, U64},
-    near_bindgen, wee_alloc, AccountId, BlockHeight,
+    near_bindgen, wee_alloc, AccountId, Balance, BlockHeight,
 };
 
 #[global_allocator]
@@ -35,12 +36,13 @@ pub struct StakeTokenService {
 
     config: Config,
     /// TODO: should the block timestamp be recorded as well?
+    /// when the config was last changed
     /// the block info can be looked up via its block index: https://docs.near.org/docs/api/rpc#block
     config_updated_on_block_index: BlockHeight,
 
     accounts: Accounts,
-    // staking pools that are in use across all accounts, i.e., which have staked NEAR
-    staking_pools: UnorderedSet<StakingPoolAccountId>,
+    // STAKE supply per staking pool
+    stake_supply: UnorderedMap<StakingPoolId, Balance>,
 }
 
 impl Default for StakeTokenService {
@@ -59,7 +61,7 @@ impl StakeTokenService {
             config: config.unwrap_or_else(Config::default),
             config_updated_on_block_index: env::block_index(),
             accounts: Accounts::default(),
-            staking_pools: UnorderedSet::new(state::STAKING_POOLS_STATE_ID.to_vec()),
+            stake_supply: UnorderedMap::new(state::STAKE_SUPPLY_STATE_ID.to_vec()),
         };
         env::state_write(&contract);
         contract

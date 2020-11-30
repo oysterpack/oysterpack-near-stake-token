@@ -1,4 +1,7 @@
-use crate::common::{Hash, StakingPoolAccountId, YoctoNEAR, YoctoSTAKE};
+use crate::common::{
+    json_types::{YoctoNEAR, YoctoSTAKE},
+    Hash, StakingPoolId,
+};
 use crate::state;
 use crate::StakeTokenService;
 use near_sdk::json_types::U128;
@@ -14,9 +17,9 @@ use std::collections::HashMap;
 
 #[derive(BorshSerialize, BorshDeserialize)]
 pub struct Accounts {
-    /// when a new account is registered it is assigned the next sequence value
+    /// the account ID hash is used as the key to ensure the TRIE is balanced
     accounts: LookupMap<Hash, Account>,
-    /// using u128 to make this future proof ... at least for the forseeable future
+    /// using u128 to make this future proof ... at least for the foreseeable future
     /// - use case: IOT, e.g. every device could potentially have its own account
     count: u128,
 }
@@ -47,7 +50,7 @@ impl Default for Accounts {
 pub struct Account {
     storage_escrow: Balance,
     /// STAKE token balances per staking pool
-    stake_balances: UnorderedMap<StakingPoolAccountId, Balance>,
+    stake_balances: UnorderedMap<StakingPoolId, Balance>,
     available_near_balance: Balance,
 }
 
@@ -203,7 +206,7 @@ pub enum UnregisterAccountResult {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::stake::YOCTO;
+    use crate::common::YOCTO;
     use crate::test_utils::near;
     use near_sdk::{testing_env, MockedBlockchain, VMContext};
 
