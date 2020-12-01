@@ -66,7 +66,7 @@ mod test {
     #[test]
     fn hash_from_string() {
         let account_id = near::to_account_id("alfio-zappala.near");
-        let mut context = near::new_context(account_id.clone());
+        let context = near::new_context(account_id.clone());
         testing_env!(context);
         let data = "Alfio Zappala";
         let hash = Hash::from(data);
@@ -77,7 +77,7 @@ mod test {
     #[test]
     fn hash_from_bytes() {
         let account_id = near::to_account_id("alfio-zappala.near");
-        let mut context = near::new_context(account_id.clone());
+        let context = near::new_context(account_id.clone());
         testing_env!(context);
         let data = "Alfio Zappala II";
         let hash = Hash::from(data.as_bytes());

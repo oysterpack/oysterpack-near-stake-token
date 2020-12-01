@@ -55,7 +55,7 @@ pub struct Account {
     storage_escrow: Balance,
     storage_usage: StorageUsage,
     /// STAKE token balances per staking pool
-    stake_balances: UnorderedMap<StakingPoolId, AccountBalances>,
+    balances: UnorderedMap<StakingPoolId, AccountBalances>,
     available_near_balance: TimestampedBalance,
 }
 
@@ -65,7 +65,7 @@ impl Default for Account {
             storage_escrow: 0,
             storage_usage: 0,
             available_near_balance: TimestampedBalance::default(),
-            stake_balances: UnorderedMap::new(state::STAKE_BALANCES_STATE_ID.to_vec()),
+            balances: UnorderedMap::new(state::STAKE_BALANCES_STATE_ID.to_vec()),
         }
     }
 }
@@ -73,21 +73,31 @@ impl Default for Account {
 impl Account {
     /// Returns the number of STAKE tokens owned for the specified staking pool.
     /// Returns None, if no record exists for the staking pool.
-    pub fn stake_balances(&self, staking_pool_id: &StakingPoolId) -> Option<AccountBalances> {
-        self.stake_balances.get(staking_pool_id)
+    pub fn balances(&self, staking_pool_id: &StakingPoolId) -> Option<AccountBalances> {
+        self.balances.get(staking_pool_id)
     }
 
     /// If a record for the staking pool does not exist, then insert a record with a zero balance.
     /// Returns false if a record for the specified staking pool already exists.
     pub fn init_staking_pool(&mut self, staking_pool_id: &StakingPoolId) -> bool {
-        match self.stake_balances.get(staking_pool_id) {
+        match self.balances.get(staking_pool_id) {
             None => {
-                self.stake_balances
+                self.balances
                     .insert(staking_pool_id, &AccountBalances::default());
                 true
             }
             Some(_) => false,
         }
+    }
+
+    pub fn storage_usage_increase(&mut self, storage_usage: StorageUsage, storage_fee: Balance) {
+        self.storage_usage += storage_usage;
+        self.storage_escrow += storage_fee;
+    }
+
+    pub fn storage_usage_decrease(&mut self, storage_usage: StorageUsage, storage_fee: Balance) {
+        self.storage_usage -= storage_usage;
+        self.storage_escrow -= storage_fee;
     }
 }
 
@@ -126,6 +136,48 @@ impl TimestampedBalance {
             block_timestamp: env::block_timestamp(),
             epoch_height: env::epoch_height(),
         }
+    }
+
+    pub fn balance(&self) -> Balance {
+        self.balance
+    }
+
+    pub fn block_height(&self) -> BlockHeight {
+        self.block_height
+    }
+
+    pub fn block_timestamp(&self) -> BlockTimestamp {
+        self.block_timestamp
+    }
+
+    pub fn epoch_height(&self) -> EpochHeight {
+        self.epoch_height
+    }
+
+    /// ## Panics
+    /// if overflow occurs
+    pub fn credit(&mut self, amount: Balance) {
+        self.balance = self.balance.checked_add(amount).expect("overflow");
+        self.update_timestamp();
+    }
+
+    /// ## Panics
+    /// if debit amount > balance
+    pub fn debit(&mut self, amount: Balance) {
+        assert!(
+            self.balance > amount,
+            "debit amount ({}) cannot be greater than the current balance ({})",
+            amount,
+            self.balance
+        );
+        self.balance -= amount;
+        self.update_timestamp();
+    }
+
+    fn update_timestamp(&mut self) {
+        self.epoch_height = env::epoch_height();
+        self.block_timestamp = env::block_timestamp();
+        self.block_height = env::block_index();
     }
 }
 
@@ -221,8 +273,7 @@ impl AccountRegistry for StakeTokenService {
         match self.accounts.accounts.get(&account_hash) {
             None => UnregisterAccountResult::NotRegistered,
             Some(account) => {
-                if account.available_near_balance.balance > 0 || !account.stake_balances.is_empty()
-                {
+                if account.available_near_balance.balance > 0 || !account.balances.is_empty() {
                     UnregisterAccountResult::AccountHasFunds
                 } else {
                     // TODO: Is it safe to transfer async?
@@ -460,7 +511,7 @@ mod test {
                     deposits: TimestampedBalance::new(10),
                     staked: TimestampedBalance::default(),
                 };
-                account.stake_balances.insert(&account_id, &stake_balances);
+                account.balances.insert(&account_id, &stake_balances);
                 contract.accounts.accounts.insert(&account_hash, &account);
                 match contract.unregister_account() {
                     UnregisterAccountResult::AccountHasFunds => (), // expected

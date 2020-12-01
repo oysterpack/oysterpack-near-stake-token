@@ -15,6 +15,7 @@ pub mod test_utils;
 use crate::account::Accounts;
 use crate::common::{json_types, StakingPoolId};
 use crate::config::Config;
+use crate::staking::StakingPool;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     collections::{UnorderedMap, UnorderedSet},
@@ -40,8 +41,7 @@ pub struct StakeTokenService {
     config_change_block_height: BlockHeight,
 
     accounts: Accounts,
-    // STAKE supply per staking pool
-    stake_supply: UnorderedMap<StakingPoolId, Balance>,
+    staking_pools: UnorderedMap<StakingPoolId, StakingPool>,
 }
 
 impl Default for StakeTokenService {
@@ -74,7 +74,7 @@ impl StakeTokenService {
             config: config.unwrap_or_else(Config::default),
             config_change_block_height: env::block_index(),
             accounts: Accounts::default(),
-            stake_supply: UnorderedMap::new(state::STAKE_SUPPLY_STATE_ID.to_vec()),
+            staking_pools: UnorderedMap::new(state::STAKING_POOLS_STATE_ID.to_vec()),
         }
     }
 

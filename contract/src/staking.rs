@@ -1,9 +1,11 @@
+use crate::account::{Account, AccountBalances, TimestampedBalance};
 use crate::common::{
     assert_self,
     json_types::{self, YoctoNEAR, YoctoSTAKE},
     StakingPoolId, YOCTO, ZERO_BALANCE,
 };
 use crate::StakeTokenService;
+use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::{
     env, ext_contract,
     json_types::{U128, U64},
@@ -149,16 +151,18 @@ impl StakingService for StakeTokenService {
         let mut account = self.expect_registered_predecessor_account();
         assert!(env::attached_deposit() > 0, "no deposit was attached");
 
-        // TODO: how expensive is this in terms of gas? If this is expensive, then we can optimize
-        // by first checking if there is a STAKE balance for the staking pool
-        let initial_storage_usage = env::storage_usage();
-
-        // if the account is not currently staking with the staking pool, then account storage
-        // will need to be allocated to track the staking pool
-        let storage_fee = if account.init_staking_pool(&staking_pool_id) {
-            self.assert_storage_fees(initial_storage_usage)
-        } else {
-            ZERO_BALANCE
+        // If the account is not currently staking with the staking pool, then account storage
+        // will need to be allocated to track the staking pool.
+        let storage_fee = {
+            let initial_storage_usage = env::storage_usage();
+            if account.init_staking_pool(&staking_pool_id) {
+                let storage_fee = self.assert_storage_fees(initial_storage_usage);
+                let storage_usage = env::storage_usage() - initial_storage_usage;
+                account.storage_usage_increase(storage_usage, storage_fee);
+                storage_fee
+            } else {
+                ZERO_BALANCE
+            }
         };
 
         let stake_deposit = env::attached_deposit() - storage_fee;
@@ -166,6 +170,21 @@ impl StakingService for StakeTokenService {
             stake_deposit > 0,
             "After applying storage fees ({} yoctoNEAR) there was zero deposit to stake."
         );
+        // we can safely unwrap here because Account::init_staking_pool() call above ensures it exists
+        let mut staking_pool_balances = account.balances(&staking_pool_id).unwrap();
+        staking_pool_balances.deposits.credit(stake_deposit);
+
+        // TODO:
+        // if this is the first time we are using this staking pool, then we need to protect the contract
+        // from a storage attack. An attacker can continue to submit staking requests against invalid
+        // staking pools that do not exist. We only want to create storage for the staking pool if the
+        // deposit_and_stake async function call succeeds.
+        //
+        // To be on the safe side, we should invoke every async function that this contract has
+        // depends on to ensure the staking pool contract interface is compliant.
+        //
+        // Another option is give the user the option to verify that the staking pool is white-listed
+        // by the NEAR foundation - via a different contact method (deposit_and_stake_with_whitelisted_pool)
 
         unimplemented!()
     }
@@ -211,10 +230,20 @@ impl StakeTokenService {
 
         let value = StakeTokenValue {
             staked_balance: balance.into(),
-            token_supply: self.stake_supply.get(&staking_pool_id).unwrap_or(0).into(),
+            token_supply: self
+                .staking_pools
+                .get(&staking_pool_id)
+                .map_or(0u128, |pool| pool.staked_balance.balance())
+                .into(),
             block_height: env::block_index().into(),
             block_timestamp: env::block_timestamp().into(),
         };
         Some(value)
     }
+}
+
+#[derive(BorshSerialize, BorshDeserialize, Default)]
+pub struct StakingPool {
+    staked_balance: TimestampedBalance,
+    unstaked_balance: TimestampedBalance,
 }
