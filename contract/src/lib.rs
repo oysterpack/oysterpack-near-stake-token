@@ -13,12 +13,11 @@ pub mod state;
 pub mod test_utils;
 
 use crate::account::Accounts;
-use crate::common::StakingPoolId;
+use crate::common::{json_types, StakingPoolId};
 use crate::config::Config;
-use near_sdk::collections::UnorderedMap;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    collections::UnorderedSet,
+    collections::{UnorderedMap, UnorderedSet},
     env,
     json_types::{ValidAccountId, U64},
     near_bindgen, wee_alloc, AccountId, Balance, BlockHeight, StorageUsage,
@@ -38,7 +37,7 @@ pub struct StakeTokenService {
     /// TODO: should the block timestamp be recorded as well?
     /// when the config was last changed
     /// the block info can be looked up via its block index: https://docs.near.org/docs/api/rpc#block
-    config_updated_on_block_index: BlockHeight,
+    config_change_block_height: BlockHeight,
 
     accounts: Accounts,
     // STAKE supply per staking pool
@@ -55,44 +54,42 @@ impl Default for StakeTokenService {
 impl StakeTokenService {
     #[init]
     pub fn new(operator_id: AccountId, config: Option<Config>) -> Self {
+        fn check_operator_id(operator_id: AccountId) -> AccountId {
+            assert!(
+                env::is_valid_account_id(operator_id.as_bytes()),
+                "operator ID is not a valid AccountID: {}",
+                operator_id
+            );
+            assert_ne!(
+                env::current_account_id(),
+                operator_id,
+                "operator account ID must not be the contract account ID"
+            );
+            operator_id
+        }
+
         assert!(!env::state_exists(), "contract is already initialized");
-        let contract = Self {
-            operator_id: StakeTokenService::check_operator_id(operator_id),
+        Self {
+            operator_id: check_operator_id(operator_id),
             config: config.unwrap_or_else(Config::default),
-            config_updated_on_block_index: env::block_index(),
+            config_change_block_height: env::block_index(),
             accounts: Accounts::default(),
             stake_supply: UnorderedMap::new(state::STAKE_SUPPLY_STATE_ID.to_vec()),
-        };
-        env::state_write(&contract);
-        contract
+        }
     }
 
     pub fn operator_id(&self) -> &str {
         &self.operator_id
     }
 
-    pub fn config_updated_on_block_index(&self) -> U64 {
-        self.config_updated_on_block_index.into()
+    pub fn config_change_block_height(&self) -> json_types::BlockHeight {
+        self.config_change_block_height.into()
     }
 }
 
 impl StakeTokenService {
-    fn check_operator_id(operator_id: AccountId) -> AccountId {
-        assert!(
-            env::is_valid_account_id(operator_id.as_bytes()),
-            "operator ID is not a valid AccountID: {}",
-            operator_id
-        );
-        assert_ne!(
-            env::current_account_id(),
-            operator_id,
-            "operator account ID must not be the contract account ID"
-        );
-        operator_id
-    }
-
     /// asserts that the predecessor account ID must be the operator
-    fn assert_is_operator(&self) {
+    pub(crate) fn assert_is_operator(&self) {
         assert_eq!(
             env::predecessor_account_id(),
             self.operator_id,
@@ -104,14 +101,14 @@ impl StakeTokenService {
     ///
     /// # Panics
     /// if not enough deposit was attached to pay for account storage
-    fn compute_storage_fees(&self, initial_storage: StorageUsage) -> Balance {
+    pub(crate) fn compute_storage_fees(&self, initial_storage: StorageUsage) -> Balance {
         let current_storage = env::storage_usage();
         let attached_deposit = env::attached_deposit();
         let required_deposit =
             Balance::from(current_storage - initial_storage) * self.config.storage_cost_per_byte();
         assert!(
             required_deposit <= attached_deposit,
-            "The attached deposit ({}) is short {} to cover account storage fees: {}",
+            "The attached deposit ({}) is not enough {} to cover account storage fees: {}",
             attached_deposit,
             required_deposit - attached_deposit,
             required_deposit,
@@ -140,10 +137,7 @@ mod test {
             100_000_000_000_000_000_000
         );
         assert_eq!(env::block_index(), 10);
-        assert_eq!(
-            contract.config_updated_on_block_index().0,
-            env::block_index()
-        );
+        assert_eq!(contract.config_change_block_height().0, env::block_index());
     }
 
     #[test]
@@ -196,7 +190,12 @@ mod test {
         let context = near::new_context(near::stake_contract_account_id());
         testing_env!(context);
         for _ in 0..2 {
-            StakeTokenService::new(near::to_account_id("operator.stake.oysterpack.near"), None);
+            let contract =
+                StakeTokenService::new(near::to_account_id("operator.stake.oysterpack.near"), None);
+            // the NEAR runtime will persist the contract state to storage once init returns
+            // however in the mocked environment it does not, thus we are manually simulating this NEAR
+            // runtime behavior
+            env::state_write(&contract);
         }
     }
 }

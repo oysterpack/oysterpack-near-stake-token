@@ -199,7 +199,11 @@ impl AccountRegistry for StakeTokenService {
 }
 
 impl StakeTokenService {
-    pub(crate) fn assert_predecessor_account_registered(&self) -> Account {
+    /// Returns registered account for predecessor account.
+    ///
+    /// ## Panics
+    /// if the predecessor account is not registered
+    pub(crate) fn expect_registered_predecessor_account(&self) -> Account {
         let account_id = env::predecessor_account_id();
         self.accounts
             .get(&account_id)

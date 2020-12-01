@@ -87,11 +87,11 @@ pub struct StakingPoolIDs {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct StakeSupply {
-    pub supply: U128,
+    pub supply: YoctoSTAKE,
 
     /// when the supply last changed
-    pub block_timestamp: U64,
-    pub block_height: U64,
+    pub block_timestamp: json_types::BlockTimestamp,
+    pub block_height: json_types::BlockHeight,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -145,7 +145,7 @@ pub trait ExtStakingPoolCallbacks {
 #[near_bindgen]
 impl StakingService for StakeTokenService {
     fn deposit_and_stake(&mut self, staking_pool_id: StakingPoolId) -> Promise {
-        let mut account = self.assert_predecessor_account_registered();
+        let mut account = self.expect_registered_predecessor_account();
         // TODO: how expensive is this in terms of gas? If this is expensive, then we can optimize
         // by first checking if there is a STAKE balance for the staking pool
         let initial_storage_usage = env::storage_usage();
