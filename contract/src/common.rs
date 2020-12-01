@@ -23,6 +23,7 @@ pub mod json_types {
 }
 
 pub type StakingPoolId = AccountId;
+pub type BlockTimestamp = u64;
 
 #[derive(BorshDeserialize, BorshSerialize, Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Hash([u8; 32]);

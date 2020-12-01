@@ -1,7 +1,7 @@
 use crate::common::{
     assert_self,
     json_types::{self, YoctoNEAR, YoctoSTAKE},
-    StakingPoolId, YOCTO,
+    StakingPoolId, YOCTO, ZERO_BALANCE,
 };
 use crate::StakeTokenService;
 use near_sdk::{
@@ -9,7 +9,7 @@ use near_sdk::{
     json_types::{U128, U64},
     near_bindgen,
     serde::{self, Deserialize, Serialize},
-    AccountId, Promise,
+    AccountId, Balance, Promise,
 };
 use primitive_types::U256;
 use std::collections::HashMap;
@@ -135,7 +135,7 @@ pub trait ExtStakingPoolCallbacks {
 
     fn on_get_account_total_balance(&self, account_id: AccountId) -> json_types::Balance;
 
-    fn on_deposit_and_stake(&mut self);
+    fn on_deposit_and_stake(&mut self, account_id: AccountId, stake_deposit: Balance);
 
     fn on_withdraw_all(&mut self);
 
@@ -144,17 +144,28 @@ pub trait ExtStakingPoolCallbacks {
 
 #[near_bindgen]
 impl StakingService for StakeTokenService {
+    #[payable]
     fn deposit_and_stake(&mut self, staking_pool_id: StakingPoolId) -> Promise {
         let mut account = self.expect_registered_predecessor_account();
+        assert!(env::attached_deposit() > 0, "no deposit was attached");
+
         // TODO: how expensive is this in terms of gas? If this is expensive, then we can optimize
         // by first checking if there is a STAKE balance for the staking pool
         let initial_storage_usage = env::storage_usage();
 
         // if the account is not currently staking with the staking pool, then account storage
         // will need to be allocated to track the staking pool
-        if account.init_staking_pool(&staking_pool_id) {
-            let storage_fee = self.compute_storage_fees(initial_storage_usage);
-        }
+        let storage_fee = if account.init_staking_pool(&staking_pool_id) {
+            self.assert_storage_fees(initial_storage_usage)
+        } else {
+            ZERO_BALANCE
+        };
+
+        let stake_deposit = env::attached_deposit() - storage_fee;
+        assert!(
+            stake_deposit > 0,
+            "After applying storage fees ({} yoctoNEAR) there was zero deposit to stake."
+        );
 
         unimplemented!()
     }

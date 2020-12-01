@@ -97,18 +97,19 @@ impl StakeTokenService {
         );
     }
 
-    /// computes if any storage fees need to be applied
+    /// Computes if storage fees need to be applied and asserts that enough deposit was attached
+    /// to pay for storage fees.
     ///
     /// # Panics
     /// if not enough deposit was attached to pay for account storage
-    pub(crate) fn compute_storage_fees(&self, initial_storage: StorageUsage) -> Balance {
+    pub(crate) fn assert_storage_fees(&self, initial_storage: StorageUsage) -> Balance {
         let current_storage = env::storage_usage();
         let attached_deposit = env::attached_deposit();
         let required_deposit =
             Balance::from(current_storage - initial_storage) * self.config.storage_cost_per_byte();
         assert!(
             required_deposit <= attached_deposit,
-            "The attached deposit ({}) is not enough {} to cover account storage fees: {}",
+            "The attached deposit ({}) is not enough {} to pay account storage fees: {}",
             attached_deposit,
             required_deposit - attached_deposit,
             required_deposit,

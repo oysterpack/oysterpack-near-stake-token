@@ -1,14 +1,15 @@
 use crate::common::{
     json_types::{YoctoNEAR, YoctoSTAKE},
-    Hash, StakingPoolId, ZERO_BALANCE,
+    BlockTimestamp, Hash, StakingPoolId, ZERO_BALANCE,
 };
 use crate::state;
 use crate::StakeTokenService;
-use near_sdk::json_types::U128;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     collections::{LookupMap, UnorderedMap},
-    env, near_bindgen,
+    env,
+    json_types::U128,
+    near_bindgen,
     serde::{self, Deserialize, Serialize},
     AccountId, Balance, BlockHeight, EpochHeight, Promise, StorageUsage,
 };
@@ -52,16 +53,18 @@ impl Default for Accounts {
 #[derive(BorshSerialize, BorshDeserialize)]
 pub struct Account {
     storage_escrow: Balance,
+    storage_usage: StorageUsage,
     /// STAKE token balances per staking pool
-    stake_balances: UnorderedMap<StakingPoolId, Balance>,
-    available_near_balance: Balance,
+    stake_balances: UnorderedMap<StakingPoolId, AccountBalances>,
+    available_near_balance: TimestampedBalance,
 }
 
 impl Default for Account {
     fn default() -> Self {
         Self {
             storage_escrow: 0,
-            available_near_balance: 0,
+            storage_usage: 0,
+            available_near_balance: TimestampedBalance::default(),
             stake_balances: UnorderedMap::new(state::STAKE_BALANCES_STATE_ID.to_vec()),
         }
     }
@@ -70,7 +73,7 @@ impl Default for Account {
 impl Account {
     /// Returns the number of STAKE tokens owned for the specified staking pool.
     /// Returns None, if no record exists for the staking pool.
-    pub fn stake_balance(&self, staking_pool_id: &StakingPoolId) -> Option<Balance> {
+    pub fn stake_balances(&self, staking_pool_id: &StakingPoolId) -> Option<AccountBalances> {
         self.stake_balances.get(staking_pool_id)
     }
 
@@ -79,10 +82,49 @@ impl Account {
     pub fn init_staking_pool(&mut self, staking_pool_id: &StakingPoolId) -> bool {
         match self.stake_balances.get(staking_pool_id) {
             None => {
-                self.stake_balances.insert(staking_pool_id, &ZERO_BALANCE);
+                self.stake_balances
+                    .insert(staking_pool_id, &AccountBalances::default());
                 true
             }
             Some(_) => false,
+        }
+    }
+}
+
+#[derive(BorshSerialize, BorshDeserialize, Default)]
+pub struct AccountBalances {
+    /// account deposits that have been staked but pending confirmation from the staking pool
+    /// - once a deposit is confirmed, then it is debited
+    /// - if the balance is zero, it means all account deposits have been processed.
+    /// - if deposits were staked successfully, then they were credited to [staked].
+    /// - if deposits failed to be staked, then the deposit is refunded
+    /// - if the refund fails, then the deposit is credited to the available withdrawal balance
+    pub deposits: TimestampedBalance,
+    /// confirmed funds that have been deposited and staked with the staking pool
+    pub staked: TimestampedBalance,
+}
+
+impl AccountBalances {
+    pub fn has_funds(&self) -> bool {
+        self.deposits.balance > 0 || self.staked.balance > 0
+    }
+}
+
+#[derive(BorshSerialize, BorshDeserialize, Default)]
+pub struct TimestampedBalance {
+    balance: Balance,
+    block_height: BlockHeight,
+    block_timestamp: BlockTimestamp,
+    epoch_height: EpochHeight,
+}
+
+impl TimestampedBalance {
+    pub fn new(balance: Balance) -> Self {
+        Self {
+            balance,
+            block_height: env::block_index(),
+            block_timestamp: env::block_timestamp(),
+            epoch_height: env::epoch_height(),
         }
     }
 }
@@ -140,7 +182,7 @@ impl AccountRegistry for StakeTokenService {
             contract: &StakeTokenService,
             initial_storage: StorageUsage,
         ) -> Balance {
-            let required_deposit = contract.compute_storage_fees(initial_storage);
+            let required_deposit = contract.assert_storage_fees(initial_storage);
             let refund_amount = env::attached_deposit() - required_deposit;
             env::log(format!("Storage fee refund: {}", refund_amount).as_bytes());
             Promise::new(env::predecessor_account_id()).transfer(refund_amount);
@@ -162,8 +204,11 @@ impl AccountRegistry for StakeTokenService {
         // this has the potential to overflow in the far distant future ...
         self.accounts.count += 1;
 
+        // apply account storage fees
+        account.storage_usage = env::storage_usage() - initial_storage_usage;
         let storage_fee = apply_storage_fees(self, initial_storage_usage);
         account.storage_escrow = storage_fee;
+
         self.accounts.accounts.insert(&account_hash, &account);
         RegisterAccountResult::Registered {
             storage_fee: storage_fee.into(),
@@ -176,7 +221,8 @@ impl AccountRegistry for StakeTokenService {
         match self.accounts.accounts.get(&account_hash) {
             None => UnregisterAccountResult::NotRegistered,
             Some(account) => {
-                if account.available_near_balance > 0 || !account.stake_balances.is_empty() {
+                if account.available_near_balance.balance > 0 || !account.stake_balances.is_empty()
+                {
                     UnregisterAccountResult::AccountHasFunds
                 } else {
                     // TODO: Is it safe to transfer async?
@@ -270,12 +316,18 @@ mod test {
             "There should be no accounts registered"
         );
 
+        let storage_before_registering_account = env::storage_usage();
         match contract.register_account() {
             RegisterAccountResult::Registered { storage_fee } => {
+                let account_storage_usage =
+                    env::storage_usage() - storage_before_registering_account;
                 println!(
-                    "account storage fee: {:?} NEAR",
+                    "account storage usage: {} | fee: {:?} NEAR",
+                    account_storage_usage,
                     storage_fee.0 as f64 / YOCTO as f64
                 );
+                let account = contract.accounts.get(&account_id).unwrap();
+                assert_eq!(account.storage_usage, account_storage_usage);
             }
             RegisterAccountResult::AlreadyRegistered => {
                 panic!("account should not be already registered");
@@ -382,7 +434,7 @@ mod test {
             RegisterAccountResult::Registered { storage_fee } => {
                 let account_hash = Hash::from(account_id.as_bytes());
                 let mut account = contract.accounts.accounts.get(&account_hash).unwrap();
-                account.available_near_balance = 10;
+                account.available_near_balance = TimestampedBalance::new(10);
                 contract.accounts.accounts.insert(&account_hash, &account);
                 match contract.unregister_account() {
                     UnregisterAccountResult::AccountHasFunds => (), // expected
@@ -404,7 +456,11 @@ mod test {
             RegisterAccountResult::Registered { storage_fee } => {
                 let account_hash = Hash::from(account_id.as_bytes());
                 let mut account = contract.accounts.accounts.get(&account_hash).unwrap();
-                account.stake_balances.insert(&account_id, &10);
+                let stake_balances = AccountBalances {
+                    deposits: TimestampedBalance::new(10),
+                    staked: TimestampedBalance::default(),
+                };
+                account.stake_balances.insert(&account_id, &stake_balances);
                 contract.accounts.accounts.insert(&account_hash, &account);
                 match contract.unregister_account() {
                     UnregisterAccountResult::AccountHasFunds => (), // expected
