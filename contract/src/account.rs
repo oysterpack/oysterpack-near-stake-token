@@ -2,6 +2,7 @@ use crate::common::{
     json_types::{YoctoNEAR, YoctoSTAKE},
     BlockTimestamp, Hash, StakingPoolId, ZERO_BALANCE,
 };
+use crate::data::TimestampedBalance;
 use crate::state;
 use crate::StakeTokenService;
 use near_sdk::{
@@ -146,73 +147,12 @@ pub struct StakeBalance {
 
 impl StakeBalance {
     pub fn has_funds(&self) -> bool {
-        self.deposit_and_stake_activity.balance > 0 || self.staked.balance > 0
+        self.deposit_and_stake_activity.balance() > 0 || self.staked.balance() > 0
     }
 
     pub fn deposit_and_stake_success(&mut self, stake_deposit: Balance) {
         self.deposit_and_stake_activity.debit(stake_deposit);
         self.staked.credit(stake_deposit);
-    }
-}
-
-#[derive(BorshSerialize, BorshDeserialize, Default)]
-pub struct TimestampedBalance {
-    balance: Balance,
-    block_height: BlockHeight,
-    block_timestamp: BlockTimestamp,
-    epoch_height: EpochHeight,
-}
-
-impl TimestampedBalance {
-    pub fn new(balance: Balance) -> Self {
-        Self {
-            balance,
-            block_height: env::block_index(),
-            block_timestamp: env::block_timestamp(),
-            epoch_height: env::epoch_height(),
-        }
-    }
-
-    pub fn balance(&self) -> Balance {
-        self.balance
-    }
-
-    pub fn block_height(&self) -> BlockHeight {
-        self.block_height
-    }
-
-    pub fn block_timestamp(&self) -> BlockTimestamp {
-        self.block_timestamp
-    }
-
-    pub fn epoch_height(&self) -> EpochHeight {
-        self.epoch_height
-    }
-
-    /// ## Panics
-    /// if overflow occurs
-    pub fn credit(&mut self, amount: Balance) {
-        self.balance = self.balance.checked_add(amount).expect("overflow");
-        self.update_timestamp();
-    }
-
-    /// ## Panics
-    /// if debit amount > balance
-    pub fn debit(&mut self, amount: Balance) {
-        assert!(
-            self.balance > amount,
-            "debit amount ({}) cannot be greater than the current balance ({})",
-            amount,
-            self.balance
-        );
-        self.balance -= amount;
-        self.update_timestamp();
-    }
-
-    fn update_timestamp(&mut self) {
-        self.epoch_height = env::epoch_height();
-        self.block_timestamp = env::block_timestamp();
-        self.block_height = env::block_index();
     }
 }
 
@@ -308,7 +248,7 @@ impl AccountRegistry for StakeTokenService {
         match self.accounts.accounts.get(&account_hash) {
             None => UnregisterAccountResult::NotRegistered,
             Some(account) => {
-                if account.near.balance > 0 || !account.stake.is_empty() {
+                if account.near.balance() > 0 || !account.stake.is_empty() {
                     UnregisterAccountResult::AccountHasFunds
                 } else {
                     // TODO: Is it safe to transfer async?

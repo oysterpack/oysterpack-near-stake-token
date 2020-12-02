@@ -4,6 +4,7 @@
 pub mod account;
 pub mod common;
 pub mod config;
+pub mod data;
 pub mod events;
 pub mod stake;
 pub mod staking;
@@ -12,9 +13,10 @@ pub mod state;
 #[cfg(test)]
 pub mod test_utils;
 
-use crate::account::{Accounts, TimestampedBalance};
+use crate::account::Accounts;
 use crate::common::{json_types, StakingPoolId};
 use crate::config::Config;
+use crate::data::TimestampedBalance;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     collections::{UnorderedMap, UnorderedSet},
