@@ -295,8 +295,10 @@ impl StakeTokenService {
             let mut staking_pool_balances = account
                 .balances(&staking_pool_id)
                 .expect("staking pool account balances should exist");
-            staking_pool_balances.deposits.credit(stake_deposit);
-            account.set_balances(&staking_pool_id, &staking_pool_balances);
+            staking_pool_balances
+                .deposit_and_stake_activity
+                .credit(stake_deposit);
+            account.set_stake_balances(&staking_pool_id, &staking_pool_balances);
             self.accounts
                 .upsert(&env::predecessor_account_id(), &account);
         }
@@ -326,11 +328,13 @@ impl StakeTokenService {
             let mut staking_pool_balances = account
                 .balances(&staking_pool_id)
                 .expect("staking pool account balances should exist");
-            staking_pool_balances.deposits.debit(stake_deposit);
+            staking_pool_balances
+                .deposit_and_stake_activity
+                .debit(stake_deposit);
             if success {
                 staking_pool_balances.staked.credit(stake_deposit);
             }
-            account.set_balances(&staking_pool_id, &staking_pool_balances);
+            account.set_stake_balances(&staking_pool_id, &staking_pool_balances);
             self.accounts
                 .upsert(&env::predecessor_account_id(), &account);
         }
