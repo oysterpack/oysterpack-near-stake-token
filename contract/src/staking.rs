@@ -1,11 +1,12 @@
-use crate::account::{Account, AccountBalances, TimestampedBalance};
+use crate::account::{Account, StakeBalance, TimestampedBalance};
 use crate::common::{
-    assert_self,
+    assert_predecessor_is_self, is_promise_result_success,
     json_types::{self, YoctoNEAR, YoctoSTAKE},
-    StakingPoolId, YOCTO, ZERO_BALANCE,
+    StakingPoolId, NO_DEPOSIT, YOCTO, ZERO_BALANCE,
 };
 use crate::StakeTokenService;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
+use near_sdk::collections::UnorderedMap;
 use near_sdk::{
     env, ext_contract,
     json_types::{U128, U64},
@@ -112,13 +113,13 @@ pub struct StakeReceipt {
 
 #[ext_contract(ext_staking_pool)]
 pub trait ExtStakingPool {
+    fn deposit_and_stake(&mut self);
+
     fn get_account_staked_balance(&self, account_id: AccountId) -> json_types::Balance;
 
     fn get_account_unstaked_balance(&self, account_id: AccountId) -> json_types::Balance;
 
     fn get_account_total_balance(&self, account_id: AccountId) -> json_types::Balance;
-
-    fn deposit_and_stake(&mut self);
 
     fn withdraw_all(&mut self);
 
@@ -127,6 +128,18 @@ pub trait ExtStakingPool {
 
 #[ext_contract(ext_staking_pool_callbacks)]
 pub trait ExtStakingPoolCallbacks {
+    /// ## failure handling
+    /// - refund the attached deposit (stake_deposit + storage_fee)
+    /// - if storage_fee > 0, then debit the storage fee escrow account
+    ///   
+    fn on_deposit_and_stake(
+        &mut self,
+        account_id: AccountId,
+        stake_deposit: Balance,
+        staking_pool_id: StakingPoolId,
+        storage_fee: Balance,
+    );
+
     fn on_get_account_staked_balance(
         &self,
         #[callback] balance: json_types::Balance,
@@ -137,8 +150,6 @@ pub trait ExtStakingPoolCallbacks {
 
     fn on_get_account_total_balance(&self, account_id: AccountId) -> json_types::Balance;
 
-    fn on_deposit_and_stake(&mut self, account_id: AccountId, stake_deposit: Balance);
-
     fn on_withdraw_all(&mut self);
 
     fn on_unstake(&mut self, amount: json_types::Balance);
@@ -146,6 +157,16 @@ pub trait ExtStakingPoolCallbacks {
 
 #[near_bindgen]
 impl StakingService for StakeTokenService {
+    /// Workflow:
+    /// 1. assert that the predecessor account is registered
+    /// 2. assert that there is an attached deposit
+    /// 3. check if staking pool storage needs to be allocated for the account, i.e., is this is the
+    ///    first time the account is staking with the specified pool
+    ///    - if staking pool storage is allocated, the compute storage fees and deduct the storage
+    ///      fees from the attached deposit. Then assert the remaining deposit is > 0.
+    /// 4. track the pending activity
+    /// 5. submit `deposit_and_stake` request to the staking pool
+    /// 6. register a callback to handle the `deposit_and_stake` promise result
     #[payable]
     fn deposit_and_stake(&mut self, staking_pool_id: StakingPoolId) -> Promise {
         let mut account = self.expect_registered_predecessor_account();
@@ -158,21 +179,24 @@ impl StakingService for StakeTokenService {
             if account.init_staking_pool(&staking_pool_id) {
                 let storage_fee = self.assert_storage_fees(initial_storage_usage);
                 let storage_usage = env::storage_usage() - initial_storage_usage;
-                account.storage_usage_increase(storage_usage, storage_fee);
+                account.storage_usage_increased(storage_usage, storage_fee);
                 storage_fee
             } else {
                 ZERO_BALANCE
             }
         };
-
+        // deduct storage fee from deposit
         let stake_deposit = env::attached_deposit() - storage_fee;
         assert!(
             stake_deposit > 0,
-            "After applying storage fees ({} yoctoNEAR) there was zero deposit to stake."
+            "After deducting storage fees ({} yoctoNEAR) there was zero deposit to stake."
         );
-        // we can safely unwrap here because Account::init_staking_pool() call above ensures it exists
-        let mut staking_pool_balances = account.balances(&staking_pool_id).unwrap();
-        staking_pool_balances.deposits.credit(stake_deposit);
+
+        self.track_pending_deposit_and_stake_activity(
+            &staking_pool_id,
+            &mut account,
+            stake_deposit,
+        );
 
         // TODO:
         // if this is the first time we are using this staking pool, then we need to protect the contract
@@ -186,7 +210,21 @@ impl StakingService for StakeTokenService {
         // Another option is give the user the option to verify that the staking pool is white-listed
         // by the NEAR foundation - via a different contact method (deposit_and_stake_with_whitelisted_pool)
 
-        unimplemented!()
+        ext_staking_pool::deposit_and_stake(
+            &staking_pool_id,
+            stake_deposit,
+            self.config.gas_config().deposit_and_stake(),
+        )
+        .then(ext_staking_pool_callbacks::on_deposit_and_stake(
+            env::predecessor_account_id(),
+            stake_deposit,
+            staking_pool_id,
+            storage_fee,
+            // action receipt params
+            &env::current_account_id(),
+            NO_DEPOSIT,
+            self.config.gas_config().on_deposit_and_stake(),
+        ))
     }
 
     fn staking_pool_count(&self) -> u32 {
@@ -216,34 +254,99 @@ impl StakingService for StakeTokenService {
 /// NEAR contract callbacks are all private, they should only be invoked by itself
 #[near_bindgen]
 impl StakeTokenService {
-    pub fn on_get_account_staked_balance(
-        &self,
-        #[callback] balance: json_types::Balance,
+    pub fn on_deposit_and_stake(
+        &mut self,
+        account_id: AccountId,
+        stake_deposit: Balance,
         staking_pool_id: StakingPoolId,
-    ) -> Option<StakeTokenValue> {
-        assert_self();
+        storage_fee: Balance,
+    ) {
+        assert_predecessor_is_self();
 
-        if balance.0 == 0 {
-            // there is no NEAR staked with this staking pool
-            return None;
+        let mut account = self
+            .accounts
+            .get(&account_id)
+            .expect(format!("account does not exist: {}", account_id).as_str());
+
+        let success = is_promise_result_success(env::promise_result(0));
+        self.track_completed_deposit_and_stake_activity(
+            &staking_pool_id,
+            &mut account,
+            stake_deposit,
+            success,
+        );
+        if !success {
+            // refund deposit
+            Promise::new(account_id).transfer(stake_deposit + storage_fee);
         }
-
-        let value = StakeTokenValue {
-            staked_balance: balance.into(),
-            token_supply: self
-                .staking_pools
-                .get(&staking_pool_id)
-                .map_or(0u128, |pool| pool.staked_balance.balance())
-                .into(),
-            block_height: env::block_index().into(),
-            block_timestamp: env::block_timestamp().into(),
-        };
-        Some(value)
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Default)]
-pub struct StakingPool {
-    staked_balance: TimestampedBalance,
-    unstaked_balance: TimestampedBalance,
+impl StakeTokenService {
+    /// the pending activity is tracked at the staking pool and account level
+    pub fn track_pending_deposit_and_stake_activity(
+        &mut self,
+        staking_pool_id: &StakingPoolId,
+        account: &mut Account,
+        stake_deposit: Balance,
+    ) {
+        {
+            // track at the account level
+            let mut staking_pool_balances = account
+                .balances(&staking_pool_id)
+                .expect("staking pool account balances should exist");
+            staking_pool_balances.deposits.credit(stake_deposit);
+            account.set_balances(&staking_pool_id, &staking_pool_balances);
+            self.accounts
+                .upsert(&env::predecessor_account_id(), &account);
+        }
+
+        match self.deposit_and_stake_activity.get(staking_pool_id) {
+            None => {
+                self.deposit_and_stake_activity
+                    .insert(staking_pool_id, &TimestampedBalance::new(stake_deposit));
+            }
+            Some(mut activity) => {
+                activity.credit(stake_deposit);
+                self.deposit_and_stake_activity
+                    .insert(staking_pool_id, &activity);
+            }
+        }
+    }
+
+    pub fn track_completed_deposit_and_stake_activity(
+        &mut self,
+        staking_pool_id: &StakingPoolId,
+        account: &mut Account,
+        stake_deposit: Balance,
+        success: bool,
+    ) {
+        // track at the account level
+        {
+            let mut staking_pool_balances = account
+                .balances(&staking_pool_id)
+                .expect("staking pool account balances should exist");
+            staking_pool_balances.deposits.debit(stake_deposit);
+            if success {
+                staking_pool_balances.staked.credit(stake_deposit);
+            }
+            account.set_balances(&staking_pool_id, &staking_pool_balances);
+            self.accounts
+                .upsert(&env::predecessor_account_id(), &account);
+        }
+
+        // track at the staking pool level
+        {
+            let mut activity = self.deposit_and_stake_activity.get(staking_pool_id).expect(
+                format!(
+                    "deposit_and_stake_activity does not exist for staking pool: {}",
+                    staking_pool_id
+                )
+                .as_str(),
+            );
+            activity.debit(stake_deposit);
+            self.deposit_and_stake_activity
+                .insert(staking_pool_id, &activity);
+        }
+    }
 }

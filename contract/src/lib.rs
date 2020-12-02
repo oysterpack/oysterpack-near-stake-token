@@ -12,10 +12,9 @@ pub mod state;
 #[cfg(test)]
 pub mod test_utils;
 
-use crate::account::Accounts;
+use crate::account::{Accounts, TimestampedBalance};
 use crate::common::{json_types, StakingPoolId};
 use crate::config::Config;
-use crate::staking::StakingPool;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     collections::{UnorderedMap, UnorderedSet},
@@ -41,7 +40,12 @@ pub struct StakeTokenService {
     config_change_block_height: BlockHeight,
 
     accounts: Accounts,
-    staking_pools: UnorderedMap<StakingPoolId, StakingPool>,
+    /// used to track deposit and stake activity
+    /// - when a deposit_and_stake request is submitted to the staking pool, the balance is credited
+    /// - when the deposit_and_stake activity is complete (success or failure), then the balance is debited
+    /// - thus, if an entry is present then it means there are pending deposit_and_stake requests
+    /// TODO: track activity count
+    deposit_and_stake_activity: UnorderedMap<StakingPoolId, TimestampedBalance>,
 }
 
 impl Default for StakeTokenService {
@@ -74,7 +78,9 @@ impl StakeTokenService {
             config: config.unwrap_or_else(Config::default),
             config_change_block_height: env::block_index(),
             accounts: Accounts::default(),
-            staking_pools: UnorderedMap::new(state::STAKING_POOLS_STATE_ID.to_vec()),
+            deposit_and_stake_activity: UnorderedMap::new(
+                state::DEPOSIT_AND_STAKE_ACTIVITY_STATE_ID.to_vec(),
+            ),
         }
     }
 
@@ -125,6 +131,7 @@ mod test {
     use near_sdk::{testing_env, MockedBlockchain, VMContext};
 
     use super::*;
+    use crate::config::GasConfig;
 
     #[test]
     fn contract_init_with_default_config() {
@@ -145,7 +152,7 @@ mod test {
     fn contract_init_with_config() {
         let context = near::new_context(near::stake_contract_account_id());
         testing_env!(context);
-        let config = Config::new(100);
+        let config = Config::new(100, GasConfig::default());
         let contract = StakeTokenService::new(
             near::to_account_id("operator.stake.oysterpack.near"),
             Some(config),

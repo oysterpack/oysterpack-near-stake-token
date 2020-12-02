@@ -2,13 +2,15 @@ use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env,
     json_types::U128,
-    AccountId, Balance,
+    AccountId, Balance, PromiseResult,
 };
 use std::ops::Deref;
 
 pub const YOCTO: u128 = 1_000_000_000_000_000_000_000_000;
 
 pub const ZERO_BALANCE: Balance = 0;
+
+pub const NO_DEPOSIT: Balance = 0;
 
 pub mod json_types {
     use near_sdk::json_types::{U128, U64};
@@ -52,8 +54,15 @@ impl From<&str> for Hash {
 
 /// asserts that predecessor account is the contract itself - used to enforce that callbacks
 /// should only be called internally - even though they are exposed on the public contract interface
-pub fn assert_self() {
+pub fn assert_predecessor_is_self() {
     assert_eq!(env::predecessor_account_id(), env::current_account_id());
+}
+
+pub fn is_promise_result_success(result: PromiseResult) -> bool {
+    match result {
+        PromiseResult::Successful(_) => true,
+        _ => false,
+    }
 }
 
 #[cfg(test)]

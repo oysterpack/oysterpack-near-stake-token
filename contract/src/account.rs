@@ -39,6 +39,18 @@ impl Accounts {
     pub fn get(&self, account_id: &str) -> Option<Account> {
         self.accounts.get(&account_id.into())
     }
+
+    /// inserts or replaces the account
+    /// - if the account is replaced, then the previous version is returned
+    pub fn upsert(&mut self, account_id: &str, account: &Account) -> Option<Account> {
+        match self.accounts.insert(&account_id.into(), account) {
+            None => {
+                self.count += 1;
+                None
+            }
+            Some(account) => Some(account),
+        }
+    }
 }
 
 impl Default for Accounts {
@@ -55,7 +67,7 @@ pub struct Account {
     storage_escrow: Balance,
     storage_usage: StorageUsage,
     /// STAKE token balances per staking pool
-    balances: UnorderedMap<StakingPoolId, AccountBalances>,
+    balances: UnorderedMap<StakingPoolId, StakeBalance>,
     available_near_balance: TimestampedBalance,
 }
 
@@ -73,8 +85,17 @@ impl Default for Account {
 impl Account {
     /// Returns the number of STAKE tokens owned for the specified staking pool.
     /// Returns None, if no record exists for the staking pool.
-    pub fn balances(&self, staking_pool_id: &StakingPoolId) -> Option<AccountBalances> {
+    pub fn balances(&self, staking_pool_id: &StakingPoolId) -> Option<StakeBalance> {
         self.balances.get(staking_pool_id)
+    }
+
+    /// Returns previous value
+    pub fn set_balances(
+        &mut self,
+        staking_pool_id: &StakingPoolId,
+        balances: &StakeBalance,
+    ) -> Option<StakeBalance> {
+        self.balances.insert(staking_pool_id, balances)
     }
 
     /// If a record for the staking pool does not exist, then insert a record with a zero balance.
@@ -83,26 +104,35 @@ impl Account {
         match self.balances.get(staking_pool_id) {
             None => {
                 self.balances
-                    .insert(staking_pool_id, &AccountBalances::default());
+                    .insert(staking_pool_id, &StakeBalance::default());
                 true
             }
             Some(_) => false,
         }
     }
 
-    pub fn storage_usage_increase(&mut self, storage_usage: StorageUsage, storage_fee: Balance) {
+    pub fn storage_usage_increased(&mut self, storage_usage: StorageUsage, storage_fee: Balance) {
         self.storage_usage += storage_usage;
         self.storage_escrow += storage_fee;
     }
 
-    pub fn storage_usage_decrease(&mut self, storage_usage: StorageUsage, storage_fee: Balance) {
+    pub fn storage_usage_decreased(&mut self, storage_usage: StorageUsage, storage_fee: Balance) {
         self.storage_usage -= storage_usage;
         self.storage_escrow -= storage_fee;
     }
 }
 
+/// ## Example
+/// <pre>
+/// deposited       staked      action
+/// =========       ======      ======
+/// 100             0           STakingPool::deposit_and_stake(100) - ext contract func call
+/// 150             0           STakingPool::deposit_and_stake(50) - ext contract func call
+/// 100             50         StateTokenService::on_deposit_and_stake(50) - contract callback
+/// 0               150         StateTokenService::on_deposit_and_stake(100) - contract callback
+/// </pre>
 #[derive(BorshSerialize, BorshDeserialize, Default)]
-pub struct AccountBalances {
+pub struct StakeBalance {
     /// account deposits that have been staked but pending confirmation from the staking pool
     /// - once a deposit is confirmed, then it is debited
     /// - if the balance is zero, it means all account deposits have been processed.
@@ -114,9 +144,14 @@ pub struct AccountBalances {
     pub staked: TimestampedBalance,
 }
 
-impl AccountBalances {
+impl StakeBalance {
     pub fn has_funds(&self) -> bool {
         self.deposits.balance > 0 || self.staked.balance > 0
+    }
+
+    pub fn deposit_and_stake_success(&mut self, stake_deposit: Balance) {
+        self.deposits.debit(stake_deposit);
+        self.staked.credit(stake_deposit);
     }
 }
 
@@ -507,7 +542,7 @@ mod test {
             RegisterAccountResult::Registered { storage_fee } => {
                 let account_hash = Hash::from(account_id.as_bytes());
                 let mut account = contract.accounts.accounts.get(&account_hash).unwrap();
-                let stake_balances = AccountBalances {
+                let stake_balances = StakeBalance {
                     deposits: TimestampedBalance::new(10),
                     staked: TimestampedBalance::default(),
                 };
