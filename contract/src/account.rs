@@ -1,9 +1,11 @@
 use crate::common::{
     json_types::{YoctoNEAR, YoctoSTAKE},
-    BlockTimestamp, Hash, StakingPoolId, ZERO_BALANCE,
+    BlockTimestamp, StakingPoolId, ZERO_BALANCE,
 };
-use crate::data::TimestampedBalance;
-use crate::state;
+use crate::data::accounts::*;
+use crate::data::{
+    Hash, TimestampedBalance, ACCOUNTS_KEY_PREFIX, ACCOUNT_STAKE_BALANCES_KEY_PREFIX,
+};
 use crate::StakeTokenService;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
@@ -16,145 +18,6 @@ use near_sdk::{
 };
 use primitive_types::U256;
 use std::collections::HashMap;
-
-#[derive(BorshSerialize, BorshDeserialize)]
-pub struct Accounts {
-    /// the account ID hash is used as the key to ensure the TRIE is balanced
-    accounts: LookupMap<Hash, Account>,
-    /// using u128 to make this future proof ... at least for the foreseeable future
-    /// - use case: IOT, e.g. every device could potentially have its own account
-    count: u128,
-}
-
-impl Accounts {
-    pub fn remove(&mut self, account_id: &str) -> Option<Account> {
-        match self.accounts.remove(&account_id.into()) {
-            None => None,
-            Some(account) => {
-                self.count -= 1;
-                Some(account)
-            }
-        }
-    }
-
-    pub fn get(&self, account_id: &str) -> Option<Account> {
-        self.accounts.get(&account_id.into())
-    }
-
-    /// inserts or replaces the account
-    /// - if the account is replaced, then the previous version is returned
-    pub fn upsert(&mut self, account_id: &str, account: &Account) -> Option<Account> {
-        match self.accounts.insert(&account_id.into(), account) {
-            None => {
-                self.count += 1;
-                None
-            }
-            Some(account) => Some(account),
-        }
-    }
-}
-
-impl Default for Accounts {
-    fn default() -> Self {
-        Self {
-            count: 0,
-            accounts: LookupMap::new(state::ACCOUNTS_STATE_ID.to_vec()),
-        }
-    }
-}
-
-#[derive(BorshSerialize, BorshDeserialize)]
-pub struct Account {
-    storage_escrow: Balance,
-    storage_usage: StorageUsage,
-    /// STAKE token balances per staking pool
-    stake: UnorderedMap<StakingPoolId, StakeBalance>,
-    /// funds that are available for withdrawal
-    near: TimestampedBalance,
-}
-
-impl Default for Account {
-    fn default() -> Self {
-        Self {
-            storage_escrow: 0,
-            storage_usage: 0,
-            near: TimestampedBalance::default(),
-            stake: UnorderedMap::new(state::STAKE_BALANCES_STATE_ID.to_vec()),
-        }
-    }
-}
-
-impl Account {
-    /// Returns the number of STAKE tokens owned for the specified staking pool.
-    /// Returns None, if no record exists for the staking pool.
-    pub fn balances(&self, staking_pool_id: &StakingPoolId) -> Option<StakeBalance> {
-        self.stake.get(staking_pool_id)
-    }
-
-    /// Returns previous value
-    pub fn set_stake_balances(
-        &mut self,
-        staking_pool_id: &StakingPoolId,
-        balances: &StakeBalance,
-    ) -> Option<StakeBalance> {
-        self.stake.insert(staking_pool_id, balances)
-    }
-
-    /// If a record for the staking pool does not exist, then insert a record with a zero balance.
-    /// Returns false if a record for the specified staking pool already exists.
-    pub fn init_staking_pool(&mut self, staking_pool_id: &StakingPoolId) -> bool {
-        match self.stake.get(staking_pool_id) {
-            None => {
-                self.stake.insert(staking_pool_id, &StakeBalance::default());
-                true
-            }
-            Some(_) => false,
-        }
-    }
-
-    pub fn storage_usage_increased(&mut self, storage_usage: StorageUsage, storage_fee: Balance) {
-        self.storage_usage += storage_usage;
-        self.storage_escrow += storage_fee;
-    }
-
-    pub fn storage_usage_decreased(&mut self, storage_usage: StorageUsage, storage_fee: Balance) {
-        self.storage_usage -= storage_usage;
-        self.storage_escrow -= storage_fee;
-    }
-}
-
-/// ## Example
-/// <pre>
-/// deposited       staked      action
-/// =========       ======      ======
-/// 100             0           STakingPool::deposit_and_stake(100) - ext contract func call
-/// 150             0           STakingPool::deposit_and_stake(50) - ext contract func call
-/// 100             50         StateTokenService::on_deposit_and_stake(50) - contract callback
-/// 0               150         StateTokenService::on_deposit_and_stake(100) - contract callback
-/// </pre>
-#[derive(BorshSerialize, BorshDeserialize, Default)]
-pub struct StakeBalance {
-    /// account deposits that have been staked but pending confirmation from the staking pool
-    /// - once a deposit is confirmed, then it is debited
-    /// - if the balance is zero, it means all account deposits have been processed.
-    /// - if deposits were staked successfully, then they were credited to [staked].
-    /// - if deposits failed to be staked, then the deposit is refunded
-    /// - if the refund fails, then the deposit is credited to the available withdrawal balance
-    pub deposit_and_stake_activity: TimestampedBalance,
-    /// confirmed funds that have been deposited and staked with the staking pool
-    pub staked: TimestampedBalance,
-}
-
-impl StakeBalance {
-    pub fn has_funds(&self) -> bool {
-        self.deposit_and_stake_activity.balance() > 0 || self.staked.balance() > 0
-    }
-
-    pub fn deposit_and_stake_success(&mut self, stake_deposit: Balance) {
-        self.deposit_and_stake_activity.debit(stake_deposit);
-        self.staked.credit(stake_deposit);
-    }
-}
 
 pub trait AccountRegistry {
     fn account_registered(&self, account_id: AccountId) -> bool;
@@ -185,9 +48,7 @@ pub trait AccountRegistry {
 #[near_bindgen]
 impl AccountRegistry for StakeTokenService {
     fn account_registered(&self, account_id: AccountId) -> bool {
-        self.accounts
-            .accounts
-            .contains_key(&Hash::from(account_id.as_str()))
+        self.accounts.get(&account_id).is_some()
     }
 
     #[payable]
@@ -218,8 +79,7 @@ impl AccountRegistry for StakeTokenService {
 
         let (account_id, deposit) = check_args();
 
-        let account_hash = Hash::from(account_id.as_str());
-        if self.accounts.accounts.contains_key(&account_hash) {
+        if self.accounts.get(&account_id).is_some() {
             return RegisterAccountResult::AlreadyRegistered;
         }
 
@@ -227,16 +87,16 @@ impl AccountRegistry for StakeTokenService {
         // the amount of storage will be determined dynamically
         let initial_storage_usage = env::storage_usage();
         let mut account = Account::default();
-        self.accounts.accounts.insert(&account_hash, &account);
-        // this has the potential to overflow in the far distant future ...
-        self.accounts.count += 1;
+        self.accounts.insert(&account_id, &account);
 
         // apply account storage fees
-        account.storage_usage = env::storage_usage() - initial_storage_usage;
         let storage_fee = apply_storage_fees(self, initial_storage_usage);
-        account.storage_escrow = storage_fee;
+        account.apply_storage_usage_increase(
+            env::storage_usage() - initial_storage_usage,
+            storage_fee,
+        );
 
-        self.accounts.accounts.insert(&account_hash, &account);
+        self.accounts.insert(&account_id, &account); // persist changes
         RegisterAccountResult::Registered {
             storage_fee: storage_fee.into(),
         }
@@ -244,21 +104,20 @@ impl AccountRegistry for StakeTokenService {
 
     fn unregister_account(&mut self) -> UnregisterAccountResult {
         let account_id = env::predecessor_account_id();
-        let account_hash = Hash::from(account_id.as_str());
-        match self.accounts.accounts.get(&account_hash) {
+
+        match self.accounts.get(&account_id) {
             None => UnregisterAccountResult::NotRegistered,
             Some(account) => {
-                if account.near.balance() > 0 || !account.stake.is_empty() {
+                if account.has_funds() {
                     UnregisterAccountResult::AccountHasFunds
                 } else {
+                    self.accounts.remove(&account_id);
                     // TODO: Is it safe to transfer async?
                     // What happens to the funds if the transfer fails?
                     // - Are the funds refunded back to this contract?
-                    Promise::new(account_id).transfer(account.storage_escrow);
-                    self.accounts.accounts.remove(&account_hash);
-                    self.accounts.count -= 1;
+                    Promise::new(account_id).transfer(account.storage_escrow().balance());
                     UnregisterAccountResult::Unregistered {
-                        storage_fee_refund: account.storage_escrow.into(),
+                        storage_fee_refund: account.storage_escrow().balance().into(),
                     }
                 }
             }
@@ -266,7 +125,7 @@ impl AccountRegistry for StakeTokenService {
     }
 
     fn registered_accounts_count(&self) -> U128 {
-        self.accounts.count.into()
+        self.accounts.count().into()
     }
 }
 
@@ -305,6 +164,7 @@ pub enum UnregisterAccountResult {
 mod test {
     use super::*;
     use crate::common::YOCTO;
+    use crate::data::accounts::StakeBalance;
     use crate::test_utils::near;
     use near_sdk::{testing_env, MockedBlockchain, VMContext};
 
@@ -353,7 +213,7 @@ mod test {
                     storage_fee.0 as f64 / YOCTO as f64
                 );
                 let account = contract.accounts.get(&account_id).unwrap();
-                assert_eq!(account.storage_usage, account_storage_usage);
+                assert_eq!(account.storage_usage(), account_storage_usage);
             }
             RegisterAccountResult::AlreadyRegistered => {
                 panic!("account should not be already registered");
@@ -459,9 +319,9 @@ mod test {
         match contract.register_account() {
             RegisterAccountResult::Registered { storage_fee } => {
                 let account_hash = Hash::from(account_id.as_bytes());
-                let mut account = contract.accounts.accounts.get(&account_hash).unwrap();
-                account.near = TimestampedBalance::new(10);
-                contract.accounts.accounts.insert(&account_hash, &account);
+                let mut account = contract.accounts.get(&account_id).unwrap();
+                account.apply_near_credit(10);
+                contract.accounts.insert(&account_id, &account);
                 match contract.unregister_account() {
                     UnregisterAccountResult::AccountHasFunds => (), // expected
                     result => panic!("unexpected result: {:?}", result),
@@ -481,13 +341,9 @@ mod test {
         match contract.register_account() {
             RegisterAccountResult::Registered { storage_fee } => {
                 let account_hash = Hash::from(account_id.as_bytes());
-                let mut account = contract.accounts.accounts.get(&account_hash).unwrap();
-                let stake_balances = StakeBalance {
-                    deposit_and_stake_activity: TimestampedBalance::new(10),
-                    staked: TimestampedBalance::default(),
-                };
-                account.stake.insert(&account_id, &stake_balances);
-                contract.accounts.accounts.insert(&account_hash, &account);
+                let mut account: Account = contract.accounts.get(&account_id).unwrap();
+                account.apply_deposit_and_stake_activity(&account_id, 10);
+                contract.accounts.insert(&account_id, &account);
                 match contract.unregister_account() {
                     UnregisterAccountResult::AccountHasFunds => (), // expected
                     result => panic!("unexpected result: {:?}", result),

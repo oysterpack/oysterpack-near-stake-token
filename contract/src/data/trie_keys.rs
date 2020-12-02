@@ -4,6 +4,6 @@
 //! collection in the TRIE. Each of the IDs defined below should only be referenced once within the
 //! project.
 
-pub(crate) const ACCOUNTS_STATE_ID: [u8; 1] = [0];
-pub(crate) const STAKE_BALANCES_STATE_ID: [u8; 1] = [1];
-pub(crate) const DEPOSIT_AND_STAKE_ACTIVITY_STATE_ID: [u8; 1] = [2];
+pub const ACCOUNTS_KEY_PREFIX: [u8; 1] = [0];
+pub const ACCOUNT_STAKE_BALANCES_KEY_PREFIX: [u8; 1] = [1];
+pub const DEPOSIT_AND_STAKE_ACTIVITY_KEY_PREFIX: [u8; 1] = [2];

@@ -5,10 +5,14 @@ use near_sdk::{
 use std::cmp::Ordering;
 
 pub mod accounts;
+pub mod staking_pools;
+pub mod trie_keys;
+
+pub use trie_keys::*;
 
 pub type BlockTimestamp = u64;
 
-#[derive(Debug, BorshSerialize, BorshDeserialize)]
+#[derive(Debug, BorshSerialize, BorshDeserialize, Clone, Copy)]
 pub struct TimestampedBalance {
     balance: Balance,
     block_height: BlockHeight,
@@ -110,6 +114,31 @@ impl TimestampedBalance {
         self.epoch_height = env::epoch_height();
         self.block_timestamp = env::block_timestamp();
         self.block_height = env::block_index();
+    }
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct Hash([u8; 32]);
+
+impl Hash {
+    const LENGTH: usize = 32;
+}
+
+impl From<&[u8]> for Hash {
+    fn from(value: &[u8]) -> Self {
+        let mut buf = [0u8; Hash::LENGTH];
+        let hash = env::sha256(value);
+        buf.copy_from_slice(&hash.as_slice()[..Hash::LENGTH]);
+        Self(buf)
+    }
+}
+
+impl From<&str> for Hash {
+    fn from(value: &str) -> Self {
+        let mut buf = [0u8; Hash::LENGTH];
+        let hash = env::sha256(value.as_bytes());
+        buf.copy_from_slice(&hash.as_slice()[..Hash::LENGTH]);
+        Self(buf)
     }
 }
 
@@ -290,5 +319,27 @@ mod test {
         let bytes: Vec<u8> = balance.try_to_vec().unwrap();
         let balance2: TimestampedBalance = TimestampedBalance::try_from_slice(&bytes).unwrap();
         assert_eq!(balance, balance2);
+    }
+
+    #[test]
+    fn hash_from_string() {
+        let account_id = "alfio-zappala.near".to_string();
+        let context = new_context(account_id.clone());
+        testing_env!(context);
+        let data = "Alfio Zappala";
+        let hash = Hash::from(data);
+        let hash2 = Hash::from(data);
+        assert_eq!(hash, hash2);
+    }
+
+    #[test]
+    fn hash_from_bytes() {
+        let account_id = "alfio-zappala.near".to_string();
+        let context = new_context(account_id.clone());
+        testing_env!(context);
+        let data = "Alfio Zappala II";
+        let hash = Hash::from(data.as_bytes());
+        let hash2 = Hash::from(data.as_bytes());
+        assert_eq!(hash, hash2);
     }
 }

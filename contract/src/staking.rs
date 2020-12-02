@@ -1,9 +1,9 @@
-use crate::account::{Account, StakeBalance};
 use crate::common::{
     assert_predecessor_is_self, is_promise_result_success,
     json_types::{self, YoctoNEAR, YoctoSTAKE},
     StakingPoolId, NO_DEPOSIT, YOCTO, ZERO_BALANCE,
 };
+use crate::data::accounts::*;
 use crate::data::TimestampedBalance;
 use crate::StakeTokenService;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
@@ -177,14 +177,11 @@ impl StakingService for StakeTokenService {
         // will need to be allocated to track the staking pool.
         let storage_fee = {
             let initial_storage_usage = env::storage_usage();
-            if account.init_staking_pool(&staking_pool_id) {
-                let storage_fee = self.assert_storage_fees(initial_storage_usage);
-                let storage_usage = env::storage_usage() - initial_storage_usage;
-                account.storage_usage_increased(storage_usage, storage_fee);
-                storage_fee
-            } else {
-                ZERO_BALANCE
-            }
+            account.apply_deposit_and_stake_activity(&staking_pool_id, 0);
+            let storage_fee = self.assert_storage_fees(initial_storage_usage);
+            let storage_usage = env::storage_usage() - initial_storage_usage;
+            account.apply_storage_usage_increase(storage_usage, storage_fee);
+            storage_fee
         };
         // deduct storage fee from deposit
         let stake_deposit = env::attached_deposit() - storage_fee;
@@ -291,18 +288,7 @@ impl StakeTokenService {
         account: &mut Account,
         stake_deposit: Balance,
     ) {
-        {
-            // track at the account level
-            let mut staking_pool_balances = account
-                .balances(&staking_pool_id)
-                .expect("staking pool account balances should exist");
-            staking_pool_balances
-                .deposit_and_stake_activity
-                .credit(stake_deposit);
-            account.set_stake_balances(&staking_pool_id, &staking_pool_balances);
-            self.accounts
-                .upsert(&env::predecessor_account_id(), &account);
-        }
+        account.apply_deposit_and_stake_activity(&staking_pool_id, stake_deposit);
 
         match self.deposit_and_stake_activity.get(staking_pool_id) {
             None => {
@@ -324,20 +310,8 @@ impl StakeTokenService {
         stake_deposit: Balance,
         success: bool,
     ) {
-        // track at the account level
-        {
-            let mut staking_pool_balances = account
-                .balances(&staking_pool_id)
-                .expect("staking pool account balances should exist");
-            staking_pool_balances
-                .deposit_and_stake_activity
-                .debit(stake_deposit);
-            if success {
-                staking_pool_balances.staked.credit(stake_deposit);
-            }
-            account.set_stake_balances(&staking_pool_id, &staking_pool_balances);
-            self.accounts
-                .upsert(&env::predecessor_account_id(), &account);
+        if success {
+            account.apply_deposit_and_stake_activity_success(staking_pool_id, stake_deposit)
         }
 
         // track at the staking pool level

@@ -2,7 +2,6 @@ use crate::common::{
     json_types::{YoctoNEAR, YoctoSTAKE},
     YOCTO,
 };
-use crate::state;
 use near_sdk::{
     json_types::{ValidAccountId, U128, U64},
     serde::{Deserialize, Serialize},
