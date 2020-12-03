@@ -110,7 +110,7 @@ impl TimestampedBalance {
     /// if debit amount > balance
     pub fn debit(&mut self, amount: Balance) {
         assert!(
-            self.balance > amount,
+            self.balance >= amount,
             "debit amount cannot be greater than the current balance: {} - {}",
             self.balance,
             amount,
