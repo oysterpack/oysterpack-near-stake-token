@@ -199,6 +199,7 @@ impl Account {
                 balance
                     .locked_stake_token_balance
                     .credit(stake_token_amount);
+                self.stake.insert(staking_pool_id, &balance);
             }
             None => panic!(
                 "unstake request failed because STAKE balance is 0 for {}",
@@ -221,6 +222,7 @@ impl Account {
                 balance
                     .locked_stake_token_balance
                     .credit(stake_token_balance);
+                self.stake.insert(staking_pool_id, &balance);
                 stake_token_balance
             }
             None => 0,
@@ -481,5 +483,101 @@ mod test {
         assert_eq!(stake_balance.stake_token_balance().balance, 0);
         assert_eq!(stake_balance.locked_stake_token_balance().balance, 0);
         assert_eq!(account.near_balance().balance, 100 * YOCTO);
+    }
+
+    #[test]
+    fn unstake() {
+        let account_id = "bob.near".to_string();
+        let context = new_context(account_id.clone());
+        testing_env!(context);
+
+        let staking_pool_id: StakingPoolId = "staking-pool.near".to_string();
+        // Given a new account is registered
+        let mut accounts = Accounts::default();
+        accounts.insert(&account_id, &Account::default());
+
+        let mut account = accounts.get(&account_id).unwrap();
+        account.apply_deposit_and_stake_activity(&staking_pool_id, 1000);
+        accounts.insert(&account_id, &account);
+
+        let mut account = accounts.get(&account_id).unwrap();
+        account.apply_deposit_and_stake_activity_success(&staking_pool_id, 1000);
+        accounts.insert(&account_id, &account);
+
+        let mut account = accounts.get(&account_id).unwrap();
+        account.unstake(&staking_pool_id, 400);
+        accounts.insert(&account_id, &account);
+
+        let account = accounts.get(&account_id).unwrap();
+        assert_eq!(
+            account
+                .stake_balance(&staking_pool_id)
+                .locked_stake_token_balance()
+                .balance,
+            400
+        );
+        assert_eq!(
+            account
+                .stake_balance(&staking_pool_id)
+                .stake_token_balance()
+                .balance,
+            600
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn unstake_balance_too_low() {
+        let account_id = "bob.near".to_string();
+        let context = new_context(account_id.clone());
+        testing_env!(context);
+
+        let staking_pool_id: StakingPoolId = "staking-pool.near".to_string();
+        // Given a new account is registered
+        let mut accounts = Accounts::default();
+        accounts.insert(&account_id, &Account::default());
+
+        let mut account = accounts.get(&account_id).unwrap();
+        account.unstake(&staking_pool_id, 400);
+    }
+
+    #[test]
+    fn unstake_all() {
+        let account_id = "bob.near".to_string();
+        let context = new_context(account_id.clone());
+        testing_env!(context);
+
+        let staking_pool_id: StakingPoolId = "staking-pool.near".to_string();
+        // Given a new account is registered
+        let mut accounts = Accounts::default();
+        accounts.insert(&account_id, &Account::default());
+
+        let mut account = accounts.get(&account_id).unwrap();
+        account.apply_deposit_and_stake_activity(&staking_pool_id, 1000);
+        accounts.insert(&account_id, &account);
+
+        let mut account = accounts.get(&account_id).unwrap();
+        account.apply_deposit_and_stake_activity_success(&staking_pool_id, 1000);
+        accounts.insert(&account_id, &account);
+
+        let mut account = accounts.get(&account_id).unwrap();
+        assert_eq!(account.unstake_all(&staking_pool_id), 1000);
+        accounts.insert(&account_id, &account);
+
+        let account = accounts.get(&account_id).unwrap();
+        assert_eq!(
+            account
+                .stake_balance(&staking_pool_id)
+                .locked_stake_token_balance()
+                .balance,
+            1000
+        );
+        assert_eq!(
+            account
+                .stake_balance(&staking_pool_id)
+                .stake_token_balance()
+                .balance,
+            0
+        );
     }
 }
