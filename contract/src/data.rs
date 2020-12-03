@@ -1,3 +1,10 @@
+//! This module and its defines the data model used for persistent contract object storage on the
+//! NEAR blockchain.
+//!
+//! All objects are persisted using [Borsh] serialization.
+//!
+//! [Borsh]: https://crates.io/crates/borsh
+
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env, Balance, BlockHeight, EpochHeight,
@@ -5,6 +12,8 @@ use near_sdk::{
 use std::cmp::Ordering;
 
 pub mod accounts;
+pub mod activities;
+pub mod config;
 pub mod staking_pools;
 pub mod trie_keys;
 

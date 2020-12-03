@@ -1,3 +1,5 @@
+//! This module is provides object storage on the NEAR blockchain for [Account] objects.
+
 use crate::data::staking_pools::StakingPoolId;
 use crate::data::{
     Hash, TimestampedBalance, ACCOUNTS_KEY_PREFIX, ACCOUNT_STAKE_BALANCES_KEY_PREFIX,
@@ -9,6 +11,11 @@ use near_sdk::{
     Balance, StorageUsage,
 };
 
+/// Accounts provides key-value persistent storage [Account] objects on the NEAR blockchain:
+///
+/// [AccountId] -> [Account]
+///
+/// [Account]: crate::data::accounts::Account
 #[derive(BorshSerialize, BorshDeserialize)]
 pub struct Accounts {
     /// the account ID hash is used as the key to ensure the TRIE is balanced
@@ -19,6 +26,9 @@ pub struct Accounts {
 }
 
 impl Accounts {
+    /// reads the object from persistent storage on the NEAR
+    ///
+    /// NOTE: in order to ensure that all [Account] state is persistently stored, use [insert]
     pub fn get(&self, account_id: &str) -> Option<Account> {
         self.accounts.get(&account_id.into())
     }
@@ -31,6 +41,8 @@ impl Accounts {
 
     /// inserts the account - replacing any previous account record
     /// - if the account is replaced, then the previous version is returned
+    ///
+    /// NOTE: this will persist the object on the NEAR blockchain
     pub fn insert(&mut self, account_id: &str, account: &Account) {
         if self.accounts.insert(&account_id.into(), account).is_none() {
             self.count += 1;

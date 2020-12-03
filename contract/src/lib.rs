@@ -11,9 +11,10 @@ pub mod staking;
 #[cfg(test)]
 pub mod test_utils;
 
-use crate::common::{json_types, StakingPoolId};
+use crate::common::json_types;
 use crate::config::Config;
 use crate::data::accounts::*;
+use crate::data::staking_pools::StakingPoolId;
 use crate::data::{TimestampedBalance, DEPOSIT_AND_STAKE_ACTIVITY_KEY_PREFIX};
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},

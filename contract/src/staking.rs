@@ -1,9 +1,10 @@
 use crate::common::{
     assert_predecessor_is_self, is_promise_result_success,
     json_types::{self, YoctoNEAR, YoctoSTAKE},
-    StakingPoolId, NO_DEPOSIT, YOCTO, ZERO_BALANCE,
+    NO_DEPOSIT, YOCTO, ZERO_BALANCE,
 };
 use crate::data::accounts::*;
+use crate::data::staking_pools::StakingPoolId;
 use crate::data::TimestampedBalance;
 use crate::StakeTokenService;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
