@@ -166,7 +166,7 @@ mod test {
     use crate::common::YOCTO;
     use crate::data::accounts::StakeBalance;
     use crate::test_utils::near;
-    use near_sdk::{testing_env, MockedBlockchain, VMContext};
+    use near_sdk::{serde_json, testing_env, MockedBlockchain, VMContext};
 
     #[test]
     fn register_account_result_json() {

@@ -3,7 +3,6 @@
 
 pub mod account;
 pub mod common;
-pub mod config;
 pub mod data;
 pub mod stake;
 pub mod staking;
@@ -12,8 +11,8 @@ pub mod staking;
 pub mod test_utils;
 
 use crate::common::json_types;
-use crate::config::Config;
 use crate::data::accounts::*;
+use crate::data::config::{updates, Config};
 use crate::data::staking_pools::StakingPoolId;
 use crate::data::{TimestampedBalance, DEPOSIT_AND_STAKE_ACTIVITY_KEY_PREFIX};
 use near_sdk::{
@@ -132,7 +131,7 @@ mod test {
     use near_sdk::{testing_env, MockedBlockchain, VMContext};
 
     use super::*;
-    use crate::config::GasConfig;
+    use crate::data::config::GasConfig;
 
     #[test]
     fn contract_init_with_default_config() {

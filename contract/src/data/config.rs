@@ -1,4 +1,5 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
+use std::str::FromStr;
 
 #[derive(Debug, BorshSerialize, BorshDeserialize)]
 pub struct Config {
@@ -20,6 +21,18 @@ impl Config {
 
     pub fn gas_config(&self) -> &GasConfig {
         &self.gas_config
+    }
+
+    /// ## Panics
+    /// if config is invalid
+    pub fn update(&mut self, config: &updates::Config) {
+        if let Some(storage_cost_per_byte) = config.storage_cost_per_byte.as_ref() {
+            self.storage_cost_per_byte = u128::from_str(storage_cost_per_byte).unwrap();
+        }
+
+        if let Some(gas_config) = config.gas_config.as_ref() {
+            self.gas_config.update(gas_config);
+        }
     }
 }
 
@@ -49,6 +62,16 @@ impl GasConfig {
 
     pub fn callbacks(&self) -> &CallBacksGasConfig {
         &self.callbacks
+    }
+
+    pub fn update(&mut self, config: &updates::GasConfig) {
+        if let Some(staking_pool) = config.staking_pool.as_ref() {
+            self.staking_pool.update(staking_pool);
+        }
+
+        if let Some(callbacks) = config.callbacks.as_ref() {
+            self.callbacks.update(callbacks);
+        }
     }
 }
 
@@ -87,6 +110,24 @@ impl StakingPoolGasConfig {
     pub fn get_account_balance(&self) -> u64 {
         self.get_account_balance
     }
+
+    pub fn update(&mut self, config: &updates::StakingPoolGasConfig) {
+        if let Some(deposit_and_stake) = config.deposit_and_stake {
+            self.deposit_and_stake = deposit_and_stake;
+        }
+
+        if let Some(unstake) = config.unstake {
+            self.unstake = unstake;
+        }
+
+        if let Some(withdraw) = config.withdraw {
+            self.withdraw = withdraw;
+        }
+
+        if let Some(get_account_balance) = config.get_account_balance {
+            self.get_account_balance = get_account_balance;
+        }
+    }
 }
 
 #[derive(Debug, BorshSerialize, BorshDeserialize)]
@@ -98,6 +139,12 @@ impl CallBacksGasConfig {
     pub fn on_deposit_and_stake(&self) -> u64 {
         self.on_deposit_and_stake
     }
+
+    pub fn update(&mut self, config: &updates::CallBacksGasConfig) {
+        if let Some(on_deposit_and_stake) = config.on_deposit_and_stake {
+            self.on_deposit_and_stake = on_deposit_and_stake;
+        }
+    }
 }
 
 impl Default for CallBacksGasConfig {
@@ -105,5 +152,244 @@ impl Default for CallBacksGasConfig {
         Self {
             on_deposit_and_stake: BASE_GAS,
         }
+    }
+}
+
+/// provides support for config updates
+/// - config updates can be uploaded in a serde compatible format (JSON and TOML are supported)
+/// - all config properties are optional
+pub mod updates {
+    use near_sdk::serde::{self, Deserialize, Serialize};
+
+    #[derive(Debug, Serialize, Deserialize, Default)]
+    #[serde(crate = "near_sdk::serde")]
+    pub struct Config {
+        /// TOML and JSON do not support u128 - thus, we need to encode u128 values as string
+        pub storage_cost_per_byte: Option<String>,
+        pub gas_config: Option<GasConfig>,
+    }
+
+    impl Config {
+        fn from_toml(config: &str) -> Result<Config, toml::de::Error> {
+            toml::from_str(config)
+        }
+    }
+
+    #[derive(Debug, Serialize, Deserialize, Default)]
+    #[serde(crate = "near_sdk::serde")]
+    pub struct GasConfig {
+        pub staking_pool: Option<StakingPoolGasConfig>,
+        pub callbacks: Option<CallBacksGasConfig>,
+    }
+
+    #[derive(Debug, Serialize, Deserialize, Default)]
+    #[serde(crate = "near_sdk::serde")]
+    pub struct StakingPoolGasConfig {
+        pub deposit_and_stake: Option<u64>,
+        pub unstake: Option<u64>,
+        pub withdraw: Option<u64>,
+        pub get_account_balance: Option<u64>,
+    }
+
+    #[derive(Debug, Serialize, Deserialize, Default)]
+    #[serde(crate = "near_sdk::serde")]
+    pub struct CallBacksGasConfig {
+        pub on_deposit_and_stake: Option<u64>,
+    }
+
+    #[cfg(test)]
+    mod test {
+
+        use super::*;
+        use std::str::FromStr;
+
+        #[test]
+        fn config_from_toml() {
+            let config: Config = toml::from_str(
+                r#"
+        storage_cost_per_byte = "1000"
+
+        [gas_config.staking_pool]
+        deposit_and_stake = 500
+        get_account_balance = 200
+        
+        [gas_config.callbacks]
+        on_deposit_and_stake = 100
+    "#,
+            )
+            .unwrap();
+
+            assert_eq!(
+                u128::from_str(&config.storage_cost_per_byte.unwrap()).unwrap(),
+                1000u128
+            );
+            assert_eq!(
+                config
+                    .gas_config
+                    .as_ref()
+                    .unwrap()
+                    .staking_pool
+                    .as_ref()
+                    .unwrap()
+                    .deposit_and_stake
+                    .unwrap(),
+                500
+            );
+            assert_eq!(
+                config
+                    .gas_config
+                    .as_ref()
+                    .unwrap()
+                    .staking_pool
+                    .as_ref()
+                    .unwrap()
+                    .get_account_balance
+                    .unwrap(),
+                200
+            );
+            assert_eq!(
+                config
+                    .gas_config
+                    .as_ref()
+                    .unwrap()
+                    .callbacks
+                    .as_ref()
+                    .unwrap()
+                    .on_deposit_and_stake
+                    .unwrap(),
+                100
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn config_from_toml() {
+        let toml_config: updates::Config = toml::from_str(
+            r#"
+        storage_cost_per_byte = "1000"
+
+        [gas_config.staking_pool]
+        deposit_and_stake = 500
+        get_account_balance = 200
+        
+        [gas_config.callbacks]
+        on_deposit_and_stake = 100
+    "#,
+        )
+        .unwrap();
+
+        let mut config = Config::default();
+        config.update(&toml_config);
+        assert_eq!(
+            u128::from_str(&toml_config.storage_cost_per_byte.unwrap()).unwrap(),
+            1000u128
+        );
+        assert_eq!(
+            toml_config
+                .gas_config
+                .as_ref()
+                .unwrap()
+                .staking_pool
+                .as_ref()
+                .unwrap()
+                .deposit_and_stake
+                .unwrap(),
+            500
+        );
+        assert_eq!(
+            toml_config
+                .gas_config
+                .as_ref()
+                .unwrap()
+                .staking_pool
+                .as_ref()
+                .unwrap()
+                .get_account_balance
+                .unwrap(),
+            200
+        );
+        assert_eq!(
+            toml_config
+                .gas_config
+                .as_ref()
+                .unwrap()
+                .callbacks
+                .as_ref()
+                .unwrap()
+                .on_deposit_and_stake
+                .unwrap(),
+            100
+        );
+    }
+
+    #[test]
+    fn config_from_json() {
+        let json_config: updates::Config = near_sdk::serde_json::from_str(
+            r#"
+        {
+            "storage_cost_per_byte":"1000",
+            "gas_config": {
+                "staking_pool": {
+                    "deposit_and_stake":500,
+                    "get_account_balance":200
+                },
+                "callbacks": {
+                    "on_deposit_and_stake":100
+                }
+            }
+        }
+        "#,
+        )
+        .unwrap();
+
+        let mut config = Config::default();
+        config.update(&json_config);
+        assert_eq!(
+            u128::from_str(&json_config.storage_cost_per_byte.unwrap()).unwrap(),
+            1000u128
+        );
+        assert_eq!(
+            json_config
+                .gas_config
+                .as_ref()
+                .unwrap()
+                .staking_pool
+                .as_ref()
+                .unwrap()
+                .deposit_and_stake
+                .unwrap(),
+            500
+        );
+        assert_eq!(
+            json_config
+                .gas_config
+                .as_ref()
+                .unwrap()
+                .staking_pool
+                .as_ref()
+                .unwrap()
+                .get_account_balance
+                .unwrap(),
+            200
+        );
+        assert_eq!(
+            json_config
+                .gas_config
+                .as_ref()
+                .unwrap()
+                .callbacks
+                .as_ref()
+                .unwrap()
+                .on_deposit_and_stake
+                .unwrap(),
+            100
+        );
     }
 }

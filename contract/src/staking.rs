@@ -212,7 +212,7 @@ impl StakingService for StakeTokenService {
         ext_staking_pool::deposit_and_stake(
             &staking_pool_id,
             stake_deposit,
-            self.config.gas_config().deposit_and_stake(),
+            self.config.gas_config().staking_pool().deposit_and_stake(),
         )
         .then(ext_staking_pool_callbacks::on_deposit_and_stake(
             env::predecessor_account_id(),
@@ -222,7 +222,7 @@ impl StakingService for StakeTokenService {
             // action receipt params
             &env::current_account_id(),
             NO_DEPOSIT,
-            self.config.gas_config().on_deposit_and_stake(),
+            self.config.gas_config().callbacks().on_deposit_and_stake(),
         ))
     }
 
