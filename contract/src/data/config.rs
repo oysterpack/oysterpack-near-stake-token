@@ -25,7 +25,7 @@ impl Config {
 
     /// ## Panics
     /// if config is invalid
-    pub fn update(&mut self, config: &updates::Config) {
+    pub fn apply_updates(&mut self, config: &updates::Config) {
         if let Some(storage_cost_per_byte) = config.storage_cost_per_byte.as_ref() {
             self.storage_cost_per_byte = u128::from_str(storage_cost_per_byte).unwrap();
         }
@@ -157,9 +157,31 @@ impl Default for CallBacksGasConfig {
 
 /// provides support for config updates
 /// - config updates can be uploaded in a serde compatible format (JSON and TOML are supported)
-/// - all config properties are optional
+/// - all config properties are optional - thus only config properties that change need to be specified
+///   when updating the config
 pub mod updates {
-    use near_sdk::serde::{self, Deserialize, Serialize};
+    use near_sdk::serde::export::TryFrom;
+    use near_sdk::{
+        serde::{self, Deserialize, Serialize},
+        serde_json,
+    };
+    use std::borrow::Borrow;
+
+    #[derive(Debug, Serialize, Deserialize)]
+    #[serde(crate = "near_sdk::serde")]
+    pub enum ConfigFormat {
+        JSON,
+        TOML,
+    }
+
+    #[derive(Debug)]
+    pub struct ConfigParseError(String);
+
+    impl AsRef<str> for ConfigParseError {
+        fn as_ref(&self) -> &str {
+            &self.0
+        }
+    }
 
     #[derive(Debug, Serialize, Deserialize, Default)]
     #[serde(crate = "near_sdk::serde")]
@@ -170,8 +192,23 @@ pub mod updates {
     }
 
     impl Config {
-        fn from_toml(config: &str) -> Result<Config, toml::de::Error> {
+        pub fn from_toml(config: &str) -> Result<Config, toml::de::Error> {
             toml::from_str(config)
+        }
+
+        pub fn from_json(config: &str) -> Result<Config, serde_json::Error> {
+            serde_json::from_str(config)
+        }
+
+        pub fn parse(format: ConfigFormat, config: &str) -> Result<Config, ConfigParseError> {
+            match format {
+                ConfigFormat::JSON => {
+                    Self::from_json(config).map_err(|err| ConfigParseError(err.to_string()))
+                }
+                ConfigFormat::TOML => {
+                    Self::from_toml(config).map_err(|err| ConfigParseError(err.to_string()))
+                }
+            }
         }
     }
 
@@ -271,7 +308,8 @@ mod test {
 
     #[test]
     fn config_from_toml() {
-        let toml_config: updates::Config = toml::from_str(
+        let toml_config: updates::Config = updates::Config::parse(
+            updates::ConfigFormat::TOML,
             r#"
         storage_cost_per_byte = "1000"
 
@@ -286,7 +324,7 @@ mod test {
         .unwrap();
 
         let mut config = Config::default();
-        config.update(&toml_config);
+        config.apply_updates(&toml_config);
         assert_eq!(
             u128::from_str(&toml_config.storage_cost_per_byte.unwrap()).unwrap(),
             1000u128
@@ -331,7 +369,8 @@ mod test {
 
     #[test]
     fn config_from_json() {
-        let json_config: updates::Config = near_sdk::serde_json::from_str(
+        let json_config: updates::Config = updates::Config::parse(
+            updates::ConfigFormat::JSON,
             r#"
         {
             "storage_cost_per_byte":"1000",
@@ -350,7 +389,7 @@ mod test {
         .unwrap();
 
         let mut config = Config::default();
-        config.update(&json_config);
+        config.apply_updates(&json_config);
         assert_eq!(
             u128::from_str(&json_config.storage_cost_per_byte.unwrap()).unwrap(),
             1000u128
