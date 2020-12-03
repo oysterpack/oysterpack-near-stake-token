@@ -105,11 +105,15 @@ impl Account {
     }
 
     pub fn apply_near_credit(&mut self, credit: Balance) {
-        self.near.credit(credit)
+        if credit > 0 {
+            self.near.credit(credit);
+        }
     }
 
     pub fn apply_near_debit(&mut self, debit: Balance) {
-        self.near.debit(debit)
+        if debit > 0 {
+            self.near.debit(debit)
+        }
     }
 
     pub fn storage_escrow(&self) -> &TimestampedBalance {
@@ -125,8 +129,14 @@ impl Account {
         storage_usage: StorageUsage,
         storage_fee: Balance,
     ) {
-        self.storage_usage += storage_usage;
-        self.storage_escrow.credit(storage_fee);
+        if storage_usage > 0 {
+            assert!(
+                storage_fee > 0,
+                "storage usage increase requires storage fee payment"
+            );
+            self.storage_usage += storage_usage;
+            self.storage_escrow.credit(storage_fee);
+        }
     }
 
     pub fn apply_storage_usage_decrease(
@@ -134,8 +144,14 @@ impl Account {
         storage_usage: StorageUsage,
         storage_fee: Balance,
     ) {
-        self.storage_usage -= storage_usage;
-        self.storage_escrow.debit(storage_fee);
+        if storage_usage > 0 {
+            assert!(
+                storage_fee > 0,
+                "storage usage decrease requires storage fee refund"
+            );
+            self.storage_usage -= storage_usage;
+            self.storage_escrow.debit(storage_fee);
+        }
     }
 
     /// updates balances to track `deposit_and_stake` requests that have been submitted to the
@@ -145,9 +161,11 @@ impl Account {
         staking_pool_id: &StakingPoolId,
         deposit: Balance,
     ) {
-        let mut balance = self.stake_balance(staking_pool_id);
-        balance.deposit_and_stake_activity_balance.credit(deposit);
-        self.stake.insert(staking_pool_id, &balance);
+        if deposit > 0 {
+            let mut balance = self.stake_balance(staking_pool_id);
+            balance.deposit_and_stake_activity_balance.credit(deposit);
+            self.stake.insert(staking_pool_id, &balance);
+        }
     }
 
     /// updates balances when confirmation from the staking pool has been received that funds have
@@ -158,13 +176,15 @@ impl Account {
     pub fn apply_deposit_and_stake_activity_success(
         &mut self,
         staking_pool_id: &StakingPoolId,
-        stake_deposit: Balance,
+        stake: Balance,
     ) {
+        assert!(
+            stake > 0,
+            "stake cannot not be zero for `deposit_and_stake` activity"
+        );
         let mut balance = self.stake_balance(staking_pool_id);
-        balance
-            .deposit_and_stake_activity_balance
-            .debit(stake_deposit);
-        balance.stake_token_balance.credit(stake_deposit);
+        balance.deposit_and_stake_activity_balance.debit(stake);
+        balance.stake_token_balance.credit(stake);
         self.stake.insert(staking_pool_id, &balance);
     }
 
@@ -176,6 +196,10 @@ impl Account {
         staking_pool_id: &StakingPoolId,
         deposit: Balance,
     ) {
+        assert!(
+            deposit > 0,
+            "deposit cannot not be zero for `deposit_and_stake` activity"
+        );
         if let Some(mut balance) = self.stake.get(staking_pool_id) {
             balance.deposit_and_stake_activity_balance.debit(deposit);
             self.stake.insert(staking_pool_id, &balance);
@@ -188,6 +212,9 @@ impl Account {
     /// ## Panics
     /// if the account does not have enough STAKE balance to satisfy the request
     pub fn unstake(&mut self, staking_pool_id: &StakingPoolId, stake_token_amount: Balance) {
+        if stake_token_amount == 0 {
+            return;
+        }
         match self.stake.get(staking_pool_id) {
             Some(mut balance) => {
                 assert!(
@@ -236,6 +263,9 @@ impl Account {
         staking_pool_id: &StakingPoolId,
         stake_token_amount: Balance,
     ) {
+        if stake_token_amount == 0 {
+            return;
+        }
         match self.stake.get(staking_pool_id) {
             Some(mut balance) => {
                 assert!(
@@ -245,6 +275,7 @@ impl Account {
                 );
                 balance.stake_token_balance.credit(stake_token_amount);
                 balance.locked_stake_token_balance.debit(stake_token_amount);
+                self.stake.insert(&staking_pool_id, &balance);
             }
             None => panic!(
                 "restake request failed because account has no STAKE with staking pool: {}",
@@ -264,6 +295,7 @@ impl Account {
                 balance
                     .locked_stake_token_balance
                     .debit(stake_token_balance);
+                self.stake.insert(&staking_pool_id, &balance);
                 stake_token_balance
             }
             None => 0,
@@ -276,28 +308,27 @@ impl Account {
         staking_pool_id: &StakingPoolId,
         near_token_amount: Balance,
     ) {
+        if near_token_amount == 0 {
+            return;
+        }
         assert!(
             self.near.balance >= near_token_amount,
             "the account NEAR balance is too low to fulfill the stake request",
         );
         self.apply_deposit_and_stake_activity(staking_pool_id, near_token_amount);
-        self.near.debit(near_token_amount);
+        self.apply_near_debit(near_token_amount);
     }
 
     /// enables an account to stake NEAR from their NEAR balance
     ///
     /// Returns how much NEAR was staked
-    pub fn stake_all_near_balance(
-        &mut self,
-        staking_pool_id: &StakingPoolId,
-        near_token_amount: Balance,
-    ) -> Balance {
+    pub fn stake_all_near_balance(&mut self, staking_pool_id: &StakingPoolId) -> Balance {
         let near_balance = self.near.balance;
         if near_balance == 0 {
             return 0;
         }
         self.apply_deposit_and_stake_activity(staking_pool_id, near_balance);
-        self.near.debit(near_balance);
+        self.apply_near_debit(near_balance);
         near_balance
     }
 }
@@ -508,6 +539,25 @@ mod test {
         account.unstake(&staking_pool_id, 400);
         accounts.insert(&account_id, &account);
 
+        let mut account = accounts.get(&account_id).unwrap();
+        assert_eq!(
+            account
+                .stake_balance(&staking_pool_id)
+                .locked_stake_token_balance()
+                .balance,
+            400
+        );
+        assert_eq!(
+            account
+                .stake_balance(&staking_pool_id)
+                .stake_token_balance()
+                .balance,
+            600
+        );
+
+        // unstaking 0 amount should have no effect
+        account.unstake(&staking_pool_id, 0);
+        accounts.insert(&account_id, &account);
         let account = accounts.get(&account_id).unwrap();
         assert_eq!(
             account
@@ -564,7 +614,7 @@ mod test {
         assert_eq!(account.unstake_all(&staking_pool_id), 1000);
         accounts.insert(&account_id, &account);
 
-        let account = accounts.get(&account_id).unwrap();
+        let mut account = accounts.get(&account_id).unwrap();
         assert_eq!(
             account
                 .stake_balance(&staking_pool_id)
@@ -579,5 +629,391 @@ mod test {
                 .balance,
             0
         );
+
+        // unstake all again after everything has been unstaked
+        assert_eq!(account.unstake_all(&staking_pool_id), 0);
+        accounts.insert(&account_id, &account);
+
+        // unstake all with staking pool that account has no funds with
+        let mut account = accounts.get(&account_id).unwrap();
+        account.unstake_all(&"foo.near".to_string());
+        accounts.insert(&account_id, &account);
+    }
+
+    fn unstake_with_staking_pool_account_has_no_stake_with() {
+        let account_id = "bob.near".to_string();
+        let context = new_context(account_id.clone());
+        testing_env!(context);
+
+        let staking_pool_id: StakingPoolId = "staking-pool.near".to_string();
+        // Given a new account is registered
+        let mut accounts = Accounts::default();
+        accounts.insert(&account_id, &Account::default());
+
+        let mut account = accounts.get(&account_id).unwrap();
+        assert_eq!(account.unstake_all(&staking_pool_id), 0);
+        account.unstake(&staking_pool_id, 10);
+    }
+
+    #[test]
+    fn restake_locked_stake() {
+        let account_id = "bob.near".to_string();
+        let context = new_context(account_id.clone());
+        testing_env!(context);
+
+        let staking_pool_id: StakingPoolId = "staking-pool.near".to_string();
+        let mut accounts = Accounts::default();
+        accounts.insert(&account_id, &Account::default());
+        let mut account = accounts.get(&account_id).unwrap();
+
+        account.apply_deposit_and_stake_activity(&staking_pool_id, 100);
+        account.apply_deposit_and_stake_activity_success(&staking_pool_id, 100);
+        account.unstake_all(&staking_pool_id);
+        account.restake_locked_stake(&staking_pool_id, 40);
+        accounts.insert(&account_id, &account);
+
+        let mut account = accounts.get(&account_id).unwrap();
+        assert_eq!(
+            account
+                .stake_balance(&staking_pool_id)
+                .stake_token_balance
+                .balance,
+            40
+        );
+        assert_eq!(
+            account
+                .stake_balance(&staking_pool_id)
+                .locked_stake_token_balance
+                .balance,
+            60
+        );
+
+        // restaking 0 amount should have no effect
+        account.restake_locked_stake(&staking_pool_id, 0);
+        accounts.insert(&account_id, &account);
+        let mut account = accounts.get(&account_id).unwrap();
+        assert_eq!(
+            account
+                .stake_balance(&staking_pool_id)
+                .stake_token_balance
+                .balance,
+            40
+        );
+        assert_eq!(
+            account
+                .stake_balance(&staking_pool_id)
+                .locked_stake_token_balance
+                .balance,
+            60
+        );
+
+        // restaking 0 balance with a staking pool that the account has no stake with should have no effect
+        let staking_pool_id = "unknown.near".to_string();
+        account.restake_locked_stake(&staking_pool_id, 0);
+        accounts.insert(&account_id, &account);
+        let account = accounts.get(&account_id).unwrap();
+        assert_eq!(
+            account
+                .stake_balance(&staking_pool_id)
+                .stake_token_balance
+                .balance,
+            0
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn restake_locked_stake_with_insufficient_balance() {
+        let account_id = "bob.near".to_string();
+        let context = new_context(account_id.clone());
+        testing_env!(context);
+
+        let staking_pool_id: StakingPoolId = "staking-pool.near".to_string();
+        let mut accounts = Accounts::default();
+        accounts.insert(&account_id, &Account::default());
+        let mut account = accounts.get(&account_id).unwrap();
+        account.restake_locked_stake(&staking_pool_id, 100);
+    }
+
+    #[test]
+    fn restake_all_locked_stake() {
+        let account_id = "bob.near".to_string();
+        let context = new_context(account_id.clone());
+        testing_env!(context);
+
+        let staking_pool_id: StakingPoolId = "staking-pool.near".to_string();
+        let mut accounts = Accounts::default();
+        accounts.insert(&account_id, &Account::default());
+        let mut account = accounts.get(&account_id).unwrap();
+
+        account.apply_deposit_and_stake_activity(&staking_pool_id, 100);
+        account.apply_deposit_and_stake_activity_success(&staking_pool_id, 100);
+        account.unstake_all(&staking_pool_id);
+        account.restake_all_locked_stake(&staking_pool_id);
+        accounts.insert(&account_id, &account);
+
+        let mut account = accounts.get(&account_id).unwrap();
+        assert_eq!(
+            account
+                .stake_balance(&staking_pool_id)
+                .stake_token_balance
+                .balance,
+            100
+        );
+        assert_eq!(
+            account
+                .stake_balance(&staking_pool_id)
+                .locked_stake_token_balance
+                .balance,
+            0
+        );
+
+        // restaking all when there is no unstaked balance should have no effect
+        account.restake_all_locked_stake(&staking_pool_id);
+        accounts.insert(&account_id, &account);
+
+        let mut account = accounts.get(&account_id).unwrap();
+        assert_eq!(
+            account
+                .stake_balance(&staking_pool_id)
+                .stake_token_balance
+                .balance,
+            100
+        );
+        assert_eq!(
+            account
+                .stake_balance(&staking_pool_id)
+                .locked_stake_token_balance
+                .balance,
+            0
+        );
+
+        // restaking all for a staking pool that the account has no stake with should have no effect
+        // restaking all when there is no unstaked balance should have no effect
+        let staking_pool_id = "unknown.near".to_string();
+        account.restake_all_locked_stake(&staking_pool_id);
+        accounts.insert(&account_id, &account);
+
+        let account = accounts.get(&account_id).unwrap();
+        assert_eq!(
+            account
+                .stake_balance(&staking_pool_id)
+                .stake_token_balance
+                .balance,
+            0
+        );
+        assert_eq!(
+            account
+                .stake_balance(&staking_pool_id)
+                .locked_stake_token_balance
+                .balance,
+            0
+        );
+    }
+
+    #[test]
+    fn stake_from_near_balance() {
+        let account_id = "bob.near".to_string();
+        let context = new_context(account_id.clone());
+        testing_env!(context);
+
+        let staking_pool_id: StakingPoolId = "staking-pool.near".to_string();
+        let mut accounts = Accounts::default();
+        accounts.insert(&account_id, &Account::default());
+        let mut account = accounts.get(&account_id).unwrap();
+
+        account.apply_near_credit(1000);
+        accounts.insert(&account_id, &account);
+        let mut account = accounts.get(&account_id).unwrap();
+        account.stake_from_near_balance(&staking_pool_id, 400);
+
+        accounts.insert(&account_id, &account);
+        let account = accounts.get(&account_id).unwrap();
+        assert_eq!(
+            account
+                .stake_balance(&staking_pool_id)
+                .deposit_and_stake_activity_balance()
+                .balance(),
+            400
+        );
+        assert_eq!(account.near_balance().balance(), 600);
+    }
+
+    #[test]
+    fn stake_all_near_balance() {
+        let account_id = "bob.near".to_string();
+        let context = new_context(account_id.clone());
+        testing_env!(context);
+
+        let staking_pool_id: StakingPoolId = "staking-pool.near".to_string();
+        let mut accounts = Accounts::default();
+        accounts.insert(&account_id, &Account::default());
+        let mut account = accounts.get(&account_id).unwrap();
+
+        account.apply_near_credit(1000);
+        accounts.insert(&account_id, &account);
+        let mut account = accounts.get(&account_id).unwrap();
+        account.stake_all_near_balance(&staking_pool_id);
+
+        accounts.insert(&account_id, &account);
+        let mut account = accounts.get(&account_id).unwrap();
+        assert_eq!(
+            account
+                .stake_balance(&staking_pool_id)
+                .deposit_and_stake_activity_balance()
+                .balance(),
+            1000
+        );
+        assert_eq!(account.near_balance().balance(), 0);
+
+        // staking all again should have no effect
+        account.stake_all_near_balance(&staking_pool_id);
+        accounts.insert(&account_id, &account);
+        let account = accounts.get(&account_id).unwrap();
+        assert_eq!(
+            account
+                .stake_balance(&staking_pool_id)
+                .deposit_and_stake_activity_balance()
+                .balance(),
+            1000
+        );
+        assert_eq!(account.near_balance().balance(), 0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn stake_from_near_balance_with_insufficient_funds() {
+        let account_id = "bob.near".to_string();
+        let context = new_context(account_id.clone());
+        testing_env!(context);
+
+        let staking_pool_id: StakingPoolId = "staking-pool.near".to_string();
+        let mut accounts = Accounts::default();
+        accounts.insert(&account_id, &Account::default());
+        let mut account = accounts.get(&account_id).unwrap();
+
+        account.apply_near_credit(1000);
+        accounts.insert(&account_id, &account);
+        let mut account = accounts.get(&account_id).unwrap();
+        account.stake_from_near_balance(&staking_pool_id, 2000);
+    }
+
+    #[test]
+    fn stake_zero_amount_from_near_balance() {
+        let account_id = "bob.near".to_string();
+        let mut context = new_context(account_id.clone());
+        context.block_index = 10;
+        context.block_timestamp = 20;
+        context.epoch_height = 30;
+        testing_env!(context.clone());
+
+        let staking_pool_id: StakingPoolId = "staking-pool.near".to_string();
+        let mut accounts = Accounts::default();
+        accounts.insert(&account_id, &Account::default());
+
+        let mut account = accounts.get(&account_id).unwrap();
+        assert_eq!(account.near_balance().balance(), 0);
+        account.apply_deposit_and_stake_activity(&staking_pool_id, 100);
+        accounts.insert(&account_id, &account);
+
+        context.block_index = 100;
+        context.block_timestamp = 200;
+        context.epoch_height = 300;
+        testing_env!(context.clone());
+
+        account.stake_from_near_balance(&staking_pool_id, 0);
+        accounts.insert(&account_id, &account);
+        let mut account = accounts.get(&account_id).unwrap();
+        assert_eq!(
+            account
+                .stake_balance(&staking_pool_id)
+                .deposit_and_stake_activity_balance()
+                .block_height(),
+            10
+        );
+        assert_eq!(
+            account
+                .stake_balance(&staking_pool_id)
+                .deposit_and_stake_activity_balance()
+                .block_timestamp(),
+            20
+        );
+        assert_eq!(
+            account
+                .stake_balance(&staking_pool_id)
+                .deposit_and_stake_activity_balance()
+                .epoch_height(),
+            30
+        );
+
+        account.stake_all_near_balance(&staking_pool_id);
+        accounts.insert(&account_id, &account);
+        let mut account = accounts.get(&account_id).unwrap();
+        assert_eq!(
+            account
+                .stake_balance(&staking_pool_id)
+                .deposit_and_stake_activity_balance()
+                .block_height(),
+            10
+        );
+        assert_eq!(
+            account
+                .stake_balance(&staking_pool_id)
+                .deposit_and_stake_activity_balance()
+                .block_timestamp(),
+            20
+        );
+        assert_eq!(
+            account
+                .stake_balance(&staking_pool_id)
+                .deposit_and_stake_activity_balance()
+                .epoch_height(),
+            30
+        );
+
+        let staking_pool_id = "unknown.near".to_string();
+        account.stake_from_near_balance(&staking_pool_id, 0);
+        accounts.insert(&account_id, &account);
+        let mut account = accounts.get(&account_id).unwrap();
+        assert!(!account.stake_balance(&staking_pool_id).has_funds());
+
+        account.stake_all_near_balance(&staking_pool_id);
+        accounts.insert(&account_id, &account);
+        let account = accounts.get(&account_id).unwrap();
+        assert!(!account.stake_balance(&staking_pool_id).has_funds());
+    }
+
+    #[test]
+    fn apply_storage_descrease() {
+        let account_id = "bob.near".to_string();
+        let mut context = new_context(account_id.clone());
+        context.block_index = 10;
+        context.block_timestamp = 20;
+        context.epoch_height = 30;
+        testing_env!(context.clone());
+
+        let staking_pool_id: StakingPoolId = "staking-pool.near".to_string();
+        let mut accounts = Accounts::default();
+        accounts.insert(&account_id, &Account::default());
+
+        let mut account = accounts.get(&account_id).unwrap();
+        account.apply_storage_usage_increase(10000, YOCTO);
+        accounts.insert(&account_id, &account);
+
+        context.block_index = 100;
+        context.block_timestamp = 200;
+        context.epoch_height = 300;
+        testing_env!(context.clone());
+
+        let mut account = accounts.get(&account_id).unwrap();
+        account.apply_storage_usage_decrease(5000, YOCTO / 2);
+        accounts.insert(&account_id, &account);
+
+        let account = accounts.get(&account_id).unwrap();
+        assert_eq!(account.storage_usage(), 5000);
+        assert_eq!(account.storage_escrow().balance(), YOCTO / 2);
+        assert_eq!(account.storage_escrow().block_height(), 100);
+        assert_eq!(account.storage_escrow().block_timestamp(), 200);
+        assert_eq!(account.storage_escrow().epoch_height(), 300);
     }
 }

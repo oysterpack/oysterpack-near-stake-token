@@ -95,6 +95,9 @@ impl TimestampedBalance {
     /// ## Panics
     /// if overflow occurs
     pub fn credit(&mut self, amount: Balance) {
+        if amount == 0 {
+            return;
+        }
         self.balance = self.balance.checked_add(amount).expect(
             format!(
                 "credit caused balance to overflow: {balance} + {amount}",
@@ -109,6 +112,9 @@ impl TimestampedBalance {
     /// ## Panics
     /// if debit amount > balance
     pub fn debit(&mut self, amount: Balance) {
+        if amount == 0 {
+            return;
+        }
         assert!(
             self.balance >= amount,
             "debit amount cannot be greater than the current balance: {} - {}",
@@ -135,6 +141,7 @@ impl Hash {
 
 impl From<&[u8]> for Hash {
     fn from(value: &[u8]) -> Self {
+        assert!(value.len() > 0);
         let mut buf = [0u8; Hash::LENGTH];
         let hash = env::sha256(value);
         buf.copy_from_slice(&hash.as_slice()[..Hash::LENGTH]);
@@ -144,6 +151,7 @@ impl From<&[u8]> for Hash {
 
 impl From<&str> for Hash {
     fn from(value: &str) -> Self {
+        assert!(value.len() > 0);
         let mut buf = [0u8; Hash::LENGTH];
         let hash = env::sha256(value.as_bytes());
         buf.copy_from_slice(&hash.as_slice()[..Hash::LENGTH]);
@@ -206,6 +214,20 @@ mod test {
         assert_eq!(balance.block_height(), 10);
         assert_eq!(balance.block_timestamp(), 20);
         assert_eq!(balance.epoch_height(), 30);
+
+        // given that time has changed
+        context.block_index = 100;
+        context.block_timestamp = 200;
+        context.epoch_height = 300;
+        testing_env!(context.clone());
+
+        // when 0 amount is credited
+        balance.credit(0);
+        // then there should be no changes applied
+        assert_eq!(balance.balance(), 20);
+        assert_eq!(balance.block_height(), 10);
+        assert_eq!(balance.block_timestamp(), 20);
+        assert_eq!(balance.epoch_height(), 30);
     }
 
     #[test]
@@ -228,6 +250,20 @@ mod test {
         testing_env!(context.clone());
 
         balance.debit(5);
+        assert_eq!(balance.balance(), 5);
+        assert_eq!(balance.block_height(), 10);
+        assert_eq!(balance.block_timestamp(), 20);
+        assert_eq!(balance.epoch_height(), 30);
+
+        // given that time has changed
+        context.block_index = 100;
+        context.block_timestamp = 200;
+        context.epoch_height = 300;
+        testing_env!(context.clone());
+
+        // when 0 amount is debited
+        balance.debit(0);
+        // then there should be no changes applied
         assert_eq!(balance.balance(), 5);
         assert_eq!(balance.block_height(), 10);
         assert_eq!(balance.block_timestamp(), 20);
@@ -342,6 +378,15 @@ mod test {
     }
 
     #[test]
+    #[should_panic]
+    fn hash_from_empty_string() {
+        let account_id = "alfio-zappala.near".to_string();
+        let context = new_context(account_id.clone());
+        testing_env!(context);
+        let hash = Hash::from("");
+    }
+
+    #[test]
     fn hash_from_bytes() {
         let account_id = "alfio-zappala.near".to_string();
         let context = new_context(account_id.clone());
@@ -350,5 +395,14 @@ mod test {
         let hash = Hash::from(data.as_bytes());
         let hash2 = Hash::from(data.as_bytes());
         assert_eq!(hash, hash2);
+    }
+
+    #[test]
+    #[should_panic]
+    fn hash_from_empty_bytes() {
+        let account_id = "alfio-zappala.near".to_string();
+        let context = new_context(account_id.clone());
+        testing_env!(context);
+        let hash = Hash::from("".as_bytes());
     }
 }
