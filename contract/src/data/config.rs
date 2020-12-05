@@ -167,13 +167,6 @@ pub mod updates {
     };
     use std::borrow::Borrow;
 
-    #[derive(Debug, Serialize, Deserialize)]
-    #[serde(crate = "near_sdk::serde")]
-    pub enum ConfigFormat {
-        JSON,
-        TOML,
-    }
-
     #[derive(Debug)]
     pub struct ConfigParseError(String);
 
@@ -189,27 +182,6 @@ pub mod updates {
         /// TOML and JSON do not support u128 - thus, we need to encode u128 values as string
         pub storage_cost_per_byte: Option<String>,
         pub gas_config: Option<GasConfig>,
-    }
-
-    impl Config {
-        pub fn from_toml(config: &str) -> Result<Config, toml::de::Error> {
-            toml::from_str(config)
-        }
-
-        pub fn from_json(config: &str) -> Result<Config, serde_json::Error> {
-            serde_json::from_str(config)
-        }
-
-        pub fn parse(format: ConfigFormat, config: &str) -> Result<Config, ConfigParseError> {
-            match format {
-                ConfigFormat::JSON => {
-                    Self::from_json(config).map_err(|err| ConfigParseError(err.to_string()))
-                }
-                ConfigFormat::TOML => {
-                    Self::from_toml(config).map_err(|err| ConfigParseError(err.to_string()))
-                }
-            }
-        }
     }
 
     #[derive(Debug, Serialize, Deserialize, Default)]
@@ -233,71 +205,6 @@ pub mod updates {
     pub struct CallBacksGasConfig {
         pub on_deposit_and_stake: Option<u64>,
     }
-
-    #[cfg(test)]
-    mod test {
-
-        use super::*;
-        use std::str::FromStr;
-
-        #[test]
-        fn config_from_toml() {
-            let config: Config = toml::from_str(
-                r#"
-        storage_cost_per_byte = "1000"
-
-        [gas_config.staking_pool]
-        deposit_and_stake = 500
-        get_account_balance = 200
-        
-        [gas_config.callbacks]
-        on_deposit_and_stake = 100
-    "#,
-            )
-            .unwrap();
-
-            assert_eq!(
-                u128::from_str(&config.storage_cost_per_byte.unwrap()).unwrap(),
-                1000u128
-            );
-            assert_eq!(
-                config
-                    .gas_config
-                    .as_ref()
-                    .unwrap()
-                    .staking_pool
-                    .as_ref()
-                    .unwrap()
-                    .deposit_and_stake
-                    .unwrap(),
-                500
-            );
-            assert_eq!(
-                config
-                    .gas_config
-                    .as_ref()
-                    .unwrap()
-                    .staking_pool
-                    .as_ref()
-                    .unwrap()
-                    .get_account_balance
-                    .unwrap(),
-                200
-            );
-            assert_eq!(
-                config
-                    .gas_config
-                    .as_ref()
-                    .unwrap()
-                    .callbacks
-                    .as_ref()
-                    .unwrap()
-                    .on_deposit_and_stake
-                    .unwrap(),
-                100
-            );
-        }
-    }
 }
 
 #[cfg(test)]
@@ -307,70 +214,8 @@ mod test {
     use std::str::FromStr;
 
     #[test]
-    fn config_from_toml() {
-        let toml_config: updates::Config = updates::Config::parse(
-            updates::ConfigFormat::TOML,
-            r#"
-        storage_cost_per_byte = "1000"
-
-        [gas_config.staking_pool]
-        deposit_and_stake = 500
-        get_account_balance = 200
-        
-        [gas_config.callbacks]
-        on_deposit_and_stake = 100
-    "#,
-        )
-        .unwrap();
-
-        let mut config = Config::default();
-        config.apply_updates(&toml_config);
-        assert_eq!(
-            u128::from_str(&toml_config.storage_cost_per_byte.unwrap()).unwrap(),
-            1000u128
-        );
-        assert_eq!(
-            toml_config
-                .gas_config
-                .as_ref()
-                .unwrap()
-                .staking_pool
-                .as_ref()
-                .unwrap()
-                .deposit_and_stake
-                .unwrap(),
-            500
-        );
-        assert_eq!(
-            toml_config
-                .gas_config
-                .as_ref()
-                .unwrap()
-                .staking_pool
-                .as_ref()
-                .unwrap()
-                .get_account_balance
-                .unwrap(),
-            200
-        );
-        assert_eq!(
-            toml_config
-                .gas_config
-                .as_ref()
-                .unwrap()
-                .callbacks
-                .as_ref()
-                .unwrap()
-                .on_deposit_and_stake
-                .unwrap(),
-            100
-        );
-    }
-
-    #[test]
     fn config_from_json() {
-        let json_config: updates::Config = updates::Config::parse(
-            updates::ConfigFormat::JSON,
+        let json_config: updates::Config = near_sdk::serde_json::from_str(
             r#"
         {
             "storage_cost_per_byte":"1000",

@@ -6,7 +6,7 @@ use crate::common::{
 use crate::data::accounts::*;
 use crate::data::staking_pools::StakingPoolId;
 use crate::data::TimestampedBalance;
-use crate::StakeTokenService;
+use crate::StakeTokenContract;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::UnorderedMap;
 use near_sdk::{
@@ -158,7 +158,7 @@ pub trait ExtStakingPoolCallbacks {
 }
 
 #[near_bindgen]
-impl StakingService for StakeTokenService {
+impl StakingService for StakeTokenContract {
     /// Workflow:
     /// 1. assert that the predecessor account is registered
     /// 2. assert that there is an attached deposit
@@ -252,7 +252,7 @@ impl StakingService for StakeTokenService {
 
 /// NEAR contract callbacks are all private, they should only be invoked by itself
 #[near_bindgen]
-impl StakeTokenService {
+impl StakeTokenContract {
     pub fn on_deposit_and_stake(
         &mut self,
         account_id: AccountId,
@@ -281,7 +281,7 @@ impl StakeTokenService {
     }
 }
 
-impl StakeTokenService {
+impl StakeTokenContract {
     /// the pending activity is tracked at the staking pool and account level
     pub fn track_pending_deposit_and_stake_activity(
         &mut self,

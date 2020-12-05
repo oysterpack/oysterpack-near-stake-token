@@ -6,7 +6,7 @@ use crate::data::accounts::*;
 use crate::data::{
     Hash, TimestampedBalance, ACCOUNTS_KEY_PREFIX, ACCOUNT_STAKE_BALANCES_KEY_PREFIX,
 };
-use crate::StakeTokenService;
+use crate::StakeTokenContract;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     collections::{LookupMap, UnorderedMap},
@@ -46,7 +46,7 @@ pub trait AccountRegistry {
 }
 
 #[near_bindgen]
-impl AccountRegistry for StakeTokenService {
+impl AccountRegistry for StakeTokenContract {
     fn account_registered(&self, account_id: AccountId) -> bool {
         self.accounts.get(&account_id).is_some()
     }
@@ -67,7 +67,7 @@ impl AccountRegistry for StakeTokenService {
         }
 
         fn apply_storage_fees(
-            contract: &StakeTokenService,
+            contract: &StakeTokenContract,
             initial_storage: StorageUsage,
         ) -> Balance {
             let required_deposit = contract.assert_storage_fees(initial_storage);
@@ -129,7 +129,7 @@ impl AccountRegistry for StakeTokenService {
     }
 }
 
-impl StakeTokenService {
+impl StakeTokenContract {
     /// Returns registered account for predecessor account.
     ///
     /// ## Panics
@@ -191,7 +191,7 @@ mod test {
         let mut context = near::new_context(account_id.clone());
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context);
-        let mut contract = StakeTokenService::new(operator_id(), None);
+        let mut contract = StakeTokenContract::new(operator_id(), None);
         assert!(
             !contract.account_registered(account_id.clone()),
             "account should not be registered"
@@ -237,7 +237,7 @@ mod test {
         let mut context = near::new_context(account_id.clone());
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context);
-        let mut contract = StakeTokenService::new(operator_id(), None);
+        let mut contract = StakeTokenContract::new(operator_id(), None);
 
         match contract.register_account() {
             RegisterAccountResult::Registered { storage_fee } => {
@@ -260,7 +260,7 @@ mod test {
         let mut context = near::new_context(account_id.clone());
         context.attached_deposit = 0;
         testing_env!(context);
-        let mut contract = StakeTokenService::new(operator_id(), None);
+        let mut contract = StakeTokenContract::new(operator_id(), None);
         contract.register_account();
     }
 
@@ -271,7 +271,7 @@ mod test {
         let mut context = near::new_context(account_id.clone());
         context.attached_deposit = 1;
         testing_env!(context);
-        let mut contract = StakeTokenService::new(operator_id(), None);
+        let mut contract = StakeTokenContract::new(operator_id(), None);
         contract.register_account();
     }
 
@@ -281,7 +281,7 @@ mod test {
         let mut context = near::new_context(account_id.clone());
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context);
-        let mut contract = StakeTokenService::new(operator_id(), None);
+        let mut contract = StakeTokenContract::new(operator_id(), None);
         match contract.register_account() {
             RegisterAccountResult::Registered { storage_fee } => {
                 match contract.unregister_account() {
@@ -302,7 +302,7 @@ mod test {
         let mut context = near::new_context(account_id.clone());
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context);
-        let mut contract = StakeTokenService::new(operator_id(), None);
+        let mut contract = StakeTokenContract::new(operator_id(), None);
         match contract.unregister_account() {
             UnregisterAccountResult::NotRegistered => (), // expected
             result => panic!("unexpected result: {:?}", result),
@@ -315,7 +315,7 @@ mod test {
         let mut context = near::new_context(account_id.clone());
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context);
-        let mut contract = StakeTokenService::new(operator_id(), None);
+        let mut contract = StakeTokenContract::new(operator_id(), None);
         match contract.register_account() {
             RegisterAccountResult::Registered { storage_fee } => {
                 let account_hash = Hash::from(account_id.as_bytes());
@@ -337,7 +337,7 @@ mod test {
         let mut context = near::new_context(account_id.clone());
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context);
-        let mut contract = StakeTokenService::new(operator_id(), None);
+        let mut contract = StakeTokenContract::new(operator_id(), None);
         match contract.register_account() {
             RegisterAccountResult::Registered { storage_fee } => {
                 let account_hash = Hash::from(account_id.as_bytes());

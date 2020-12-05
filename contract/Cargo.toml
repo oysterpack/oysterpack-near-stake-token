@@ -10,8 +10,6 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 near-sdk = "2.0.0"
 primitive-types = "0.7.3"
-deflate = "0.8.6"
-toml = "0.5.7"
 
 [dev-dependencies]
 

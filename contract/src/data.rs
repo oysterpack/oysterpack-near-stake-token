@@ -12,7 +12,6 @@ use near_sdk::{
 use std::cmp::Ordering;
 
 pub mod accounts;
-pub mod activities;
 pub mod config;
 pub mod staking_pools;
 pub mod trie_keys;
