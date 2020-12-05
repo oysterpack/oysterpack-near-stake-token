@@ -1,3 +1,4 @@
+use near_sdk::json_types::ValidAccountId;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env,
@@ -27,6 +28,12 @@ impl From<&str> for Hash {
         let hash = env::sha256(value.as_bytes());
         buf.copy_from_slice(&hash.as_slice()[..Hash::LENGTH]);
         Self(buf)
+    }
+}
+
+impl From<&String> for Hash {
+    fn from(value: &String) -> Self {
+        value.as_str().into()
     }
 }
 

@@ -1,5 +1,4 @@
-use crate::domain::{BlockHeight, BlockTimestamp, EpochHeight};
-use crate::YoctoStake;
+use crate::domain::{BlockHeight, BlockTimestamp, EpochHeight, YoctoStake};
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env,

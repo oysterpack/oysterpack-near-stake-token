@@ -1,5 +1,4 @@
-use crate::domain::Gas;
-use crate::YoctoNear;
+use crate::domain::{Gas, YoctoNear};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 
 #[derive(Debug, BorshSerialize, BorshDeserialize)]
