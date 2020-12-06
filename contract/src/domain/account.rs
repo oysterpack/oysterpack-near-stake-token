@@ -38,7 +38,7 @@ impl Account {
                 storage_fee.value() > 0,
                 "storage usage increase requires storage fee payment"
             );
-            self.storage_usage += storage_usage;
+            *self.storage_usage += storage_usage.value();
             self.storage_escrow.credit(storage_fee);
         }
     }
@@ -53,7 +53,7 @@ impl Account {
                 storage_fee.value() > 0,
                 "storage usage decrease requires storage fee refund"
             );
-            self.storage_usage -= storage_usage;
+            *self.storage_usage -= storage_usage.value();
             self.storage_escrow.debit(storage_fee);
         }
     }

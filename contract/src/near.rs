@@ -1,22 +1,7 @@
-use near_sdk::{env, json_types::U128, AccountId, Balance, PromiseResult};
-use std::ops::Deref;
+pub mod storage_keys;
+use near_sdk::{env, PromiseResult};
 
 pub const YOCTO: u128 = 1_000_000_000_000_000_000_000_000;
-
-pub const ZERO_BALANCE: Balance = 0;
-pub const NO_DEPOSIT: Balance = 0;
-
-pub mod json_types {
-    use near_sdk::json_types::{U128, U64};
-
-    pub type YoctoNEAR = U128;
-    pub type YoctoSTAKE = U128;
-
-    pub type BlockHeight = U64;
-    pub type BlockTimestamp = U64;
-
-    pub type Balance = U128;
-}
 
 /// asserts that predecessor account is the contract itself - used to enforce that callbacks
 /// should only be called internally - even though they are exposed on the public contract interface

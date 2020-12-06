@@ -1,7 +1,6 @@
-use crate::domain::{Account, StorageUsage, YoctoNear};
 use crate::{
-    domain::YoctoNearValue,
-    hash::Hash,
+    core::Hash,
+    domain::{Account, StorageUsage, YoctoNear, YoctoNearValue},
     interface::{AccountRegistry, UnregisterAccountFailure},
     StakeTokenContract,
 };
@@ -76,7 +75,7 @@ impl AccountRegistry for StakeTokenContract {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::domain::YOCTO;
+    use crate::near::YOCTO;
     use crate::test_utils::near;
     use near_sdk::{serde_json, testing_env, AccountId, MockedBlockchain, VMContext};
 

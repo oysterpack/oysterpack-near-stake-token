@@ -1,3 +1,5 @@
+// TODO: delete file
+
 use crate::common::{
     assert_predecessor_is_self, is_promise_result_success,
     json_types::{self, YoctoNEAR, YoctoSTAKE},

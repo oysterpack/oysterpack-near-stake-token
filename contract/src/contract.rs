@@ -1,12 +1,13 @@
 pub mod account_registry;
 
-use crate::config::Config;
-use crate::domain::{Account, StorageUsage, YoctoNear};
-use crate::hash::Hash;
-use crate::storage_keys::ACCOUNTS_KEY_PREFIX;
-use crate::StakeTokenContract;
-use near_sdk::collections::LookupMap;
-use near_sdk::{env, json_types::ValidAccountId, near_bindgen, AccountId};
+use crate::{
+    config::Config,
+    core::Hash,
+    domain::{Account, StorageUsage, YoctoNear},
+    near::storage_keys::ACCOUNTS_KEY_PREFIX,
+    StakeTokenContract,
+};
+use near_sdk::{collections::LookupMap, env, json_types::ValidAccountId, near_bindgen, AccountId};
 
 #[near_bindgen]
 impl StakeTokenContract {
@@ -63,11 +64,11 @@ impl StakeTokenContract {
         initial_storage: StorageUsage,
     ) -> Option<(StorageUsage, YoctoNear)> {
         let current_storage = env::storage_usage();
-        if current_storage < initial_storage {
+        if current_storage < *initial_storage {
             return None;
         }
         let attached_deposit = env::attached_deposit();
-        let storage_usage_increase = current_storage - initial_storage;
+        let storage_usage_increase = current_storage - *initial_storage;
 
         let required_deposit: u128 =
             (storage_usage_increase as u128) * self.config.storage_cost_per_byte().value();

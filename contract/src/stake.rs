@@ -1,3 +1,5 @@
+// TODO: delete file
+
 use crate::common::{
     json_types::{YoctoNEAR, YoctoSTAKE},
     YOCTO,

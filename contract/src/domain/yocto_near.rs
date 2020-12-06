@@ -4,6 +4,7 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
 };
 use std::fmt::{self, Display, Formatter};
+use std::ops::{Deref, DerefMut};
 
 #[derive(
     BorshSerialize, BorshDeserialize, Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Default,
@@ -25,6 +26,20 @@ impl YoctoNear {
 impl From<YoctoNear> for u128 {
     fn from(value: YoctoNear) -> Self {
         value.0
+    }
+}
+
+impl Deref for YoctoNear {
+    type Target = u128;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for YoctoNear {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 

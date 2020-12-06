@@ -3,17 +3,17 @@
 
 pub mod config;
 pub mod contract;
+mod core;
 pub mod domain;
-pub mod hash;
 pub mod interface;
-pub mod storage_keys;
+pub mod near;
 
 #[cfg(test)]
 pub mod test_utils;
 
 use crate::config::Config;
+use crate::core::Hash;
 use crate::domain::{Account, YoctoNear};
-use crate::hash::Hash;
 use near_sdk::collections::LookupMap;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
