@@ -68,7 +68,7 @@ impl AccountRegistry for StakeTokenContract {
     }
 
     fn registered_accounts_count(&self) -> U128 {
-        self.account_count.into()
+        self.accounts.count().into()
     }
 }
 
@@ -102,7 +102,7 @@ mod test {
     }
 
     fn operator_id() -> AccountId {
-        near::to_account_id("operator.stake.oysterpack.near")
+        "operator.stake.oysterpack.near".to_string()
     }
 
     // #[test]

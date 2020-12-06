@@ -4,7 +4,19 @@ use near_sdk::{
     env,
 };
 
-#[derive(BorshDeserialize, BorshSerialize, Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(
+    BorshDeserialize,
+    BorshSerialize,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Debug,
+    Ord,
+    PartialOrd,
+    Default,
+)]
 pub struct Hash([u8; 32]);
 
 impl Hash {
@@ -46,7 +58,7 @@ mod test {
     #[test]
     fn hash_from_string() {
         let account_id = "alfio-zappala.near".to_string();
-        let context = new_context(account_id.clone());
+        let context = new_context(&account_id);
         testing_env!(context);
         let data = "Alfio Zappala";
         let hash = Hash::from(data);
@@ -58,7 +70,7 @@ mod test {
     #[should_panic(expected = "value cannot be empty")]
     fn hash_from_empty_string() {
         let account_id = "alfio-zappala.near".to_string();
-        let context = new_context(account_id.clone());
+        let context = new_context(&account_id);
         testing_env!(context);
         Hash::from("");
     }
@@ -66,7 +78,7 @@ mod test {
     #[test]
     fn hash_from_bytes() {
         let account_id = "alfio-zappala.near".to_string();
-        let context = new_context(account_id.clone());
+        let context = new_context(&account_id);
         testing_env!(context);
         let data = "Alfio Zappala II";
         let hash = Hash::from(data.as_bytes());
@@ -78,7 +90,7 @@ mod test {
     #[should_panic(expected = "value cannot be empty")]
     fn hash_from_empty_bytes() {
         let account_id = "alfio-zappala.near".to_string();
-        let context = new_context(account_id.clone());
+        let context = new_context(&account_id);
         testing_env!(context);
         Hash::from("".as_bytes());
     }

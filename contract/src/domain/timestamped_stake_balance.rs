@@ -127,7 +127,7 @@ mod test {
 
     #[test]
     fn timestamped_balance_new() {
-        let mut context = new_context("bob.near".to_string());
+        let mut context = new_context("bob.near");
         context.block_index = 1;
         context.block_timestamp = 2;
         context.epoch_height = 3;
@@ -142,7 +142,7 @@ mod test {
 
     #[test]
     pub fn timestamped_balance_partial_eq() {
-        let mut context = new_context("bob.near".to_string());
+        let mut context = new_context("bob.near");
         testing_env!(context.clone());
 
         let balance_1 = TimestampedStakeBalance::new(10.into());
@@ -159,7 +159,7 @@ mod test {
 
     #[test]
     pub fn timestamped_balance_debug() {
-        let mut context = new_context("bob.near".to_string());
+        let mut context = new_context("bob.near");
         context.block_index = 1;
         context.block_timestamp = 2;
         context.epoch_height = 3;
@@ -171,7 +171,7 @@ mod test {
 
     #[test]
     pub fn timestamped_balance_borsh() {
-        let mut context = new_context("bob.near".to_string());
+        let mut context = new_context("bob.near");
         context.block_index = 1;
         context.block_timestamp = 2;
         context.epoch_height = 3;

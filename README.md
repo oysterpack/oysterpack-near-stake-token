@@ -32,3 +32,7 @@ withdraw the 50 NEAR at epoch 104, the 2nd unstaking request must be submitted a
 To work around this staking pool limitation, unstaking requests will be held until any previous unstaking request is 
 complete and funds withdrawn. Thus, the customer waiting period for unstaked NEAR funds to be available for withdrawal
 will be 4-7 epochs. 
+
+# STAKE Token Contract Fees
+OysterPack will charge fees for each STAKE batch job that is executed based. 
+- minimum batch size = 5 NEAR

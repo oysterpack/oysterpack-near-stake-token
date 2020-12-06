@@ -1,3 +1,4 @@
+use crate::domain::stake_batch::StakeBatch;
 use crate::domain::{
     RedeemStakeBatch, StorageUsage, TimestampedNearBalance, TimestampedStakeBalance, YoctoNear,
 };
@@ -10,17 +11,29 @@ pub struct Account {
     storage_escrow: TimestampedNearBalance,
     storage_usage: StorageUsage,
 
-    /// when the user is invoking `deposit_and_stake`, the funds are are first credited to the NEAR
-    /// balance
+    /// NEAR funds that are available for withdrawal
     near: Option<TimestampedNearBalance>,
-    /// once the NEAR funds are confirmed to be staked with the staking pool, then the staked funds
-    /// are moved from the [near] balance into the [stake] balance
+    /// STAKE tokens that the account owns
     stake: Option<TimestampedStakeBalance>,
+
+    /// users will deposit NEAR funds into a batch that will be processed, i.e. deposited and staked
+    /// into the staking pool, at scheduled intervals
+    /// - STAKE token value is computed when batches are processed in order to issue STAKE tokens
+    ///   for NEAR that was staked
+    /// - when the account is accessed, the [StakeBatch] status is checked - if processed, then the
+    ///   STAKE token value is looked up for the batch and the account is credited with STAKE tokens
+    ///   and the batch is cleared
+    /// - when funds are claimed, the account is refunded storage fees
+    stake_batch: Option<StakeBatch>,
 
     /// when a user wants to redeem STAKE tokens, they are moved from the [stake] balance into the
     /// [redeem_stake_batch] balance.
+    /// - STAKE tokens become locked, i.e., they can no longer be traded
+    /// - when the account is accessed, the [RedeemStakeBatch] status is checked - if processed, then
+    ///   the STAKE token value is looked up for the batch and the account is credited with NEAR token
+    ///   and the batch is cleared
+    /// - when funds are claimed, the account is refunded storage fees
     redeem_stake_batch: Option<RedeemStakeBatch>,
-    pending_withdrawal: Option<Vec<RedeemStakeBatch>>,
 }
 
 impl Account {
@@ -61,7 +74,7 @@ impl Account {
     pub fn has_funds(&self) -> bool {
         self.near.is_some()
             || self.stake.is_some()
+            || self.stake_batch.is_some()
             || self.redeem_stake_batch.is_some()
-            || self.pending_withdrawal.is_some()
     }
 }

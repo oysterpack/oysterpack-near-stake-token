@@ -1,9 +1,13 @@
-use crate::domain::{Gas, YoctoNear};
-use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
+use crate::domain::{Gas, YoctoNearValue};
+use near_sdk::{
+    borsh::{self, BorshDeserialize, BorshSerialize},
+    serde::{Deserialize, Serialize},
+};
 
-#[derive(Debug, BorshSerialize, BorshDeserialize)]
+#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
 pub struct Config {
-    storage_cost_per_byte: YoctoNear,
+    storage_cost_per_byte: YoctoNearValue,
     gas_config: GasConfig,
 }
 
@@ -19,15 +23,15 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn new(storage_cost_per_byte: YoctoNear, gas_config: GasConfig) -> Self {
+    pub fn new(storage_cost_per_byte: YoctoNearValue, gas_config: GasConfig) -> Self {
         Self {
             storage_cost_per_byte,
             gas_config,
         }
     }
 
-    pub fn storage_cost_per_byte(&self) -> YoctoNear {
-        self.storage_cost_per_byte
+    pub fn storage_cost_per_byte(&self) -> &YoctoNearValue {
+        &self.storage_cost_per_byte
     }
 
     pub fn gas_config(&self) -> &GasConfig {
@@ -37,7 +41,8 @@ impl Config {
 
 const BASE_GAS: Gas = Gas(25_000_000_000_000);
 
-#[derive(Debug, BorshSerialize, BorshDeserialize, Default)]
+#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Default)]
+#[serde(crate = "near_sdk::serde")]
 pub struct GasConfig {
     staking_pool: StakingPoolGasConfig,
     callbacks: CallBacksGasConfig,
@@ -53,7 +58,8 @@ impl GasConfig {
     }
 }
 
-#[derive(Debug, BorshSerialize, BorshDeserialize)]
+#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
 pub struct StakingPoolGasConfig {
     deposit_and_stake: Gas,
     unstake: Gas,
@@ -90,7 +96,8 @@ impl StakingPoolGasConfig {
     }
 }
 
-#[derive(Debug, BorshSerialize, BorshDeserialize)]
+#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
 pub struct CallBacksGasConfig {
     on_deposit_and_stake: Gas,
 }

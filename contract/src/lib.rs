@@ -13,11 +13,15 @@ pub mod test_utils;
 
 use crate::config::Config;
 use crate::core::Hash;
-use crate::domain::{Account, YoctoNear};
-use near_sdk::collections::LookupMap;
+use crate::domain::{
+    Account, Accounts, BlockHeight, StorageUsage, TimestampedNearBalance, TimestampedStakeBalance,
+    YoctoNear,
+};
+use near_sdk::json_types::ValidAccountId;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    env, near_bindgen, wee_alloc, AccountId, BlockHeight, StorageUsage,
+    collections::LookupMap,
+    env, near_bindgen, wee_alloc, AccountId,
 };
 
 #[global_allocator]
@@ -35,6 +39,51 @@ pub struct StakeTokenContract {
     /// the block info can be looked up via its block index: https://docs.near.org/docs/api/rpc#block
     config_change_block_height: BlockHeight,
 
-    accounts: LookupMap<Hash, Account>,
-    account_count: u128,
+    accounts: Accounts,
+    staking_pool_id: AccountId,
+
+    locked: bool,
+}
+
+impl Default for StakeTokenContract {
+    fn default() -> Self {
+        panic!("contract should be initialized before usage")
+    }
+}
+
+#[near_bindgen]
+impl StakeTokenContract {
+    #[payable]
+    #[init]
+    pub fn new(
+        staking_pool_id: ValidAccountId,
+        operator_id: ValidAccountId,
+        config: Option<Config>,
+    ) -> Self {
+        let operator_id: AccountId = operator_id.into();
+        assert_ne!(
+            env::current_account_id(),
+            operator_id,
+            "operator account ID must not be the contract account ID"
+        );
+
+        assert!(!env::state_exists(), "contract is already initialized");
+
+        // TODO: verify the staking pool contract interface by invoking functions that this contract depends on
+
+        Self {
+            operator_id,
+
+            config: config.unwrap_or_else(Config::default),
+            config_change_block_height: env::block_index().into(),
+
+            accounts: Accounts::default(),
+            staking_pool_id: staking_pool_id.into(),
+            locked: false,
+        }
+    }
+
+    pub fn operator_id(&self) -> &str {
+        &self.operator_id
+    }
 }

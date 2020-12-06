@@ -1,5 +1,6 @@
 pub mod account_registry;
 
+use crate::domain::Accounts;
 use crate::{
     config::Config,
     core::Hash,
@@ -8,39 +9,6 @@ use crate::{
     StakeTokenContract,
 };
 use near_sdk::{collections::LookupMap, env, json_types::ValidAccountId, near_bindgen, AccountId};
-
-#[near_bindgen]
-impl StakeTokenContract {
-    #[init]
-    pub fn new(operator_id: ValidAccountId, config: Option<Config>) -> Self {
-        let operator_id: AccountId = operator_id.into();
-        assert_ne!(
-            env::current_account_id(),
-            operator_id,
-            "operator account ID must not be the contract account ID"
-        );
-
-        assert!(!env::state_exists(), "contract is already initialized");
-        Self {
-            operator_id,
-            config: config.unwrap_or_else(Config::default),
-            config_change_block_height: env::block_index(),
-
-            accounts: LookupMap::new(ACCOUNTS_KEY_PREFIX.to_vec()),
-            account_count: 0,
-        }
-    }
-
-    pub fn operator_id(&self) -> &str {
-        &self.operator_id
-    }
-}
-
-impl Default for StakeTokenContract {
-    fn default() -> Self {
-        panic!("contract should be initialized before usage")
-    }
-}
 
 impl StakeTokenContract {
     /// asserts that the predecessor account ID must be the operator
