@@ -25,6 +25,8 @@ pub struct Account {
     ///   and the batch is cleared
     /// - when funds are claimed, the account is refunded storage fees
     stake_batch: Option<StakeBatch>,
+    /// if the contract is locked, then deposit the NEAR funds in the next batch
+    next_stake_batch: Option<StakeBatch>,
 
     /// when a user wants to redeem STAKE tokens, they are moved from the [stake] balance into the
     /// [redeem_stake_batch] balance.
@@ -34,6 +36,8 @@ pub struct Account {
     ///   and the batch is cleared
     /// - when funds are claimed, the account is refunded storage fees
     redeem_stake_batch: Option<RedeemStakeBatch>,
+    /// if the contract is locked, then deposit the NEAR funds in the next batch
+    next_redeem_stake_batch: Option<RedeemStakeBatch>,
 }
 
 impl Account {
