@@ -1,6 +1,5 @@
 mod account;
 mod accounts;
-mod batch_claim_ticket;
 mod batch_id;
 mod block_height;
 mod block_time_height;
@@ -21,7 +20,6 @@ mod yocto_stake;
 
 pub use account::Account;
 pub use accounts::Accounts;
-pub use batch_claim_ticket::{BatchClaimTicket, BatchClaimTickets};
 pub use batch_id::BatchId;
 pub use block_height::BlockHeight;
 pub use block_time_height::BlockTimeHeight;

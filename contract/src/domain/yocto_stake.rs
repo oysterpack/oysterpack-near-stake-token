@@ -1,5 +1,6 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::serde::export::Formatter;
+use primitive_types::U256;
 use std::fmt::{self, Display};
 use std::ops::{Deref, DerefMut};
 
@@ -43,5 +44,11 @@ impl DerefMut for YoctoStake {
 impl Display for YoctoStake {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
+    }
+}
+
+impl From<YoctoStake> for U256 {
+    fn from(value: YoctoStake) -> Self {
+        U256::from(value.value())
     }
 }

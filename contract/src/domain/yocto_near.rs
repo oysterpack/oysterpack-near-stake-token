@@ -5,6 +5,7 @@ use near_sdk::{
 };
 use std::fmt::{self, Display, Formatter};
 use std::ops::{Deref, DerefMut};
+use primitive_types::U256;
 
 #[derive(
     BorshSerialize, BorshDeserialize, Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Default,
@@ -89,5 +90,11 @@ impl DerefMut for YoctoNearValue {
 impl Display for YoctoNearValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.0.0.fmt(f)
+    }
+}
+
+impl From<YoctoNear> for U256 {
+    fn from(value: YoctoNear) -> Self {
+        U256::from(value.value())
     }
 }

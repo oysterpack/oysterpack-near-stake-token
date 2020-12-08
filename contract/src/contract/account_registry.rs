@@ -25,6 +25,7 @@ impl AccountRegistry for StakeTokenContract {
         );
 
         // account needs to pay for its storage
+        // TODO: allocate storage for worst case scenario to compute storage fees
         let initial_storage_usage = env::storage_usage();
         // insert the record to allocate the account storage
         let mut account = Account::default();
@@ -43,6 +44,7 @@ impl AccountRegistry for StakeTokenContract {
             }
             None => 0.into(),
         };
+        // TODO: deallocate storage
 
         self.accounts.insert(&account_id_hash, &account); // persist changes
         storage_fee.into()

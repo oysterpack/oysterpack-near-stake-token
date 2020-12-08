@@ -76,9 +76,17 @@ impl Account {
     }
 
     pub fn has_funds(&self) -> bool {
-        self.near.is_some()
-            || self.stake.is_some()
-            || self.stake_batch.is_some()
-            || self.redeem_stake_batch.is_some()
+        self.near.map_or(false, |balance| balance > 0)
+            || self.stake.map_or(false, |balance| balance > 0)
+            || self.stake_batch.map_or(false, |batch| batch.balance() > 0)
+            || self
+                .next_stake_batch
+                .map_or(false, |batch| batch.balance() > 0)
+            || self
+                .redeem_stake_batch
+                .map_or(false, |batch| batch.balance() > 0)
+            || self
+                .next_redeem_stake_batch
+                .map_or(false, |batch| batch.balance() > 0)
     }
 }

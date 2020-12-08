@@ -5,9 +5,8 @@ use crate::near::storage_keys::{
 use crate::{
     core::Hash,
     domain::{
-        Account, BatchClaimTickets, BatchId, RedeemStakeBatch, RedeemStakeBatchReceipt, StakeBatch,
-        StakeBatchReceipt, StorageUsage, TimestampedNearBalance, TimestampedStakeBalance,
-        YoctoNear,
+        Account, BatchId, RedeemStakeBatch, RedeemStakeBatchReceipt, StakeBatch, StakeBatchReceipt,
+        StorageUsage, TimestampedNearBalance, TimestampedStakeBalance, YoctoNear,
     },
 };
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
@@ -34,18 +33,6 @@ pub struct Accounts {
     // the receipt from storage
     stake_batch_receipts: UnorderedMap<BatchId, StakeBatchReceipt>,
     redeem_stake_batch_receipts: UnorderedMap<BatchId, RedeemStakeBatchReceipt>,
-
-    // tracks users that have unclaimed funds
-    // - this is required to defend against an attack vector where users stake small amounts and then
-    //   don't claim the funds. This would result in storage increases at the contract's expense and
-    //   eventually cause all contract funds to be locked up for storage - thus blocking future
-    //   transactions until more NEAR funds are deposited
-    // - when contract storage fees go above a threshold, the contract will start processing the claims
-    //   for the users in order to free up storage
-    //   - claim processing fees will be applied against the users esscrowed storage fees - the escrowed
-    //     storage fees will be deducted from the user's contract as the claim processing fee
-    unclaimed_stake_batch_funds: BatchClaimTickets,
-    unclaimed_redeem_stake_batch_funds: BatchClaimTickets,
 }
 
 impl Default for Accounts {
@@ -60,12 +47,6 @@ impl Default for Accounts {
             batch_id_sequence: Default::default(),
             stake_batch: None,
             redeem_stake_batch: None,
-            unclaimed_stake_batch_funds: BatchClaimTickets::new(
-                UNCLAIMED_STAKE_BATCH_FUNDS_KEY_PREFIX,
-            ),
-            unclaimed_redeem_stake_batch_funds: BatchClaimTickets::new(
-                UNCLAIMED_REDEEME_STAKE_BATCH_FUNDS_KEY_PREFIX,
-            ),
             stake_batch_receipts: UnorderedMap::new(STAKE_BATCH_RECEIPTS_KEY_PREFIX.to_vec()),
             redeem_stake_batch_receipts: UnorderedMap::new(
                 REDEEM_STAKE_BATCH_RECEIPTS_KEY_PREFIX.to_vec(),
