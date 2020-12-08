@@ -41,9 +41,10 @@ pub struct StakeTokenContract {
 
     accounts: Accounts,
     staking_pool_id: AccountId,
-
     locked: bool,
 }
+
+impl StakeTokenContract {}
 
 impl Default for StakeTokenContract {
     fn default() -> Self {
