@@ -23,6 +23,12 @@ impl Hash {
     const LENGTH: usize = 32;
 }
 
+impl From<[u8; 32]> for Hash {
+    fn from(value: [u8; 32]) -> Self {
+        Self(value)
+    }
+}
+
 impl From<&[u8]> for Hash {
     fn from(value: &[u8]) -> Self {
         assert!(value.len() > 0, "value cannot be empty");

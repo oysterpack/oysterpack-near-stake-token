@@ -1,5 +1,5 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use std::ops::{Deref, DerefMut};
+use std::ops::{AddAssign, Deref, DerefMut};
 
 #[derive(
     BorshSerialize,

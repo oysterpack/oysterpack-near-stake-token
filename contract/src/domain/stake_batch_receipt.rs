@@ -10,7 +10,7 @@
 use crate::domain::{BatchId, StakeTokenValue, TimestampedNearBalance, YoctoNear};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 
-#[derive(BorshSerialize, BorshDeserialize)]
+#[derive(BorshSerialize, BorshDeserialize, Default)]
 pub struct StakeBatchReceipt {
     batch_id: BatchId,
     staked_near: YoctoNear,

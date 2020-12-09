@@ -11,19 +11,16 @@ pub trait AccountRegistry {
     /// The account is required to pay for its storage. Storage fees will be escrowed and refunded
     /// when the account is unregistered.
     ///
-    /// Returns false if the account is already registered.
-    /// If the account is already registered, then the deposit is refunded.
-    ///
     /// #[payable]
     /// - account must pay for its storage
-    /// - storage fee: ??? yoctoNEAR
+    /// - storage fee can be looked up via [account_storage_escrow_fee]
     ///
     /// ## Panics
     /// - if deposit is not enough to cover storage fees
     /// - is account is already registered
     ///
     /// NOTE: panic will automatically refund any attached deposit
-    fn register_account(&mut self) -> YoctoNearValue;
+    fn register_account(&mut self);
 
     /// An account can only be unregistered if the account has zero token balance, i.e., zero STAKE
     /// and NEAR balances. In order to unregister the account all NEAR must be unstaked and withdrawn
@@ -33,6 +30,8 @@ pub trait AccountRegistry {
     fn unregister_account(&mut self) -> Result<YoctoNearValue, UnregisterAccountFailure>;
 
     fn registered_accounts_count(&self) -> U128;
+
+    fn account_storage_escrow_fee(&self) -> YoctoNearValue;
 }
 
 #[derive(Serialize, Deserialize)]

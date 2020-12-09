@@ -1,6 +1,7 @@
 use crate::domain::stake_batch::StakeBatch;
 use crate::domain::{
     RedeemStakeBatch, StorageUsage, TimestampedNearBalance, TimestampedStakeBalance, YoctoNear,
+    YoctoStake,
 };
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 
@@ -9,7 +10,6 @@ pub struct Account {
     /// account is responsible for paying for its own storage fees
     /// the funds are escrowed and refunded when the account is unregistered
     storage_escrow: TimestampedNearBalance,
-    storage_usage: StorageUsage,
 
     /// NEAR funds that are available for withdrawal
     near: Option<TimestampedNearBalance>,
@@ -41,38 +41,30 @@ pub struct Account {
 }
 
 impl Account {
+    pub fn new(storage_escrow_fee: YoctoNear) -> Self {
+        let mut account = Self::default();
+        account.storage_escrow = TimestampedNearBalance::new(storage_escrow_fee);
+        account
+    }
+
+    /// the purpose for this constructor is to create a fully allocated [Account] object instance
+    /// to be used to compute storage usage during the account registration process
+    /// - the account is responsible to pay for its storage fees - in order to compute storage fees
+    ///   a temporary instance is stored and then the storage usage is measured at runtime
+    pub(crate) fn account_template_to_measure_storage_usage() -> Self {
+        Self {
+            storage_escrow: Default::default(),
+            near: Some(TimestampedNearBalance::default()),
+            stake: Some(TimestampedStakeBalance::default()),
+            stake_batch: Some(StakeBatch::default()),
+            next_stake_batch: Some(StakeBatch::default()),
+            redeem_stake_batch: Some(RedeemStakeBatch::default()),
+            next_redeem_stake_batch: Some(RedeemStakeBatch::default()),
+        }
+    }
+
     pub fn storage_escrow(&self) -> TimestampedNearBalance {
         self.storage_escrow
-    }
-
-    pub fn apply_storage_usage_increase(
-        &mut self,
-        storage_usage: StorageUsage,
-        storage_fee: YoctoNear,
-    ) {
-        if storage_usage.value() > 0 {
-            assert!(
-                storage_fee.value() > 0,
-                "storage usage increase requires storage fee payment"
-            );
-            *self.storage_usage += storage_usage.value();
-            self.storage_escrow.credit(storage_fee);
-        }
-    }
-
-    pub fn apply_storage_usage_decrease(
-        &mut self,
-        storage_usage: StorageUsage,
-        storage_fee: YoctoNear,
-    ) {
-        if storage_usage.value() > 0 {
-            assert!(
-                storage_fee.value() > 0,
-                "storage usage decrease requires storage fee refund"
-            );
-            *self.storage_usage -= storage_usage.value();
-            self.storage_escrow.debit(storage_fee);
-        }
     }
 
     pub fn has_funds(&self) -> bool {
@@ -88,5 +80,29 @@ impl Account {
             || self
                 .next_redeem_stake_batch
                 .map_or(false, |batch| batch.balance() > 0)
+    }
+
+    pub fn apply_near_credit(&mut self, credit: YoctoNear) {
+        self.near
+            .get_or_insert_with(|| TimestampedNearBalance::new(YoctoNear(0)))
+            .credit(credit);
+    }
+
+    pub fn apply_near_debit(&mut self, debit: YoctoNear) {
+        self.near
+            .get_or_insert_with(|| TimestampedNearBalance::new(YoctoNear(0)))
+            .debit(debit);
+    }
+
+    pub fn apply_stake_credit(&mut self, credit: YoctoStake) {
+        self.stake
+            .get_or_insert_with(|| TimestampedStakeBalance::new(YoctoStake(0)))
+            .credit(credit);
+    }
+
+    pub fn apply_stake_debit(&mut self, debit: YoctoStake) {
+        self.stake
+            .get_or_insert_with(|| TimestampedStakeBalance::new(YoctoStake(0)))
+            .debit(debit);
     }
 }

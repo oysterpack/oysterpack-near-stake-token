@@ -4,7 +4,7 @@ use crate::domain::{
 };
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 
-#[derive(BorshSerialize, BorshDeserialize)]
+#[derive(BorshSerialize, BorshDeserialize, Default)]
 pub struct RedeemStakeBatchReceipt {
     redeemed_stake: YoctoStake,
     /// the value of the STAKE tokens that are being redeemed in this batch, which will be unstaked

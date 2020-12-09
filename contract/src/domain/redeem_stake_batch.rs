@@ -40,10 +40,10 @@
 //!
 //! [staking pool contract] = https://github.com/near/core-contracts/tree/master/staking-pool
 
-use crate::domain::{BatchId, TimestampedStakeBalance};
+use crate::domain::{BatchId, TimestampedStakeBalance, YoctoStake};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 
-#[derive(BorshSerialize, BorshDeserialize, Clone, Copy)]
+#[derive(BorshSerialize, BorshDeserialize, Clone, Copy, Default)]
 pub struct RedeemStakeBatch {
     batch_id: BatchId,
     balance: TimestampedStakeBalance,
@@ -56,5 +56,13 @@ impl RedeemStakeBatch {
 
     pub fn balance(&self) -> TimestampedStakeBalance {
         self.balance
+    }
+
+    pub fn add(&mut self, amount: YoctoStake) {
+        self.balance.credit(amount)
+    }
+
+    pub fn remove(&mut self, amount: YoctoStake) {
+        self.balance.debit(amount)
     }
 }

@@ -1,3 +1,4 @@
+use crate::near::YOCTO;
 use crate::{
     core::Hash,
     domain::{Account, StorageUsage, YoctoNear, YoctoNearValue},
@@ -17,37 +18,20 @@ impl AccountRegistry for StakeTokenContract {
         self.accounts.get(&hash).is_some()
     }
 
-    fn register_account(&mut self) -> YoctoNearValue {
+    fn register_account(&mut self) {
         let deposit = YoctoNear(env::attached_deposit());
         assert!(
-            deposit.value() > 0,
-            "deposit is required to pay for account storage fees",
+            deposit.value() >= self.account_storage_escrow_fee().value(),
+            "deposit is required to pay for account storage fees : {} NEAR",
+            self.account_storage_escrow_fee().value() as f64 / YOCTO as f64,
         );
 
-        // account needs to pay for its storage
-        // TODO: allocate storage for worst case scenario to compute storage fees
-        let initial_storage_usage = env::storage_usage();
-        // insert the record to allocate the account storage
-        let mut account = Account::default();
+        let account = Account::new(self.account_storage_escrow_fee().value().into());
         let account_id_hash = Hash::from(&env::predecessor_account_id());
         assert!(
             self.accounts.insert(&account_id_hash, &account).is_none(),
             "account is already registered"
         );
-
-        let storage_fee = match self.assert_storage_fees(initial_storage_usage.into()) {
-            Some((storage_usage, storage_fee)) => {
-                let refund = env::attached_deposit() - storage_fee.value();
-                Promise::new(env::predecessor_account_id()).transfer(refund);
-                account.apply_storage_usage_increase(storage_usage, storage_fee);
-                storage_fee
-            }
-            None => 0.into(),
-        };
-        // TODO: deallocate storage
-
-        self.accounts.insert(&account_id_hash, &account); // persist changes
-        storage_fee.into()
     }
 
     fn unregister_account(&mut self) -> Result<YoctoNearValue, UnregisterAccountFailure> {
@@ -72,6 +56,14 @@ impl AccountRegistry for StakeTokenContract {
     fn registered_accounts_count(&self) -> U128 {
         self.accounts.count().into()
     }
+
+    /// returns the required account storage fee that needs to be attached to the account registration
+    /// contract function call in yoctoNEAR
+    fn account_storage_escrow_fee(&self) -> YoctoNearValue {
+        let fee = self.config.storage_cost_per_byte().value()
+            * self.account_storage_usage.value() as u128;
+        fee.into()
+    }
 }
 
 #[cfg(test)]
@@ -80,6 +72,7 @@ mod test {
     use crate::near::YOCTO;
     use crate::test_utils::near;
     use near_sdk::{serde_json, testing_env, AccountId, MockedBlockchain, VMContext};
+    use std::convert::TryFrom;
 
     #[test]
     fn result_json() {
@@ -107,51 +100,46 @@ mod test {
         "operator.stake.oysterpack.near".to_string()
     }
 
-    // #[test]
-    // fn register_new_account_success() {
-    //     let account_id = near::to_account_id("alfio-zappala.near");
-    //     let mut context = near::new_context(account_id.clone());
-    //     context.attached_deposit = 10 * YOCTO;
-    //     testing_env!(context);
-    //     let mut contract = StakeTokenContract::new(operator_id(), None);
-    //     assert!(
-    //         !contract.account_registered(account_id.clone()),
-    //         "account should not be registered"
-    //     );
-    //     assert_eq!(
-    //         contract.registered_accounts_count().0,
-    //         0,
-    //         "There should be no accounts registered"
-    //     );
-    //
-    //     let storage_before_registering_account = env::storage_usage();
-    //     match contract.register_account() {
-    //         RegisterAccountResult::Registered { storage_fee } => {
-    //             let account_storage_usage =
-    //                 env::storage_usage() - storage_before_registering_account;
-    //             println!(
-    //                 "account storage usage: {} | fee: {:?} NEAR",
-    //                 account_storage_usage,
-    //                 storage_fee.0 as f64 / YOCTO as f64
-    //             );
-    //             let account = contract.accounts.get(&account_id).unwrap();
-    //             assert_eq!(account.storage_usage(), account_storage_usage);
-    //         }
-    //         RegisterAccountResult::AlreadyRegistered => {
-    //             panic!("account should not be already registered");
-    //         }
-    //     }
-    //
-    //     assert!(
-    //         contract.account_registered(account_id.clone()),
-    //         "account should be registered"
-    //     );
-    //     assert_eq!(
-    //         contract.registered_accounts_count().0,
-    //         1,
-    //         "There should be 1 account registered"
-    //     );
-    // }
+    #[test]
+    fn register_new_account_success() {
+        let account_id = "alfio-zappala.near";
+        let mut context = near::new_context(account_id);
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context);
+
+        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
+        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
+        let valid_account_id = ValidAccountId::try_from(account_id).unwrap();
+        let mut contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
+        assert!(
+            !contract.account_registered(valid_account_id.clone()),
+            "account should not be registered"
+        );
+        assert_eq!(
+            contract.registered_accounts_count().0,
+            0,
+            "There should be no accounts registered"
+        );
+
+        let storage_before_registering_account = env::storage_usage();
+        contract.register_account();
+        let account_storage_usage = env::storage_usage() - storage_before_registering_account;
+        assert_eq!(
+            account_storage_usage, 119,
+            "account storage usage changed !!! If the change is expected, then update the assert"
+        );
+
+        assert!(
+            contract.account_registered(valid_account_id.clone()),
+            "account should be registered"
+        );
+        assert_eq!(
+            contract.registered_accounts_count().0,
+            1,
+            "There should be 1 account registered"
+        );
+    }
+
     //
     // #[test]
     // fn register_preexisting_account() {
