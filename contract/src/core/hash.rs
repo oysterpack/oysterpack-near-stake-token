@@ -3,6 +3,7 @@ use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env,
 };
+use std::convert::TryInto;
 
 #[derive(
     BorshDeserialize,
@@ -32,20 +33,16 @@ impl From<[u8; 32]> for Hash {
 impl From<&[u8]> for Hash {
     fn from(value: &[u8]) -> Self {
         assert!(value.len() > 0, "value cannot be empty");
-        let mut buf = [0u8; Hash::LENGTH];
         let hash = env::sha256(value);
-        buf.copy_from_slice(&hash.as_slice()[..Hash::LENGTH]);
-        Self(buf)
+        Self(hash.try_into().unwrap())
     }
 }
 
 impl From<&str> for Hash {
     fn from(value: &str) -> Self {
         assert!(value.len() > 0, "value cannot be empty");
-        let mut buf = [0u8; Hash::LENGTH];
         let hash = env::sha256(value.as_bytes());
-        buf.copy_from_slice(&hash.as_slice()[..Hash::LENGTH]);
-        Self(buf)
+        Self(hash.try_into().unwrap())
     }
 }
 

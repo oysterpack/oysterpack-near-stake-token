@@ -28,20 +28,13 @@ pub trait AccountRegistry {
     /// - panic will automatically refund any attached deposit
     fn register_account(&mut self);
 
-    /// An account can only be unregistered if the account has zero token balance, i.e., zero STAKE
-    /// and NEAR balances. In order to unregister the account all NEAR must be unstaked and withdrawn
-    /// from the account.
+    /// In order to unregister the account all NEAR must be unstaked and withdrawn from the account.
+    /// The escrowed storage fee will be refunded to the account.
     ///
-    /// If success, then returns the storage escrow fees that were refunded
-    fn unregister_account(&mut self) -> Result<YoctoNearValue, UnregisterAccountFailure>;
+    /// ## Panics
+    /// - if account is not registered
+    /// - if registered account has funds
+    fn unregister_account(&mut self);
 
     fn total_registered_accounts(&self) -> U128;
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(crate = "near_sdk::serde")]
-pub enum UnregisterAccountFailure {
-    NotRegistered,
-    /// account must first redeem and withdraw all funds before being able to unregister the account
-    AccountHasFunds,
 }

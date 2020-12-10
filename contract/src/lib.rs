@@ -67,6 +67,10 @@ pub struct StakeTokenContract {
     stake_batch: Option<StakeBatch>,
     redeem_stake_batch: Option<RedeemStakeBatch>,
 
+    /// used to store batch requests while the contract is locked
+    next_stake_batch: Option<StakeBatch>,
+    next_redeem_stake_batch: Option<RedeemStakeBatch>,
+
     /// after users have claimed all funds from a receipt, then the map will clean itself up by removing
     //. the receipt from storage
     stake_batch_receipts: UnorderedMap<BatchId, StakeBatchReceipt>,
@@ -120,6 +124,8 @@ impl StakeTokenContract {
             batch_id_sequence: BatchId::default(),
             stake_batch: None,
             redeem_stake_batch: None,
+            next_stake_batch: None,
+            next_redeem_stake_batch: None,
             stake_batch_receipts: UnorderedMap::new(STAKE_BATCH_RECEIPTS_KEY_PREFIX.to_vec()),
             redeem_stake_batch_receipts: UnorderedMap::new(
                 REDEEM_STAKE_BATCH_RECEIPTS_KEY_PREFIX.to_vec(),
@@ -140,10 +146,6 @@ impl StakeTokenContract {
         }
 
         contract
-    }
-
-    pub fn operator_id(&self) -> &str {
-        &self.operator_id
     }
 }
 
