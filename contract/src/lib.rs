@@ -180,8 +180,8 @@ mod test {
     use super::*;
     use crate::interface::AccountRegistry;
     use crate::near::YOCTO;
-    use crate::test_utils::near;
     use crate::test_utils::near::new_context;
+    use crate::test_utils::{near, EXPECTED_ACCOUNT_STORAGE_USAGE};
     use near_sdk::{testing_env, AccountId, MockedBlockchain, VMContext};
     use std::convert::TryFrom;
 
@@ -209,10 +209,14 @@ mod test {
         let contract = StakeTokenContract::new(staking_pool_id.clone(), operator_id, None);
 
         // Then [StakeTokenContract::account_storage_usage] is dynamically computed
-        assert_eq!(contract.account_storage_usage.value(), 947);
+        assert_eq!(
+            contract.account_storage_usage.value(),
+            EXPECTED_ACCOUNT_STORAGE_USAGE
+        );
         assert_eq!(
             contract.account_storage_fee().value(),
-            947 * contract.config.storage_cost_per_byte().value()
+            EXPECTED_ACCOUNT_STORAGE_USAGE as u128
+                * contract.config.storage_cost_per_byte().value()
         );
 
         // And staking pool ID was stored

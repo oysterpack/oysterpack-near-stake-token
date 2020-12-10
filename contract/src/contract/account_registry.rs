@@ -15,11 +15,6 @@ use near_sdk::{
 
 #[near_bindgen]
 impl AccountRegistry for StakeTokenContract {
-    fn account_registered(&self, account_id: ValidAccountId) -> bool {
-        let hash = Hash::from(account_id.as_ref());
-        self.accounts.get(&hash).is_some()
-    }
-
     /// ## Logic
     /// - check attached deposit
     ///   - assert amount is enough to cover storage fees
@@ -65,16 +60,12 @@ impl AccountRegistry for StakeTokenContract {
             Some(account) => {
                 assert!(
                     !account.has_funds(),
-                    "all funds must be withdrawn from the account in order to unregister it"
+                    "all funds must be withdrawn from the account in order to unregister"
                 );
                 // refund the escrowed storage fee
                 Promise::new(account_id).transfer(account.storage_escrow.balance().value());
             }
         };
-    }
-
-    fn total_registered_accounts(&self) -> U128 {
-        self.accounts_len.into()
     }
 
     /// returns the required account storage fee that needs to be attached to the account registration
@@ -83,6 +74,15 @@ impl AccountRegistry for StakeTokenContract {
         let fee = self.config.storage_cost_per_byte().value()
             * self.account_storage_usage.value() as u128;
         fee.into()
+    }
+
+    fn account_registered(&self, account_id: ValidAccountId) -> bool {
+        let hash = Hash::from(account_id.as_ref());
+        self.accounts.get(&hash).is_some()
+    }
+
+    fn total_registered_accounts(&self) -> U128 {
+        self.accounts_len.into()
     }
 
     fn lookup_account(&self, account_id: ValidAccountId) -> Option<StakeAccount> {
@@ -210,7 +210,7 @@ mod test {
     use super::*;
     use crate::config::Config;
     use crate::near::YOCTO;
-    use crate::test_utils::near;
+    use crate::test_utils::{near, EXPECTED_ACCOUNT_STORAGE_USAGE};
     use near_sdk::{serde_json, testing_env, AccountId, MockedBlockchain, VMContext};
     use std::convert::TryFrom;
 
@@ -371,7 +371,8 @@ mod test {
     fn register_account_with_exact_storage_fee() {
         let account_id = "alfio-zappala.near";
         let mut context = near::new_context(account_id);
-        context.attached_deposit = 947 * Config::default().storage_cost_per_byte().value();
+        context.attached_deposit = EXPECTED_ACCOUNT_STORAGE_USAGE as u128
+            * Config::default().storage_cost_per_byte().value();
         testing_env!(context.clone());
 
         let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
@@ -503,28 +504,85 @@ mod test {
         println!("{}", stake_account_json);
     }
 
-    //
-    // #[test]
-    // #[should_panic]
-    // fn register_new_account_with_no_deposit() {
-    //     let account_id = near::to_account_id("alfio-zappala.near");
-    //     let mut context = near::new_context(account_id.clone());
-    //     context.attached_deposit = 0;
-    //     testing_env!(context);
-    //     let mut contract = StakeTokenContract::new(operator_id(), None);
-    //     contract.register_account();
-    // }
-    //
-    // #[test]
-    // #[should_panic]
-    // fn register_new_account_with_not_enough_deposit() {
-    //     let account_id = near::to_account_id("alfio-zappala.near");
-    //     let mut context = near::new_context(account_id.clone());
-    //     context.attached_deposit = 1;
-    //     testing_env!(context);
-    //     let mut contract = StakeTokenContract::new(operator_id(), None);
-    //     contract.register_account();
-    // }
+    #[test]
+    fn unregister_registered_account_with_no_funds() {
+        let account_id = "alfio-zappala.near";
+        let mut context = near::new_context(account_id);
+        context.attached_deposit = EXPECTED_ACCOUNT_STORAGE_USAGE as u128
+            * Config::default().storage_cost_per_byte().value();
+        testing_env!(context.clone());
+
+        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
+        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
+        let valid_account_id = ValidAccountId::try_from(account_id).unwrap();
+        let mut contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
+
+        assert!(contract.lookup_account(valid_account_id.clone()).is_none());
+        contract.register_account();
+        assert!(contract.account_registered(valid_account_id.clone()));
+        let stake_account = contract.lookup_account(valid_account_id.clone()).unwrap();
+        assert!(stake_account.stake_batch.is_none());
+        assert!(stake_account.next_stake_batch.is_none());
+        assert!(stake_account.near.is_none());
+        assert!(stake_account.stake.is_none());
+
+        let contract_balance_with_registered_account = env::account_balance();
+        assert_eq!(
+            contract.total_storage_escrow.balance().value(),
+            contract_balance_with_registered_account
+        );
+        contract.unregister_account();
+        assert!(!contract.account_registered(valid_account_id.clone()));
+        assert_eq!(
+            contract.total_storage_escrow.balance().value(),
+            0,
+            "storage fees should have been refunded"
+        );
+        assert_eq!(
+            env::account_balance(),
+            0,
+            "storage fees should have been refunded"
+        );
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "all funds must be withdrawn from the account in order to unregister"
+    )]
+    fn unregister_account_with_funds() {
+        let account_id = "alfio-zappala.near";
+        let mut context = near::new_context(account_id);
+        context.attached_deposit = EXPECTED_ACCOUNT_STORAGE_USAGE as u128
+            * Config::default().storage_cost_per_byte().value()
+            + 1;
+        testing_env!(context.clone());
+
+        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
+        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
+        let valid_account_id = ValidAccountId::try_from(account_id).unwrap();
+        let mut contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
+
+        contract.register_account();
+        contract.unregister_account();
+    }
+
+    #[test]
+    #[should_panic(expected = "account is not registered")]
+    fn unregister_unknown_account() {
+        let account_id = "alfio-zappala.near";
+        let mut context = near::new_context(account_id);
+        context.attached_deposit = EXPECTED_ACCOUNT_STORAGE_USAGE as u128
+            * Config::default().storage_cost_per_byte().value()
+            + 1;
+        testing_env!(context.clone());
+
+        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
+        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
+        let mut contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
+
+        contract.unregister_account();
+    }
+
     //
     // #[test]
     // fn unregister_account_with_zero_funds() {

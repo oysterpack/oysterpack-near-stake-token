@@ -1,3 +1,5 @@
+pub const EXPECTED_ACCOUNT_STORAGE_USAGE: u64 = 947;
+
 pub mod near {
     use near_sdk::{AccountId, VMContext};
 
