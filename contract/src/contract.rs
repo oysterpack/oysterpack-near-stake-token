@@ -1,6 +1,5 @@
 pub mod account_registry;
 
-use crate::domain::Accounts;
 use crate::{
     config::Config,
     core::Hash,

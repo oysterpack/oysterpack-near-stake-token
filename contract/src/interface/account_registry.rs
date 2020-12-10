@@ -5,21 +5,27 @@ use near_sdk::{
 };
 
 pub trait AccountRegistry {
+    /// Returns the required deposit amount that is required for account registration.
+    fn account_storage_fee(&self) -> YoctoNearValue;
+
     fn account_registered(&self, account_id: ValidAccountId) -> bool;
 
     /// If no account exists for the predecessor account ID, then a new one is created and registered.
+    /// The attached deposit will be staked minus the account storage fees.
     /// The account is required to pay for its storage. Storage fees will be escrowed and refunded
     /// when the account is unregistered.
     ///
     /// #[payable]
-    /// - account must pay for its storage
-    /// - storage fee can be looked up via [account_storage_escrow_fee]
+    /// - storage escrow fee is required
+    ///   - use [account_storage_escrow_fee] to lookup the required storage fee amount
+    /// - any amount above the storage fee will be staked
     ///
     /// ## Panics
     /// - if deposit is not enough to cover storage fees
     /// - is account is already registered
     ///
-    /// NOTE: panic will automatically refund any attached deposit
+    /// ## NOTES
+    /// - panic will automatically refund any attached deposit
     fn register_account(&mut self);
 
     /// An account can only be unregistered if the account has zero token balance, i.e., zero STAKE
@@ -29,9 +35,7 @@ pub trait AccountRegistry {
     /// If success, then returns the storage escrow fees that were refunded
     fn unregister_account(&mut self) -> Result<YoctoNearValue, UnregisterAccountFailure>;
 
-    fn registered_accounts_count(&self) -> U128;
-
-    fn account_storage_escrow_fee(&self) -> YoctoNearValue;
+    fn total_registered_accounts(&self) -> U128;
 }
 
 #[derive(Serialize, Deserialize)]

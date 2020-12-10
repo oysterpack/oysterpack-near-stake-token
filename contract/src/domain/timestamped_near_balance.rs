@@ -74,35 +74,17 @@ impl TimestampedNearBalance {
         if amount.0 == 0 {
             return;
         }
-        self.balance = self
-            .balance
-            .0
-            .checked_add(amount.0)
-            .expect(
-                format!(
-                    "credit caused balance to overflow: {balance} + {amount}",
-                    amount = amount,
-                    balance = self.balance
-                )
-                .as_str(),
-            )
-            .into();
+        self.balance += amount;
         self.update_timestamp();
     }
 
     /// ## Panics
-    /// if debit amount > balance
+    /// if overflow occurs
     pub fn debit(&mut self, amount: YoctoNear) {
         if amount.0 == 0 {
             return;
         }
-        assert!(
-            self.balance >= amount,
-            "debit amount cannot be greater than the current balance: {} - {}",
-            self.balance,
-            amount,
-        );
-        self.balance.0 -= amount.0;
+        self.balance -= amount;
         self.update_timestamp();
     }
 
@@ -163,7 +145,7 @@ mod test {
         context.block_index = 1;
         context.block_timestamp = 2;
         context.epoch_height = 3;
-        testing_env!(context.clone());
+        testing_env!(context);
 
         let balance = TimestampedNearBalance::new(10.into());
         println!("{:?}", balance);
@@ -175,12 +157,32 @@ mod test {
         context.block_index = 1;
         context.block_timestamp = 2;
         context.epoch_height = 3;
-        testing_env!(context.clone());
+        testing_env!(context);
 
         let balance = TimestampedNearBalance::new(10.into());
         let bytes: Vec<u8> = balance.try_to_vec().unwrap();
         let balance2: TimestampedNearBalance =
             TimestampedNearBalance::try_from_slice(&bytes).unwrap();
         assert_eq!(balance, balance2);
+    }
+
+    #[test]
+    #[should_panic(expected = "attempt to add with overflow")]
+    pub fn credit_panics_on_overflow() {
+        let context = new_context("bob.near");
+        testing_env!(context);
+
+        let mut balance = TimestampedNearBalance::new(10.into());
+        balance.credit(u128::MAX.into());
+    }
+
+    #[test]
+    #[should_panic(expected = "attempt to subtract with overflow")]
+    pub fn debit_panics_on_overflow() {
+        let context = new_context("bob.near");
+        testing_env!(context);
+
+        let mut balance = TimestampedNearBalance::new(10.into());
+        balance.debit(u128::MAX.into());
     }
 }

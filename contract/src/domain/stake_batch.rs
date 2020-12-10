@@ -25,7 +25,7 @@ impl StakeBatch {
         }
     }
 
-    pub fn batch_id(&self) -> BatchId {
+    pub fn id(&self) -> BatchId {
         self.batch_id
     }
 

@@ -2,7 +2,7 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::serde::export::Formatter;
 use primitive_types::U256;
 use std::fmt::{self, Display};
-use std::ops::{Deref, DerefMut};
+use std::ops::{Add, AddAssign, Deref, DerefMut, Sub, SubAssign};
 
 #[derive(
     BorshSerialize, BorshDeserialize, Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Default,
@@ -50,5 +50,33 @@ impl Display for YoctoStake {
 impl From<YoctoStake> for U256 {
     fn from(value: YoctoStake) -> Self {
         U256::from(value.value())
+    }
+}
+
+impl Sub for YoctoStake {
+    type Output = YoctoStake;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        YoctoStake(self.0 - rhs.0)
+    }
+}
+
+impl SubAssign for YoctoStake {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.0 -= rhs.0
+    }
+}
+
+impl Add for YoctoStake {
+    type Output = YoctoStake;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        YoctoStake(self.0 + rhs.0)
+    }
+}
+
+impl AddAssign for YoctoStake {
+    fn add_assign(&mut self, rhs: Self) {
+        self.0 += rhs.0
     }
 }

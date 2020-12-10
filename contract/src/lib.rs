@@ -14,9 +14,14 @@ pub mod test_utils;
 use crate::config::Config;
 use crate::core::Hash;
 use crate::domain::{
-    Account, Accounts, BlockHeight, StorageUsage, TimestampedNearBalance, TimestampedStakeBalance,
-    YoctoNear, YoctoNearValue,
+    Account, BatchId, BlockHeight, RedeemStakeBatch, RedeemStakeBatchReceipt, StakeBatch,
+    StakeBatchReceipt, StorageUsage, TimestampedNearBalance, TimestampedStakeBalance, YoctoNear,
+    YoctoNearValue,
 };
+use crate::near::storage_keys::{
+    ACCOUNTS_KEY_PREFIX, REDEEM_STAKE_BATCH_RECEIPTS_KEY_PREFIX, STAKE_BATCH_RECEIPTS_KEY_PREFIX,
+};
+use near_sdk::collections::UnorderedMap;
 use near_sdk::json_types::ValidAccountId;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
@@ -38,9 +43,34 @@ pub struct StakeTokenContract {
     /// when the config was last changed
     /// the block info can be looked up via its block index: https://docs.near.org/docs/api/rpc#block
     config_change_block_height: BlockHeight,
-
-    accounts: Accounts,
+    /// how much storage the account needs to pay for when registering an account
+    /// - dynamically computed when the contract is deployed
     account_storage_usage: StorageUsage,
+
+    accounts: LookupMap<Hash, Account>,
+    accounts_len: u128,
+
+    /// the total amount of account storage fees that have been deposited and escrowed
+    /// - when an account unregisters, it is refunded its storage fee deposit
+    total_storage_escrow: TimestampedNearBalance,
+
+    /// total available NEAR balance across all accounts
+    total_near: TimestampedNearBalance,
+    /// total STAKE token supply
+    total_stake: TimestampedStakeBalance,
+
+    /// used to generate new batch IDs
+    /// - the sequence is incremented to generate a new batch ID
+    /// - sequence ID starts at 1
+    batch_id_sequence: BatchId,
+    /// when the batches are processed, receipts are created
+    stake_batch: Option<StakeBatch>,
+    redeem_stake_batch: Option<RedeemStakeBatch>,
+
+    /// after users have claimed all funds from a receipt, then the map will clean itself up by removing
+    //. the receipt from storage
+    stake_batch_receipts: UnorderedMap<BatchId, StakeBatchReceipt>,
+    redeem_stake_batch_receipts: UnorderedMap<BatchId, RedeemStakeBatchReceipt>,
 
     staking_pool_id: AccountId,
     locked: bool,
@@ -82,7 +112,18 @@ impl StakeTokenContract {
             config: config.unwrap_or_else(Config::default),
             config_change_block_height: env::block_index().into(),
 
-            accounts: Accounts::default(),
+            accounts: LookupMap::new(ACCOUNTS_KEY_PREFIX.to_vec()),
+            accounts_len: 0,
+            total_storage_escrow: Default::default(),
+            total_near: Default::default(),
+            total_stake: Default::default(),
+            batch_id_sequence: BatchId::default(),
+            stake_batch: None,
+            redeem_stake_batch: None,
+            stake_batch_receipts: UnorderedMap::new(STAKE_BATCH_RECEIPTS_KEY_PREFIX.to_vec()),
+            redeem_stake_batch_receipts: UnorderedMap::new(
+                REDEEM_STAKE_BATCH_RECEIPTS_KEY_PREFIX.to_vec(),
+            ),
             account_storage_usage: Default::default(),
             staking_pool_id: staking_pool_id.into(),
             locked: false,
@@ -91,14 +132,10 @@ impl StakeTokenContract {
         // compute account storage usage
         {
             let initial_storage_usage = env::storage_usage();
-            contract
-                .accounts
-                .allocate_account_template_to_measure_storage_usage();
+            contract.allocate_account_template_to_measure_storage_usage();
             contract.account_storage_usage =
                 StorageUsage(env::storage_usage() - initial_storage_usage);
-            contract
-                .accounts
-                .deallocate_account_template_to_measure_storage_usage();
+            contract.deallocate_account_template_to_measure_storage_usage();
             assert_eq!(initial_storage_usage, env::storage_usage());
         }
 
@@ -107,6 +144,32 @@ impl StakeTokenContract {
 
     pub fn operator_id(&self) -> &str {
         &self.operator_id
+    }
+}
+
+impl StakeTokenContract {
+    /// this is used to compute the storage usage fees to charge for account registration
+    /// - the account is responsible to pay for its storage fees - account storage is allocated, measured,
+    ///   and then freed
+    fn allocate_account_template_to_measure_storage_usage(&mut self) {
+        let hash = Hash::from([0u8; 32]);
+        let account_template = Account::account_template_to_measure_storage_usage();
+        self.accounts.insert(&hash, &account_template);
+
+        let batch_id = BatchId(0);
+        self.stake_batch_receipts
+            .insert(&batch_id, &StakeBatchReceipt::default());
+        self.redeem_stake_batch_receipts
+            .insert(&batch_id, &RedeemStakeBatchReceipt::default());
+    }
+
+    fn deallocate_account_template_to_measure_storage_usage(&mut self) {
+        let hash = Hash::from([0u8; 32]);
+        self.accounts.remove(&hash);
+
+        let batch_id = BatchId(0);
+        self.stake_batch_receipts.remove(&batch_id);
+        self.redeem_stake_batch_receipts.remove(&batch_id);
     }
 }
 
@@ -120,20 +183,78 @@ mod test {
     use near_sdk::{testing_env, AccountId, MockedBlockchain, VMContext};
     use std::convert::TryFrom;
 
+    /// When the contract is deployed
+    /// Then [StakeTokenContract::account_storage_usage] is dynamically computed
+    /// And staking pool ID was stored
+    /// And there should be no accounts registered
+    /// And the config change block height should be set from the NEAR runtime env
+    /// And the contract should not be locked
+    /// And the total storage escrow should be zero
+    /// And the total NEAR balance aggregated across all account should be zero
+    /// And the total STAKE supply should be zero
+    /// And batch ID sequence should be zero
+    /// And batches should be None
+    /// And there should be no receipts
     #[test]
-    fn state_token_contract_account_storage_usage() {
+    fn contract_init() {
         let account_id = "bob.near";
-        let context = new_context(account_id);
+        let mut context = new_context(account_id);
+        context.block_index = 10;
         testing_env!((context));
 
         let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
         let operator_id = ValidAccountId::try_from("joe.near").unwrap();
-        let contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
-        assert!(contract.account_storage_usage.value() > 0);
-        println!(
-            "account_storage_usage: {:?} -> storage fee: {} NEAR",
-            contract.account_storage_usage,
-            contract.account_storage_escrow_fee().value() as f64 / YOCTO as f64
+        let contract = StakeTokenContract::new(staking_pool_id.clone(), operator_id, None);
+
+        // Then [StakeTokenContract::account_storage_usage] is dynamically computed
+        assert_eq!(contract.account_storage_usage.value(), 947);
+        assert_eq!(
+            contract.account_storage_fee().value(),
+            947 * contract.config.storage_cost_per_byte().value()
         );
+
+        // And staking pool ID was stored
+        assert_eq!(
+            contract.staking_pool_id,
+            staking_pool_id.as_ref().to_string()
+        );
+
+        assert_eq!(
+            contract.total_registered_accounts().0,
+            0,
+            "there should be no accounts registered"
+        );
+        assert_eq!(
+            contract.config_change_block_height.value(),
+            10,
+            "config change block height should be set from the NEAR runtime env"
+        );
+        assert!(!contract.locked, "contract should not be locked");
+        assert_eq!(
+            contract.total_storage_escrow.balance().value(),
+            0,
+            "the total storage escrow should be zero"
+        );
+        assert_eq!(
+            contract.total_near.balance().value(),
+            0,
+            "the total NEAR balance aggregated across all account should be zero"
+        );
+        assert_eq!(
+            contract.total_stake.balance().value(),
+            0,
+            "the total STAKE supply should be zero"
+        );
+        assert_eq!(
+            contract.batch_id_sequence.value(),
+            0,
+            "batch ID sequence should be zero"
+        );
+        // And batches should be None
+        assert!(contract.stake_batch.is_none());
+        assert!(contract.redeem_stake_batch.is_none());
+        // And there should be no receipts
+        assert!(contract.stake_batch_receipts.is_empty());
+        assert!(contract.redeem_stake_batch_receipts.is_empty())
     }
 }

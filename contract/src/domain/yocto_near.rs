@@ -4,7 +4,7 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
 };
 use std::fmt::{self, Display, Formatter};
-use std::ops::{Deref, DerefMut};
+use std::ops::{Deref, DerefMut, Sub, SubAssign, Add, AddAssign};
 use primitive_types::U256;
 
 #[derive(
@@ -47,6 +47,40 @@ impl DerefMut for YoctoNear {
 impl Display for YoctoNear {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
+    }
+}
+
+impl Sub for YoctoNear {
+    type Output = YoctoNear;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        YoctoNear(self.0 - rhs.0)
+    }
+}
+
+impl SubAssign for YoctoNear {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.0 -= rhs.0
+    }
+}
+
+impl Add for YoctoNear {
+    type Output = YoctoNear;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        YoctoNear(self.0 + rhs.0)
+    }
+}
+
+impl AddAssign for YoctoNear {
+    fn add_assign(&mut self, rhs: Self) {
+        self.0 += rhs.0
+    }
+}
+
+impl From<YoctoNearValue> for YoctoNear {
+    fn from(value: YoctoNearValue) -> Self {
+        YoctoNear(value.value())
     }
 }
 
