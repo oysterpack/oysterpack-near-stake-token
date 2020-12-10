@@ -1,4 +1,5 @@
 use crate::domain::{StakeBatch, StakeBatchReceipt};
+use crate::interface::StakeAccount;
 use crate::near::YOCTO;
 use crate::{
     core::Hash,
@@ -82,6 +83,11 @@ impl AccountRegistry for StakeTokenContract {
         let fee = self.config.storage_cost_per_byte().value()
             * self.account_storage_usage.value() as u128;
         fee.into()
+    }
+
+    fn lookup_account(&self, account_id: ValidAccountId) -> Option<StakeAccount> {
+        let hash = Hash::from(account_id.as_ref());
+        self.accounts.get(&hash).map(Into::into)
     }
 }
 
@@ -212,6 +218,74 @@ mod test {
         "operator.stake.oysterpack.near".to_string()
     }
 
+    #[test]
+    fn account_registered_is_view_func() {
+        let account_id = "alfio-zappala.near";
+        let mut context = near::new_context(account_id);
+        context.is_view = false;
+        testing_env!(context.clone());
+
+        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
+        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
+        let valid_account_id = ValidAccountId::try_from(account_id).unwrap();
+        let contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
+
+        context.is_view = true;
+        testing_env!(context.clone());
+        assert!(!contract.account_registered(valid_account_id.clone()));
+    }
+
+    #[test]
+    fn lookup_account_is_view_func() {
+        let account_id = "alfio-zappala.near";
+        let mut context = near::new_context(account_id);
+        context.is_view = false;
+        testing_env!(context.clone());
+
+        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
+        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
+        let valid_account_id = ValidAccountId::try_from(account_id).unwrap();
+        let contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
+
+        context.is_view = true;
+        testing_env!(context.clone());
+        assert!(contract.lookup_account(valid_account_id.clone()).is_none());
+    }
+
+    #[test]
+    fn account_storage_fee_is_view_func() {
+        let account_id = "alfio-zappala.near";
+        let mut context = near::new_context(account_id);
+        context.is_view = false;
+        testing_env!(context.clone());
+
+        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
+        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
+        let valid_account_id = ValidAccountId::try_from(account_id).unwrap();
+        let contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
+
+        context.is_view = true;
+        testing_env!(context.clone());
+        contract.account_storage_fee();
+    }
+
+    #[test]
+    fn total_registered_accounts_is_view_func() {
+        let account_id = "alfio-zappala.near";
+        let mut context = near::new_context(account_id);
+        context.is_view = false;
+        testing_env!(context.clone());
+
+        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
+        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
+        let valid_account_id = ValidAccountId::try_from(account_id).unwrap();
+        let contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
+
+        context.is_view = true;
+        testing_env!(context.clone());
+        contract.total_registered_accounts();
+    }
+
     /// - Given the contract is not locked
     /// - And the account is not currently registered
     /// - When a new account is registered with attached deposit to stake
@@ -227,6 +301,7 @@ mod test {
         let account_id = "alfio-zappala.near";
         let mut context = near::new_context(account_id);
         context.attached_deposit = 10 * YOCTO;
+        context.is_view = false;
         testing_env!(context.clone());
 
         let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
@@ -406,6 +481,26 @@ mod test {
         let mut contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
 
         contract.register_account();
+    }
+
+    #[test]
+    fn lookup_account() {
+        let account_id = "alfio-zappala.near";
+        let mut context = near::new_context(account_id);
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context.clone());
+
+        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
+        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
+        let valid_account_id = ValidAccountId::try_from(account_id).unwrap();
+        let mut contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
+
+        assert!(contract.lookup_account(valid_account_id.clone()).is_none());
+        contract.register_account();
+
+        let stake_account = contract.lookup_account(valid_account_id.clone()).unwrap();
+        let stake_account_json = serde_json::to_string_pretty(&stake_account).unwrap();
+        println!("{}", stake_account_json);
     }
 
     //

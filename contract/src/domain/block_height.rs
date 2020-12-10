@@ -1,13 +1,8 @@
-use near_sdk::{
-    borsh::{self, BorshDeserialize, BorshSerialize},
-    serde::{Deserialize, Serialize},
-};
+use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 
 #[derive(
     BorshSerialize,
     BorshDeserialize,
-    Serialize,
-    Deserialize,
     Debug,
     Clone,
     Copy,
@@ -18,7 +13,6 @@ use near_sdk::{
     Hash,
     Default,
 )]
-#[serde(crate = "near_sdk::serde")]
 pub struct BlockHeight(pub u64);
 
 impl From<u64> for BlockHeight {

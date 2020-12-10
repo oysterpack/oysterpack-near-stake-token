@@ -50,7 +50,7 @@ pub struct RedeemStakeBatch {
 }
 
 impl RedeemStakeBatch {
-    pub fn batch_id(&self) -> BatchId {
+    pub fn id(&self) -> BatchId {
         self.batch_id
     }
 

@@ -1,14 +1,14 @@
 use crate::domain::YoctoNearValue;
+use crate::interface::StakeAccount;
 use near_sdk::{
     json_types::{ValidAccountId, U128},
     serde::{Deserialize, Serialize},
 };
 
 pub trait AccountRegistry {
-    /// Returns the required deposit amount that is required for account registration.
-    fn account_storage_fee(&self) -> YoctoNearValue;
-
-    fn account_registered(&self, account_id: ValidAccountId) -> bool;
+    /// ******************* ///
+    ///    WRITE METHODS    ///
+    /// ******************* ///
 
     /// If no account exists for the predecessor account ID, then a new one is created and registered.
     /// The attached deposit will be staked minus the account storage fees.
@@ -36,5 +36,16 @@ pub trait AccountRegistry {
     /// - if registered account has funds
     fn unregister_account(&mut self);
 
+    /// ******************* ///
+    ///     VIEW METHODS    ///
+    /// ******************* ///
+
+    /// Returns the required deposit amount that is required for account registration.
+    fn account_storage_fee(&self) -> YoctoNearValue;
+
+    fn account_registered(&self, account_id: ValidAccountId) -> bool;
+
     fn total_registered_accounts(&self) -> U128;
+
+    fn lookup_account(&self, account_id: ValidAccountId) -> Option<StakeAccount>;
 }
