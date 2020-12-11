@@ -1,6 +1,7 @@
 use crate::config::Config;
+use near_sdk::serde::{Deserialize, Serialize};
 
-pub const EXPECTED_ACCOUNT_STORAGE_USAGE: u64 = 947;
+pub const EXPECTED_ACCOUNT_STORAGE_USAGE: u64 = 931;
 
 pub fn expected_account_storage_fee() -> u128 {
     EXPECTED_ACCOUNT_STORAGE_USAGE as u128 * Config::default().storage_cost_per_byte().value()
@@ -33,4 +34,16 @@ pub mod near {
             output_data_receivers: vec![],
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct Receipt {
+    pub actions: Vec<Action>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub enum Action {
+    Transfer { deposit: u128 },
 }

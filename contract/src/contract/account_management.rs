@@ -1,4 +1,6 @@
-use crate::domain::{StakeBatch, StakeBatchReceipt};
+use crate::domain::{
+    BatchId, RedeemStakeBatch, RedeemStakeBatchReceipt, StakeBatch, StakeBatchReceipt,
+};
 use crate::interface::StakeAccount;
 use crate::near::YOCTO;
 use crate::{
@@ -19,7 +21,7 @@ impl AccountManagement for StakeTokenContract {
     /// - check attached deposit
     ///   - assert amount is enough to cover storage fees
     /// - track the account storage fees
-    /// - stake attached deposit minus account storage fees
+    /// - refunds funds minus account storage fees
     ///
     /// ## Panics
     /// - if attached deposit is not enough to cover account storage fees
@@ -34,21 +36,18 @@ impl AccountManagement for StakeTokenContract {
             account_storage_fee.value() as f64 / YOCTO as f64,
         );
 
-        let mut account = Account::new(account_storage_fee);
-
-        // stake any attached deposit minus the account storage fees
-        {
-            let stake_amount = attached_deposit - account_storage_fee;
-            if stake_amount.value() > 0 {
-                self.apply_stake_batch_credit(&mut account, stake_amount)
-            }
-        }
-
+        let account = Account::new(account_storage_fee);
         assert!(
             self.insert_account(&Hash::from(&env::predecessor_account_id()), &account)
                 .is_none(),
             "account is already registered"
         );
+
+        // refund over payment of storage fees
+        let refund = attached_deposit - account_storage_fee;
+        if refund.value() > 0 {
+            Promise::new(env::predecessor_account_id()).transfer(refund.value());
+        }
     }
 
     fn unregister_account(&mut self) {
@@ -132,7 +131,11 @@ impl StakeTokenContract {
     /// when a new account is registered the following is tracked:
     /// - total account count is inc
     /// - total storage escrow is updated
-    fn insert_account(&mut self, account_id: &Hash, account: &Account) -> Option<Account> {
+    pub(crate) fn insert_account(
+        &mut self,
+        account_id: &Hash,
+        account: &Account,
+    ) -> Option<Account> {
         match self.accounts.insert(account_id, account) {
             None => {
                 self.accounts_len += 1;
@@ -158,88 +161,6 @@ impl StakeTokenContract {
             }
         }
     }
-
-    /// batches the NEAR to stake at the contract level and account level
-    /// - if the account has a pre-existing batch, then check the batch's status, i.e., check if
-    ///   a batch has a receipt to claim STAKE tokens
-    ///   - if STAKE tokens are all claimed on the batch receipt, then delete the batch receipt
-    fn apply_stake_batch_credit(&mut self, account: &mut Account, amount: YoctoNear) {
-        if amount.value() == 0 {
-            return;
-        }
-
-        // apply to contract level batch
-        {
-            if self.locked {
-                let mut batch = self.next_stake_batch.unwrap_or_else(|| {
-                    // create the next batch
-                    *self.batch_id_sequence += 1;
-                    StakeBatch::new(self.batch_id_sequence, YoctoNear(0))
-                });
-                batch.add(amount);
-                self.next_stake_batch = Some(batch);
-            } else {
-                let mut batch = self.stake_batch.unwrap_or_else(|| {
-                    // create the next batch
-                    *self.batch_id_sequence += 1;
-                    StakeBatch::new(self.batch_id_sequence, YoctoNear(0))
-                });
-                batch.add(amount);
-                self.stake_batch = Some(batch);
-            }
-        }
-
-        // check if there are STAKE tokens to claim
-        {
-            fn claim_stake_tokens(
-                contract: &mut StakeTokenContract,
-                account: &mut Account,
-                batch: StakeBatch,
-                receipt: &mut StakeBatchReceipt,
-            ) {
-                // how much NEAR did the account stake in the batch
-                let staked_near = batch.balance().balance();
-
-                // claim the STAKE tokens for the account
-                let stake = receipt.stake_token_value().near_to_stake(staked_near);
-                account.apply_stake_credit(stake);
-
-                // track that the STAKE tokens were claimed
-                receipt.stake_tokens_issued(staked_near);
-                if receipt.all_claimed() {
-                    // then delete the receipt and free the storage
-                    contract.stake_batch_receipts.remove(&batch.id());
-                }
-            }
-
-            if let Some(batch) = account.stake_batch {
-                if let Some(mut receipt) = self.stake_batch_receipts.get(&batch.id()) {
-                    claim_stake_tokens(self, account, batch, &mut receipt);
-                    account.stake_batch = None;
-                }
-            }
-            if let Some(batch) = account.next_stake_batch {
-                if let Some(mut receipt) = self.stake_batch_receipts.get(&batch.id()) {
-                    claim_stake_tokens(self, account, batch, &mut receipt);
-                    account.next_stake_batch = None;
-                }
-            }
-        }
-
-        if self.locked {
-            let mut batch = account
-                .next_stake_batch
-                .unwrap_or_else(|| StakeBatch::new(self.batch_id_sequence, YoctoNear(0)));
-            batch.add(amount);
-            account.next_stake_batch = Some(batch);
-        } else {
-            let mut batch = account
-                .next_stake_batch
-                .unwrap_or_else(|| StakeBatch::new(self.batch_id_sequence, YoctoNear(0)));
-            batch.add(amount);
-            account.stake_batch = Some(batch);
-        }
-    }
 }
 
 #[cfg(test)]
@@ -247,7 +168,9 @@ mod test {
     use super::*;
     use crate::config::Config;
     use crate::near::YOCTO;
-    use crate::test_utils::{expected_account_storage_fee, near, EXPECTED_ACCOUNT_STORAGE_USAGE};
+    use crate::test_utils::{
+        expected_account_storage_fee, near, Action, Receipt, EXPECTED_ACCOUNT_STORAGE_USAGE,
+    };
     use near_sdk::{serde_json, testing_env, AccountId, MockedBlockchain, VMContext};
     use std::convert::TryFrom;
 
@@ -334,7 +257,7 @@ mod test {
     /// - And the next stake batch is set to None
     /// - And the redeem stake batches are set to None
     #[test]
-    fn register_account_with_stake_when_contract_not_locked() {
+    fn register_account_when_contract_not_locked() {
         let account_id = "alfio-zappala.near";
         let mut context = near::new_context(account_id);
         context.attached_deposit = 10 * YOCTO;
@@ -356,6 +279,20 @@ mod test {
 
         let storage_before_registering_account = env::storage_usage();
         contract.register_account();
+
+        // the txn should have created a Transfer receipt to refund the storage fee over payment
+        let receipt = env::created_receipts().first().cloned().unwrap();
+        let json = serde_json::to_string_pretty(&receipt).unwrap();
+        println!("receipt: {}", json);
+        let receipt: Receipt = serde_json::from_str(&json).unwrap();
+        let refund: u128 = match receipt.actions.first().unwrap() {
+            Action::Transfer { deposit } => *deposit,
+        };
+        assert_eq!(
+            refund,
+            context.attached_deposit - contract.account_storage_fee().value()
+        );
+
         let account = contract
             .accounts
             .get(&Hash::from(account_id))
@@ -372,7 +309,7 @@ mod test {
 
         let account_storage_usage = env::storage_usage() - storage_before_registering_account;
         assert_eq!(
-            account_storage_usage, 175,
+            account_storage_usage, 119,
             "account storage usage changed !!! If the change is expected, then update the assert"
         );
 
@@ -385,23 +322,6 @@ mod test {
             contract.total_storage_escrow.balance(),
             contract.account_storage_fee().into()
         );
-
-        // And the account deposit minus the storage fee is credited to the stake batch on the account
-        // and the on the contract
-        let expected_staked_near_amount =
-            context.attached_deposit - contract.account_storage_fee().value();
-        assert_eq!(
-            account.stake_batch.unwrap().balance().balance(),
-            expected_staked_near_amount.into()
-        );
-        assert!(account.next_stake_batch.is_none());
-        assert!(account.redeem_stake_batch.is_none());
-        assert!(account.next_redeem_stake_batch.is_none());
-        assert_eq!(
-            contract.stake_batch.unwrap().balance().balance(),
-            expected_staked_near_amount.into()
-        );
-        assert!(contract.next_stake_batch.is_none());
     }
 
     #[test]
@@ -417,59 +337,8 @@ mod test {
         let mut contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
 
         contract.register_account();
-
-        assert!(contract.stake_batch.is_none());
-
-        let account = contract
-            .accounts
-            .get(&Hash::from(account_id))
-            .expect("account should be registered");
-        assert!(account.stake_batch.is_none());
-        assert!(account.next_stake_batch.is_none())
-    }
-
-    #[test]
-    fn register_account_while_contract_locked_with_stake_deposit() {
-        let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
-        context.attached_deposit = 10 * YOCTO;
-        testing_env!(context.clone());
-
-        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
-        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
-        let valid_account_id = ValidAccountId::try_from(account_id).unwrap();
-        let mut contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
-        contract.locked = true;
-
-        contract.register_account();
-
-        let account = contract
-            .accounts
-            .get(&Hash::from(account_id))
-            .expect("account should be registered");
-        let expected_staked_near_amount =
-            context.attached_deposit - contract.account_storage_fee().value();
-        assert!(account.stake_batch.is_none());
-        assert_eq!(
-            account
-                .next_stake_batch
-                .unwrap()
-                .balance()
-                .balance()
-                .value(),
-            expected_staked_near_amount
-        );
-
-        assert!(contract.stake_batch.is_none());
-        assert_eq!(
-            contract
-                .next_stake_batch
-                .unwrap()
-                .balance()
-                .balance()
-                .value(),
-            expected_staked_near_amount
-        );
+        println!("{:?}", env::created_receipts());
+        assert!(env::created_receipts().is_empty());
     }
 
     #[test]
@@ -557,7 +426,6 @@ mod test {
         assert!(contract.account_registered(valid_account_id.clone()));
         let stake_account = contract.lookup_account(valid_account_id.clone()).unwrap();
         assert!(stake_account.stake_batch.is_none());
-        assert!(stake_account.next_stake_batch.is_none());
         assert!(stake_account.near.is_none());
         assert!(stake_account.stake.is_none());
 
@@ -596,6 +464,14 @@ mod test {
         let mut contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
 
         contract.register_account();
+
+        // given the account has STAKE funds
+        let contract_hash = Hash::from(&env::predecessor_account_id());
+        let mut account = contract.accounts.get(&contract_hash).unwrap();
+        account.apply_stake_credit(1.into());
+        contract.insert_account(&contract_hash, &account);
+
+        // then unregister will fail
         contract.unregister_account();
     }
 
@@ -668,7 +544,8 @@ mod test {
     fn withdraw_partial_funds() {
         let account_id = "alfio-zappala.near";
         let mut context = near::new_context(account_id);
-        context.attached_deposit = 100 * YOCTO;
+        context.account_balance = 100 * YOCTO;
+        context.attached_deposit = expected_account_storage_fee();
         testing_env!(context.clone());
 
         let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
@@ -695,7 +572,8 @@ mod test {
     fn withdraw_all_has_near_funds() {
         let account_id = "alfio-zappala.near";
         let mut context = near::new_context(account_id);
-        context.attached_deposit = 100 * YOCTO;
+        context.account_balance = 100 * YOCTO;
+        context.attached_deposit = expected_account_storage_fee();
         testing_env!(context.clone());
 
         let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();

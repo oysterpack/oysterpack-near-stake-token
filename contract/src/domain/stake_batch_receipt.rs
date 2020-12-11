@@ -31,6 +31,6 @@ impl StakeBatchReceipt {
     }
 
     pub fn all_claimed(&self) -> bool {
-        self.staked_near.value() > 0
+        self.staked_near.value() == 0
     }
 }

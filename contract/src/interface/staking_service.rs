@@ -3,7 +3,7 @@ use crate::interface::{
 };
 use near_sdk::{AccountId, Promise, PromiseOrValue};
 
-trait StakingService {
+pub trait StakingService {
     ////////////////////////////
     ///     VIEW METHODS    ///
     /// //////////////////////
@@ -15,6 +15,8 @@ trait StakingService {
     ///     CHANGE METHODS    ///
     /// ////////////////////////
 
+    /// Stakes the attached deposit.
+    ///
     /// If the contract is locked, then the NEAR funds will not be staked immediately,
     /// They will be scheduled on the next available [StakeBatch].
     ///
@@ -24,7 +26,9 @@ trait StakingService {
     /// ## Panics
     /// - if account is not registered
     /// - if no deposit is attached
-    fn stake(&mut self) -> PromiseOrValue<BatchId>;
+    ///
+    /// #[payable]
+    fn deposit_and_stake(&mut self) -> PromiseOrValue<BatchId>;
 
     /// returns false if there was no batch to run
     fn run_stake_batch(&mut self) -> PromiseOrValue<bool>;

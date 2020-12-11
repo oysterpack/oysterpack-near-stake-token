@@ -19,7 +19,7 @@ pub trait AccountManagement {
     /// #[payable]
     /// - storage escrow fee is required
     ///   - use [account_storage_escrow_fee] to lookup the required storage fee amount
-    /// - any amount above the storage fee will be staked
+    /// - any amount above the storage fee will be refunded
     ///
     /// ## Panics
     /// - if deposit is not enough to cover storage fees
