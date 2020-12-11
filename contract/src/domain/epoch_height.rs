@@ -2,6 +2,7 @@ use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
 };
+use std::ops::Add;
 
 #[derive(
     BorshSerialize,
@@ -36,5 +37,13 @@ impl EpochHeight {
 impl From<EpochHeight> for u64 {
     fn from(value: EpochHeight) -> Self {
         value.0
+    }
+}
+
+impl Add<u64> for EpochHeight {
+    type Output = EpochHeight;
+
+    fn add(self, rhs: u64) -> Self::Output {
+        EpochHeight(self.0 + rhs)
     }
 }

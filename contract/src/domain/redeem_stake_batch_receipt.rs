@@ -1,6 +1,6 @@
 use crate::domain::{
-    BlockTimeHeight, StakeTokenValue, TimestampedNearBalance, TimestampedStakeBalance, YoctoNear,
-    YoctoStake,
+    BlockTimeHeight, EpochHeight, StakeTokenValue, TimestampedNearBalance, TimestampedStakeBalance,
+    YoctoNear, YoctoStake,
 };
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 
@@ -11,4 +11,10 @@ pub struct RedeemStakeBatchReceipt {
     unstaked_near: YoctoNear,
 
     stake_token_value: StakeTokenValue,
+}
+
+impl RedeemStakeBatchReceipt {
+    pub fn unstaked_near_withdrawal_availability(&self) -> EpochHeight {
+        self.stake_token_value.block_time_height().epoch_height() + 4
+    }
 }

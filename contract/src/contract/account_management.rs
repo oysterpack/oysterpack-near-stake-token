@@ -4,7 +4,7 @@ use crate::near::YOCTO;
 use crate::{
     core::Hash,
     domain::{Account, StorageUsage, YoctoNear, YoctoNearValue},
-    interface::AccountRegistry,
+    interface::{self, AccountManagement},
     StakeTokenContract,
 };
 use near_sdk::{
@@ -14,7 +14,7 @@ use near_sdk::{
 };
 
 #[near_bindgen]
-impl AccountRegistry for StakeTokenContract {
+impl AccountManagement for StakeTokenContract {
     /// ## Logic
     /// - check attached deposit
     ///   - assert amount is enough to cover storage fees
@@ -70,7 +70,7 @@ impl AccountRegistry for StakeTokenContract {
 
     /// returns the required account storage fee that needs to be attached to the account registration
     /// contract function call in yoctoNEAR
-    fn account_storage_fee(&self) -> YoctoNearValue {
+    fn account_storage_fee(&self) -> interface::YoctoNear {
         let fee = self.config.storage_cost_per_byte().value()
             * self.account_storage_usage.value() as u128;
         fee.into()
@@ -88,6 +88,14 @@ impl AccountRegistry for StakeTokenContract {
     fn lookup_account(&self, account_id: ValidAccountId) -> Option<StakeAccount> {
         let hash = Hash::from(account_id.as_ref());
         self.accounts.get(&hash).map(Into::into)
+    }
+
+    fn withdraw(&mut self, amount: interface::YoctoNear) {
+        unimplemented!()
+    }
+
+    fn withdraw_all(&mut self) {
+        unimplemented!()
     }
 }
 

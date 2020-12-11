@@ -1,11 +1,12 @@
+use crate::interface;
 use near_sdk::json_types::U128;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
 };
-use std::fmt::{self, Display, Formatter};
-use std::ops::{Deref, DerefMut, Sub, SubAssign, Add, AddAssign};
 use primitive_types::U256;
+use std::fmt::{self, Display, Formatter};
+use std::ops::{Add, AddAssign, Deref, DerefMut, Sub, SubAssign};
 
 #[derive(
     BorshSerialize, BorshDeserialize, Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Default,
@@ -84,14 +85,19 @@ impl From<YoctoNearValue> for YoctoNear {
     }
 }
 
+impl From<interface::YoctoNear> for YoctoNear {
+    fn from(value: interface::YoctoNear) -> Self {
+        YoctoNear(value.value())
+    }
+}
+
 #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct YoctoNearValue(pub U128);
 
-
 impl YoctoNearValue {
     pub fn value(&self) -> u128 {
-        self.0.0
+        self.0 .0
     }
 }
 
@@ -111,19 +117,19 @@ impl Deref for YoctoNearValue {
     type Target = u128;
 
     fn deref(&self) -> &Self::Target {
-        &self.0.0
+        &self.0 .0
     }
 }
 
 impl DerefMut for YoctoNearValue {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0.0
+        &mut self.0 .0
     }
 }
 
 impl Display for YoctoNearValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.0.0.fmt(f)
+        self.0 .0.fmt(f)
     }
 }
 

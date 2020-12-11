@@ -63,13 +63,19 @@ pub struct StakeTokenContract {
     /// - the sequence is incremented to generate a new batch ID
     /// - sequence ID starts at 1
     batch_id_sequence: BatchId,
+
     /// when the batches are processed, receipts are created
     stake_batch: Option<StakeBatch>,
-    redeem_stake_batch: Option<RedeemStakeBatch>,
-
     /// used to store batch requests while the contract is locked
     next_stake_batch: Option<StakeBatch>,
+
+    redeem_stake_batch: Option<RedeemStakeBatch>,
+    /// used to store batch requests while the contract is locked    
     next_redeem_stake_batch: Option<RedeemStakeBatch>,
+    /// unstaked NEAR funds are not available for 4 epochs after the funds were unstaked
+    /// - [RedeemStakeBatch] can only be processed after all available unstaked NEAR funds have been
+    ///   withdrawn, i.e., ig [pending_withdrawal] is None
+    pending_withdrawal: Option<RedeemStakeBatchReceipt>,
 
     /// after users have claimed all funds from a receipt, then the map will clean itself up by removing
     //. the receipt from storage
@@ -84,7 +90,7 @@ impl StakeTokenContract {}
 
 impl Default for StakeTokenContract {
     fn default() -> Self {
-        panic!("contract should be initialized before usage")
+        panic!("contract must be initialized before usage")
     }
 }
 
@@ -126,6 +132,7 @@ impl StakeTokenContract {
             redeem_stake_batch: None,
             next_stake_batch: None,
             next_redeem_stake_batch: None,
+            pending_withdrawal: None,
             stake_batch_receipts: UnorderedMap::new(STAKE_BATCH_RECEIPTS_KEY_PREFIX.to_vec()),
             redeem_stake_batch_receipts: UnorderedMap::new(
                 REDEEM_STAKE_BATCH_RECEIPTS_KEY_PREFIX.to_vec(),
@@ -178,12 +185,23 @@ impl StakeTokenContract {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::interface::AccountRegistry;
+    use crate::interface::AccountManagement;
     use crate::near::YOCTO;
     use crate::test_utils::near::new_context;
     use crate::test_utils::{near, EXPECTED_ACCOUNT_STORAGE_USAGE};
     use near_sdk::{testing_env, AccountId, MockedBlockchain, VMContext};
     use std::convert::TryFrom;
+
+    #[test]
+    #[should_panic(expected = "contract must be initialized before usage")]
+    fn default_constructor_should_fail() {
+        let account_id = "bob.near";
+        let mut context = new_context(account_id);
+        context.block_index = 10;
+        testing_env!((context));
+
+        StakeTokenContract::default();
+    }
 
     /// When the contract is deployed
     /// Then [StakeTokenContract::account_storage_usage] is dynamically computed
