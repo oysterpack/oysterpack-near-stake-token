@@ -84,6 +84,10 @@ impl TimestampedNearBalance {
         if amount.0 == 0 {
             return;
         }
+        assert!(
+            self.balance >= amount,
+            "balance is too low to fulfill debit request"
+        );
         self.balance -= amount;
         self.update_timestamp();
     }
@@ -177,7 +181,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "attempt to subtract with overflow")]
+    #[should_panic(expected = "balance is too low to fulfill debit request")]
     pub fn debit_panics_on_overflow() {
         let context = new_context("bob.near");
         testing_env!(context);

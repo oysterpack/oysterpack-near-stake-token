@@ -88,6 +88,11 @@ impl Account {
         self.near
             .get_or_insert_with(|| TimestampedNearBalance::new(YoctoNear(0)))
             .debit(debit);
+        if let Some(balance) = self.near {
+            if balance.balance().value() == 0 {
+                self.near = None
+            }
+        }
     }
 
     pub fn apply_stake_credit(&mut self, credit: YoctoStake) {
@@ -100,5 +105,11 @@ impl Account {
         self.stake
             .get_or_insert_with(|| TimestampedStakeBalance::new(YoctoStake(0)))
             .debit(debit);
+
+        if let Some(balance) = self.stake {
+            if balance.balance().value() == 0 {
+                self.stake = None
+            }
+        }
     }
 }

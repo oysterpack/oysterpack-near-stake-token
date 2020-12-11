@@ -1,4 +1,10 @@
+use crate::config::Config;
+
 pub const EXPECTED_ACCOUNT_STORAGE_USAGE: u64 = 947;
+
+pub fn expected_account_storage_fee() -> u128 {
+    EXPECTED_ACCOUNT_STORAGE_USAGE as u128 * Config::default().storage_cost_per_byte().value()
+}
 
 pub mod near {
     use near_sdk::{AccountId, VMContext};

@@ -3,6 +3,7 @@ use crate::interface::{StakeAccount, YoctoNear};
 use near_sdk::{
     json_types::{ValidAccountId, U128},
     serde::{Deserialize, Serialize},
+    Promise, PromiseOrValue,
 };
 
 pub trait AccountManagement {
@@ -52,14 +53,21 @@ pub trait AccountManagement {
     /// Withdraws the specified amount from the account's available NEAR balance and transfers the
     /// funds to the account.
     ///
+    /// Returns the Promise that transfers the funds. This enables the client to react to the fund
+    /// transfer.
+    ///
     /// ## Panics
     /// - if the account is not registered
     /// - if there are not enough available NEAR funds to fulfill the request
-    fn withdraw(&mut self, amount: YoctoNear);
+    fn withdraw(&mut self, amount: YoctoNear) -> Promise;
 
-    /// Withdraws all available NEAR funds from the account
+    /// Withdraws all available NEAR funds from the account.
+    ///
+    /// Returns the Promise that transfers the funds. This enables the client to react to the fund
+    /// transfer.
     ///
     /// ## Panics
-    /// if the account is not registered
-    fn withdraw_all(&mut self);
+    /// - if the account is not registered
+    /// - if there are no funds to withdraw
+    fn withdraw_all(&mut self) -> Promise;
 }
