@@ -58,7 +58,7 @@ impl StakeTokenContract {
         .then(ext_staking_pool_callbacks::on_deposit_and_stake(
             staked_balance.0,
             &env::current_account_id(),
-            NO_DEPOSIT,
+            NO_DEPOSIT.into(),
             callback_gas,
         ))
         .into()

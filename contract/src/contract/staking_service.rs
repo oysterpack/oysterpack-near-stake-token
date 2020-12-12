@@ -62,13 +62,13 @@ impl StakingService for StakeTokenContract {
         ext_staking_pool::get_account_staked_balance(
             env::current_account_id(),
             &self.staking_pool_id,
-            NO_DEPOSIT,
+            NO_DEPOSIT.into(),
             get_staked_balance_gas,
         )
         .then(
             ext_staking_pool_callbacks::on_get_account_staked_balance_to_run_stake_batch(
                 &env::current_account_id(),
-                NO_DEPOSIT,
+                NO_DEPOSIT.into(),
                 callback_gas,
             ),
         )
@@ -111,7 +111,7 @@ impl StakingService for StakeTokenContract {
         ext_staking_pool::get_account_staked_balance(
             env::current_account_id(),
             &self.staking_pool_id,
-            NO_DEPOSIT,
+            NO_DEPOSIT.into(),
             self.config
                 .gas_config()
                 .staking_pool()
@@ -120,7 +120,7 @@ impl StakingService for StakeTokenContract {
         )
         .then(ext_staking_pool_callbacks::on_get_account_staked_balance(
             &env::current_account_id(),
-            NO_DEPOSIT,
+            NO_DEPOSIT.into(),
             self.config
                 .gas_config()
                 .callbacks()
