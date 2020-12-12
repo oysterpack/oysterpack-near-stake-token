@@ -10,10 +10,10 @@ use near_sdk::{
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct TimestampedNearBalance {
-    balance: YoctoNear,
-    block_height: BlockHeight,
-    block_timestamp: BlockTimestamp,
-    epoch_height: EpochHeight,
+    pub balance: YoctoNear,
+    pub block_height: BlockHeight,
+    pub block_timestamp: BlockTimestamp,
+    pub epoch_height: EpochHeight,
 }
 
 impl From<domain::TimestampedNearBalance> for TimestampedNearBalance {

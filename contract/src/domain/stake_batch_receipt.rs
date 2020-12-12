@@ -17,6 +17,13 @@ pub struct StakeBatchReceipt {
 }
 
 impl StakeBatchReceipt {
+    pub fn new(staked_near: YoctoNear, stake_token_value: StakeTokenValue) -> Self {
+        Self {
+            staked_near,
+            stake_token_value,
+        }
+    }
+
     pub fn staked_near(&self) -> YoctoNear {
         self.staked_near
     }

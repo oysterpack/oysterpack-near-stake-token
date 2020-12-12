@@ -17,7 +17,7 @@ pub struct Account {
     pub stake: Option<TimestampedStakeBalance>,
 
     /// users will deposit NEAR funds into a batch that will be processed, i.e. deposited and staked
-    /// into the staking pool, at scheduled intervals
+    /// into the staking pool, at scheduled intervals (at least once per epoch)
     /// - STAKE token value is computed when batches are processed in order to issue STAKE tokens
     ///   for NEAR that was staked
     /// - when the account is accessed, the [StakeBatch] status is checked - if processed, then the

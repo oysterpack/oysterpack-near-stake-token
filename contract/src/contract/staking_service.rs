@@ -15,7 +15,7 @@ impl StakingService for StakeTokenContract {
         self.staking_pool_id.clone()
     }
 
-    fn deposit_and_stake(&mut self) -> PromiseOrValue<BatchId> {
+    fn deposit(&mut self) -> BatchId {
         let account_hash = Hash::from(&env::predecessor_account_id());
         let mut account = self
             .accounts
@@ -27,21 +27,10 @@ impl StakingService for StakeTokenContract {
             "deposit is required in order to stake"
         );
 
-        self.claim_receipt_funds(&mut account);
-
-        if self.locked {
-            self.apply_stake_batch_credit(&mut account, env::attached_deposit().into());
-            let batch_id = account.stake_batch.unwrap().id();
-            self.insert_account(&account_hash, &account);
-            PromiseOrValue::Value(batch_id.into())
-        } else {
-            self.locked = true;
-
-            unimplemented!()
-        }
+        self.apply_stake_batch_credit(&mut account, env::attached_deposit().into())
     }
 
-    fn run_stake_batch(&mut self) -> PromiseOrValue<bool> {
+    fn run_stake_batch(&mut self) -> PromiseOrValue<Option<BatchId>> {
         unimplemented!()
     }
 
@@ -57,7 +46,7 @@ impl StakingService for StakeTokenContract {
         unimplemented!()
     }
 
-    fn run_redeem_stake_batch(&mut self) -> PromiseOrValue<bool> {
+    fn run_redeem_stake_batch(&mut self) -> PromiseOrValue<Option<BatchId>> {
         unimplemented!()
     }
 
@@ -88,37 +77,53 @@ impl StakeTokenContract {
     /// - if the account has a pre-existing batch, then check the batch's status, i.e., check if
     ///   a batch has a receipt to claim STAKE tokens
     ///   - if STAKE tokens are all claimed on the batch receipt, then delete the batch receipt
-    fn apply_stake_batch_credit(&mut self, account: &mut Account, amount: domain::YoctoNear) {
-        if amount.value() == 0 {
-            return;
-        }
+    ///
+    /// ## Panics
+    /// if [amount] is zero
+    fn apply_stake_batch_credit(
+        &mut self,
+        account: &mut Account,
+        amount: domain::YoctoNear,
+    ) -> BatchId {
+        assert_ne!(amount.value(), 0, "amount must not be zero");
 
-        // apply to contract level batch
-        {
-            if self.locked {
-                let mut batch = self.next_stake_batch.unwrap_or_else(|| {
-                    // create the next batch
-                    *self.batch_id_sequence += 1;
-                    StakeBatch::new(self.batch_id_sequence, domain::YoctoNear(0))
-                });
-                batch.add(amount);
-                self.next_stake_batch = Some(batch);
-            } else {
-                let mut batch = self.stake_batch.unwrap_or_else(|| {
-                    // create the next batch
-                    *self.batch_id_sequence += 1;
-                    StakeBatch::new(self.batch_id_sequence, domain::YoctoNear(0))
-                });
-                batch.add(amount);
-                self.stake_batch = Some(batch);
-            }
-        }
+        self.claim_stake_batch_receipts(account);
 
-        let mut batch = account
-            .stake_batch
-            .unwrap_or_else(|| StakeBatch::new(self.batch_id_sequence, domain::YoctoNear(0)));
-        batch.add(amount);
-        account.stake_batch = Some(batch);
+        let batch_id = if self.locked {
+            // deposit the funds in the next batch
+            let mut batch = self.next_stake_batch.unwrap_or_else(|| {
+                // create the next batch
+                *self.batch_id_sequence += 1;
+                StakeBatch::new(self.batch_id_sequence, domain::YoctoNear(0))
+            });
+            batch.add(amount);
+            self.next_stake_batch = Some(batch);
+
+            let mut batch = account
+                .next_stake_batch
+                .unwrap_or_else(|| StakeBatch::new(self.batch_id_sequence, domain::YoctoNear(0)));
+            batch.add(amount);
+            account.next_stake_batch = Some(batch);
+            batch.id()
+        } else {
+            // deposit the funds in the current batch
+            let mut batch = self.stake_batch.unwrap_or_else(|| {
+                // create the next batch
+                *self.batch_id_sequence += 1;
+                StakeBatch::new(self.batch_id_sequence, domain::YoctoNear(0))
+            });
+            batch.add(amount);
+            self.stake_batch = Some(batch);
+
+            let mut batch = account
+                .stake_batch
+                .unwrap_or_else(|| StakeBatch::new(self.batch_id_sequence, domain::YoctoNear(0)));
+            batch.add(amount);
+            account.stake_batch = Some(batch);
+            batch.id()
+        };
+
+        batch_id.into()
     }
 
     /// returns true if funds were claimed, which means the account's state has changed and requires
@@ -237,6 +242,7 @@ pub trait ExtStakingPoolCallbacks {
 mod test {
     use super::*;
     use crate::config::Config;
+    use crate::domain::StakeBatchReceipt;
     use crate::interface::AccountManagement;
     use crate::near::YOCTO;
     use crate::test_utils::{
@@ -250,8 +256,11 @@ mod test {
         "operator.stake.oysterpack.near".to_string()
     }
 
+    /// Given the account has no funds in stake batches
+    /// When funds are claimed
+    /// Then there should be no effect
     #[test]
-    fn claim_all_batch_receipt_funds() {
+    fn claim_all_batch_receipt_funds_with_no_batched_funds() {
         let account_id = "alfio-zappala.near";
         let mut context = near::new_context(account_id);
         context.is_view = false;
@@ -267,5 +276,184 @@ mod test {
 
         // should have no effect because there are no batches and no receipts
         contract.claim_all_batch_receipt_funds();
+    }
+
+    /// Given the account has funds in the stake batch
+    /// And there is no receipt for the batch
+    /// When funds are claimed
+    /// Then there should be no effect on the account
+    #[test]
+    fn claim_all_batch_receipt_funds_with_funds_in_stake_batch_and_no_receipt() {
+        let account_id = "alfio-zappala.near";
+        let mut context = near::new_context(account_id);
+        context.is_view = false;
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context.clone());
+
+        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
+        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
+        let valid_account_id = ValidAccountId::try_from(account_id).unwrap();
+        let mut contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
+
+        contract.register_account();
+
+        // Given account has funds deposited into the current StakeBatch
+        // And there are no receipts
+        let account_hash = Hash::from(account_id);
+        let mut account = contract.accounts.get(&account_hash).unwrap();
+        let batch_id = contract.apply_stake_batch_credit(&mut account, YOCTO.into());
+        contract.insert_account(&account_hash, &account);
+
+        // When batch receipts are claimed
+        contract.claim_all_batch_receipt_funds();
+        // Then there should be no effect on the account
+        let account = contract.lookup_account(valid_account_id.clone()).unwrap();
+        let stake_batch = account.stake_batch.unwrap();
+        assert_eq!(stake_batch.id, batch_id);
+        assert_eq!(stake_batch.balance.balance, YOCTO.into());
+    }
+
+    /// Given the account has funds in the stake batch
+    /// And there is a receipt for the batch with additional funds batched into it
+    /// When funds are claimed
+    /// Then the STAKE tokens should be credited to the account
+    /// And the receipt NEAR balance should have been debited
+    #[test]
+    fn claim_all_batch_receipt_funds_with_funds_in_stake_batch_and_with_receipt() {
+        let account_id = "alfio-zappala.near";
+        let mut context = near::new_context(account_id);
+        context.is_view = false;
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context.clone());
+
+        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
+        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
+        let valid_account_id = ValidAccountId::try_from(account_id).unwrap();
+        let mut contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
+
+        contract.register_account();
+
+        // Given account has funds deposited into the current StakeBatch
+        // And there are no receipts
+        let account_hash = Hash::from(account_id);
+        let mut account = contract.accounts.get(&account_hash).unwrap();
+        let batch_id = contract.apply_stake_batch_credit(&mut account, YOCTO.into());
+        contract.insert_account(&account_hash, &account);
+
+        // Given there is a receipt for the batch
+        // And the receipt exists for the stake batch
+        // And STAKE token value = 1 NEAR
+        let stake_token_value = domain::StakeTokenValue::new(YOCTO.into(), YOCTO.into());
+        let receipt = domain::StakeBatchReceipt::new((2 * YOCTO).into(), stake_token_value);
+        let batch_id = domain::BatchId(batch_id.into());
+        contract.stake_batch_receipts.insert(&batch_id, &receipt);
+        // When batch receipts are claimed
+        contract.claim_all_batch_receipt_funds();
+        // Assert
+        let account = contract.lookup_account(valid_account_id.clone()).unwrap();
+        assert_eq!(
+            account.stake.unwrap().balance.0 .0,
+            YOCTO,
+            "the funds should have been claimed by the account"
+        );
+        assert!(
+            account.stake_batch.is_none(),
+            "stake batch should be set to None"
+        );
+        let receipt = contract.stake_batch_receipts.get(&batch_id).unwrap();
+        assert_eq!(
+            receipt.staked_near().value(),
+            YOCTO,
+            "claiming STAKE tokens should have reduced the near balance on the receipt"
+        );
+
+        // Given account has funds deposited into the current StakeBatch
+        let account_hash = Hash::from(account_id);
+        let mut account = contract.accounts.get(&account_hash).unwrap();
+        let batch_id = contract.apply_stake_batch_credit(&mut account, YOCTO.into());
+        contract.insert_account(&account_hash, &account);
+        // When batch receipts are claimed
+        contract.claim_all_batch_receipt_funds();
+        // Assert
+        let account = contract.lookup_account(valid_account_id.clone()).unwrap();
+        assert_eq!(
+            account.stake.unwrap().balance.0 .0,
+            2 * YOCTO,
+            "the funds should have been claimed by the account"
+        );
+        assert!(
+            account.stake_batch.is_none(),
+            "stake batch should be set to None"
+        );
+        let batch_id = domain::BatchId(batch_id.0 .0);
+        let receipt = contract.stake_batch_receipts.get(&batch_id);
+        assert!(
+            receipt.is_none(),
+            "when all STAKE tokens are claimed, then the receipt should have been deleted"
+        );
+    }
+
+    /// Given the account has funds in the stake batch
+    /// And there is a receipt for the batch with exact matching funds
+    /// When funds are claimed
+    /// Then the STAKE tokens should be credited to the account
+    /// And the receipt is deleted
+    #[test]
+    fn claim_all_batch_receipt_funds_with_all_stake_batch_funds_claimed_on_receipt() {
+        let account_id = "alfio-zappala.near";
+        let mut context = near::new_context(account_id);
+        context.is_view = false;
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context.clone());
+
+        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
+        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
+        let valid_account_id = ValidAccountId::try_from(account_id).unwrap();
+        let mut contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
+
+        contract.register_account();
+
+        // Given account has funds deposited into the current StakeBatch
+        // And there are no receipts
+        let account_hash = Hash::from(account_id);
+        let mut account = contract.accounts.get(&account_hash).unwrap();
+        let batch_id = contract.apply_stake_batch_credit(&mut account, (2 * YOCTO).into());
+        contract.insert_account(&account_hash, &account);
+
+        // Given there is a receipt for the batch
+        // And the receipt exists for the stake batch
+        // And STAKE token value = 1 NEAR
+        let stake_token_value = domain::StakeTokenValue::new(YOCTO.into(), YOCTO.into());
+        let receipt = domain::StakeBatchReceipt::new((2 * YOCTO).into(), stake_token_value);
+        let batch_id = domain::BatchId(batch_id.into());
+        contract.stake_batch_receipts.insert(&batch_id, &receipt);
+        // When batch receipts are claimed
+        contract.claim_all_batch_receipt_funds();
+
+        // Assert
+        let account = contract.lookup_account(valid_account_id.clone()).unwrap();
+        assert_eq!(
+            account.stake.unwrap().balance.0 .0,
+            2 * YOCTO,
+            "the funds should have been claimed by the account"
+        );
+        assert!(
+            account.stake_batch.is_none(),
+            "stake batch should be set to None"
+        );
+        let receipt = contract.stake_batch_receipts.get(&batch_id);
+        assert!(
+            receipt.is_none(),
+            "when all STAKE tokens are claimed, then the receipt should have been deleted"
+        );
+    }
+
+    /// Given Account::stake_batch and Account::next_stake_batch both have funds
+    /// And there are exact receipts for both batches
+    /// Then STAKE tokens should be claimed for both
+    /// And the receipts should be deleted
+    #[test]
+    fn claim_all_batch_receipt_funds_with_stake_batch_and_next_stake_batch_funds_with_receipts() {
+        unimplemented!()
     }
 }

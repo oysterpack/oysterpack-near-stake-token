@@ -15,23 +15,19 @@ pub trait StakingService {
     ///     CHANGE METHODS    ///
     /// ////////////////////////
 
-    /// Stakes the attached deposit.
+    /// Adds the attached deposit to the next [StakeBatch] scheduled to run.
     ///
-    /// If the contract is locked, then the NEAR funds will not be staked immediately,
-    /// They will be scheduled on the next available [StakeBatch].
-    ///
-    /// If the contract is not locked, then funds are staked with staking pool and Promise is returned.
-    /// If the contract is locked, then the funds are batched, and the [BatchId] is returned.
+    /// Returns the [BatchId] for the [StakeBatch] that the funds are deposited into.
     ///
     /// ## Panics
     /// - if account is not registered
     /// - if no deposit is attached
     ///
     /// #[payable]
-    fn deposit_and_stake(&mut self) -> PromiseOrValue<BatchId>;
+    fn deposit(&mut self) -> BatchId;
 
-    /// returns false if there was no batch to run
-    fn run_stake_batch(&mut self) -> PromiseOrValue<bool>;
+    /// returns None if there was no batch to run
+    fn run_stake_batch(&mut self) -> PromiseOrValue<Option<BatchId>>;
 
     /// Redeem the specified amount of STAKE.
     ///
@@ -62,8 +58,8 @@ pub trait StakingService {
     /// Returns false if there was no pending request.
     fn cancel_pending_redeem_stake_request(&mut self) -> bool;
 
-    /// returns false if there was no batch to run
-    fn run_redeem_stake_batch(&mut self) -> PromiseOrValue<bool>;
+    /// returns None if there was no batch to run
+    fn run_redeem_stake_batch(&mut self) -> PromiseOrValue<Option<BatchId>>;
 
     /// Explicitly claims any available funds for batch receipts:
     /// - updates STAKE and NEAR account balances

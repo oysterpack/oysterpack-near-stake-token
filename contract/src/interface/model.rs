@@ -23,7 +23,7 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
 };
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct YoctoNear(pub U128);
 
@@ -45,7 +45,7 @@ impl YoctoNear {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct YoctoStake(pub U128);
 
@@ -55,7 +55,7 @@ impl From<domain::YoctoStake> for YoctoStake {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct BlockHeight(pub U64);
 
@@ -65,7 +65,7 @@ impl From<domain::BlockHeight> for BlockHeight {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct BlockTimestamp(pub U64);
 
@@ -75,7 +75,7 @@ impl From<domain::BlockTimestamp> for BlockTimestamp {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct EpochHeight(pub U64);
 
@@ -85,7 +85,7 @@ impl From<domain::EpochHeight> for EpochHeight {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct BatchId(pub U128);
 
@@ -95,7 +95,13 @@ impl From<domain::BatchId> for BatchId {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+impl From<BatchId> for u128 {
+    fn from(vale: BatchId) -> Self {
+        vale.0 .0
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct BlockTimeHeight {
     block_height: BlockHeight,
