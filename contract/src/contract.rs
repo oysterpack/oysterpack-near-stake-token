@@ -1,5 +1,8 @@
 pub mod account_management;
-mod staking_service;
+pub mod staking_service;
+pub mod staking_service_callbacks;
+
+pub use staking_service::*;
 
 use crate::StakeTokenContract;
 use near_sdk::env;

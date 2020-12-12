@@ -1,13 +1,19 @@
 use crate::core::Hash;
-use crate::domain::{Account, StakeBatch};
-use crate::interface::YoctoNear;
+use crate::domain::{Account, StakeBatch, StakeBatchReceipt};
+use crate::interface::{StakeTokenValue, YoctoNear};
+use crate::near::NO_DEPOSIT;
 use crate::StakeTokenContract;
 use crate::{
     domain,
     interface::{BatchId, RedeemStakeBatchReceipt, StakingService, YoctoStake},
 };
-use near_sdk::json_types::U128;
-use near_sdk::{env, ext_contract, near_bindgen, AccountId, PromiseOrValue};
+use near_sdk::{
+    env, ext_contract,
+    json_types::{U128, U64},
+    near_bindgen,
+    serde::{Deserialize, Serialize},
+    AccountId, Promise, PromiseOrValue,
+};
 
 #[near_bindgen]
 impl StakingService for StakeTokenContract {
@@ -33,7 +39,40 @@ impl StakingService for StakeTokenContract {
     }
 
     fn run_stake_batch(&mut self) -> PromiseOrValue<Option<BatchId>> {
-        unimplemented!()
+        assert!(
+            !self.locked,
+            "contract is locked - batch run is in progress"
+        );
+
+        if self.stake_batch.is_none() {
+            return PromiseOrValue::Value(None);
+        }
+
+        self.locked = true;
+
+        let get_staked_balance_gas = self
+            .config
+            .gas_config()
+            .staking_pool()
+            .get_account_balance()
+            .value();
+        // give the remainder of the gas to the callback
+        let callback_gas = env::prepaid_gas() - env::used_gas() - get_staked_balance_gas;
+
+        ext_staking_pool::get_account_staked_balance(
+            env::current_account_id(),
+            &self.staking_pool_id,
+            NO_DEPOSIT,
+            get_staked_balance_gas,
+        )
+        .then(
+            ext_staking_pool_callbacks::on_get_account_staked_balance_to_run_stake_batch(
+                &env::current_account_id(),
+                NO_DEPOSIT,
+                callback_gas,
+            ),
+        )
+        .into()
     }
 
     fn redeem(&mut self, amount: YoctoStake) -> PromiseOrValue<BatchId> {
@@ -67,14 +106,31 @@ impl StakingService for StakeTokenContract {
     fn pending_redeem_stake_batch_receipt(&self) -> Option<RedeemStakeBatchReceipt> {
         unimplemented!()
     }
+
+    fn stake_token_value(&self) -> Promise {
+        ext_staking_pool::get_account_staked_balance(
+            env::current_account_id(),
+            &self.staking_pool_id,
+            NO_DEPOSIT,
+            self.config
+                .gas_config()
+                .staking_pool()
+                .get_account_balance()
+                .value(),
+        )
+        .then(ext_staking_pool_callbacks::on_get_account_staked_balance(
+            &env::current_account_id(),
+            NO_DEPOSIT,
+            self.config
+                .gas_config()
+                .callbacks()
+                .on_get_account_staked_balance()
+                .value(),
+        ))
+    }
 }
 
 impl StakeTokenContract {
-    fn batch_deposit_and_stake_request(&mut self, account_hash: Hash, account: Account) -> BatchId {
-        // TODO
-        unimplemented!()
-    }
-
     /// batches the NEAR to stake at the contract level and account level
     /// - if the account has a pre-existing batch, then check the batch's status, i.e., check if
     ///   a batch has a receipt to claim STAKE tokens
@@ -230,14 +286,36 @@ impl StakeTokenContract {
     }
 }
 
+type Balance = U128;
+
 #[ext_contract(ext_staking_pool)]
 pub trait ExtStakingPool {
     fn deposit_and_stake(&mut self);
+
+    fn get_account_staked_balance(&self, account_id: AccountId) -> Balance;
 }
 
 #[ext_contract(ext_staking_pool_callbacks)]
 pub trait ExtStakingPoolCallbacks {
-    fn on_deposit_and_stake(&mut self, account_id: AccountId, stake_deposit: YoctoNear);
+    fn on_deposit_and_stake(
+        &mut self,
+        staked_balance: Balance,
+    ) -> Result<StakeBatchReceipt, RunStakeBatchFailure>;
+
+    fn on_get_account_staked_balance(&self, #[callback] staked_balance: Balance)
+        -> StakeTokenValue;
+
+    fn on_get_account_staked_balance_to_run_stake_batch(
+        &mut self,
+        #[callback] staked_balance: Balance,
+    ) -> PromiseOrValue<Result<StakeBatchReceipt, RunStakeBatchFailure>>;
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(crate = "near_sdk::serde")]
+pub enum RunStakeBatchFailure {
+    GetStakedBalanceFailure(BatchId),
+    DepositAndStakeFailure(BatchId),
 }
 
 #[cfg(test)]

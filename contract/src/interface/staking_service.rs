@@ -27,6 +27,17 @@ pub trait StakingService {
     fn deposit(&mut self) -> BatchId;
 
     /// returns None if there was no batch to run
+    ///
+    /// ## Panics
+    /// if contract is locked, which means a batch run is in progress
+    ///
+    /// ## Notes
+    /// - takes 5 blocks to complete:
+    ///     1. StakeTokenContract::run_stake_batch
+    ///     2. StakingPool::get_account_staked_balance
+    ///     3. StakeTokenContract::on_get_account_staked_balance_to_run_stake_batch
+    ///     4. StakingPool:deposit_and_stake
+    ///     5. StakeTokenContract::on_deposit_and_stake
     fn run_stake_batch(&mut self) -> PromiseOrValue<Option<BatchId>>;
 
     /// Redeem the specified amount of STAKE.
@@ -71,4 +82,10 @@ pub trait StakingService {
     ///
     /// NOTE: pending withdrawals blocks [RedeemStakeBatch] to run
     fn pending_redeem_stake_batch_receipt(&self) -> Option<RedeemStakeBatchReceipt>;
+
+    /// Returns the current STAKE token value based on the current staked balance with the staking
+    /// pool.
+    ///
+    /// Promise result type is [StakeTokenValue]
+    fn stake_token_value(&self) -> Promise;
 }

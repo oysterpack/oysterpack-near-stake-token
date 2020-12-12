@@ -100,11 +100,16 @@ impl StakingPoolGasConfig {
 #[serde(crate = "near_sdk::serde")]
 pub struct CallBacksGasConfig {
     on_deposit_and_stake: Gas,
+    on_get_account_staked_balance: Gas,
 }
 
 impl CallBacksGasConfig {
     pub fn on_deposit_and_stake(&self) -> Gas {
         self.on_deposit_and_stake
+    }
+
+    pub fn on_get_account_staked_balance(&self) -> Gas {
+        self.on_get_account_staked_balance
     }
 }
 
@@ -112,6 +117,7 @@ impl Default for CallBacksGasConfig {
     fn default() -> Self {
         Self {
             on_deposit_and_stake: BASE_GAS,
+            on_get_account_staked_balance: BASE_GAS,
         }
     }
 }

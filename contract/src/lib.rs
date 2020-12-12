@@ -3,10 +3,12 @@
 
 pub mod config;
 pub mod contract;
-mod core;
+pub mod core;
 pub mod domain;
 pub mod interface;
 pub mod near;
+
+pub use contract::*;
 
 #[cfg(test)]
 pub mod test_utils;
@@ -55,8 +57,12 @@ pub struct StakeTokenContract {
     total_storage_escrow: TimestampedNearBalance,
 
     /// total available NEAR balance across all accounts
+    /// - credit applied when [RedeemStakeBatchReceipt] is created
+    /// - debit applied when account withdraws funds
     total_near: TimestampedNearBalance,
     /// total STAKE token supply
+    /// - credit applied when [StakeBatchReceipt] is created
+    /// - debit applied when account [RedeemStakeBatchReceipt] is created
     total_stake: TimestampedStakeBalance,
 
     /// used to generate new batch IDs

@@ -47,6 +47,10 @@ When a batch is processed, the STAKE token value at that point in time is comput
 the blockchain. Each time an account performs an action, the account checks if there are any batch receipts to apply and
 updates account balances accordingly. Explicit contract function will be exposed to process the account's batch receipts.
 
+# STAKE Token Value is Pegged to NEAR Value
+Overtime the STAKE token value will increase in NEAR value as STAKE rewards are earned.
+Periodically the STAKE token value will be reset to 1:1 to NEAR by issuing more STAKE tokens to accounts.
+
 ## Notes
 - while the contract is locked, customer requests to stake NEAR and redeem STAKE will be scheduled into the next batch
   - the contract is locked in order to compute STAKE token value which requires balances to be static

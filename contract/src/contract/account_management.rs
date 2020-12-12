@@ -117,8 +117,9 @@ impl StakeTokenContract {
         account_hash: &Hash,
         amount: YoctoNear,
     ) -> Promise {
-        account.apply_near_debit(amount.into());
+        account.apply_near_debit(amount);
         self.insert_account(&account_hash, &account);
+        self.total_near.debit(amount);
         Promise::new(env::predecessor_account_id()).transfer(amount.value())
     }
 
@@ -560,6 +561,7 @@ mod test {
         let mut account = contract.accounts.get(&account_hash).unwrap();
         account.apply_near_credit((10 * YOCTO).into());
         contract.accounts.insert(&account_hash, &account);
+        contract.total_near.credit(account.near.unwrap().balance());
 
         // When partial funds are withdrawn
         contract.withdraw((5 * YOCTO).into());
@@ -588,6 +590,7 @@ mod test {
         let mut account = contract.accounts.get(&account_hash).unwrap();
         account.apply_near_credit((10 * YOCTO).into());
         contract.accounts.insert(&account_hash, &account);
+        contract.total_near.credit(account.near.unwrap().balance());
 
         contract.withdraw_all();
         // Assert that the account NEAR balance was debited
