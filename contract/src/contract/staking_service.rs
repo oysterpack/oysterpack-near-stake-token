@@ -336,6 +336,10 @@ mod test {
         "operator.stake.oysterpack.near".to_string()
     }
 
+    /// Given the contract is not locked
+    /// When an account deposits funds to be staked
+    /// Then the funds are deposited into the current stake batch on the account
+    /// And the funds are deposited into the current stake batch on the contract
     #[test]
     fn deposit_contract_not_locked() {
         let account_id = "alfio-zappala.near";
@@ -355,6 +359,8 @@ mod test {
         testing_env!(context.clone());
 
         let batch_id = contract.deposit();
+
+        // Then the funds are deposited into the current stake batch on the account
         let account = contract.lookup_account(valid_account_id.clone()).unwrap();
         let stake_batch = account.stake_batch.unwrap();
         assert_eq!(
@@ -362,8 +368,20 @@ mod test {
             context.attached_deposit
         );
         assert_eq!(stake_batch.id, batch_id);
+        assert!(account.next_stake_batch.is_none());
+
+        // And the funds are deposited into the current stake batch on the contract
+        assert_eq!(
+            contract.stake_batch.unwrap().balance().balance(),
+            context.attached_deposit.into()
+        );
+        assert!(contract.next_stake_batch.is_none());
     }
 
+    /// Given the contract is locked
+    /// When an account deposits funds to be staked
+    /// Then the funds are deposited into the next stake batch on the account
+    /// And the funds are deposited into the next stake batch on the contract
     #[test]
     fn deposit_contract_locked() {
         let account_id = "alfio-zappala.near";
@@ -392,8 +410,23 @@ mod test {
             context.attached_deposit
         );
         assert_eq!(stake_batch.id, batch_id);
+        assert!(account.stake_batch.is_none());
+
+        // And the funds are deposited into the next stake batch on the contract
+        assert_eq!(
+            contract.next_stake_batch.unwrap().balance().balance(),
+            context.attached_deposit.into()
+        );
+        assert!(contract.stake_batch.is_none());
     }
 
+    /// Given the contract is not locked
+    /// When the account deposits funds to be staked
+    /// Then the funds are deposited into the current stake batch
+    /// Given the contract is then locked
+    /// When the account deposits funds to be staked
+    /// Then the funds are deposited into the next stake batch
+    /// And both the contract and account have funds in the current and next stake batches
     #[test]
     fn deposit_contract_not_locked_and_then_locked() {
         let account_id = "alfio-zappala.near";
@@ -422,6 +455,12 @@ mod test {
         );
         assert_eq!(stake_batch.id, batch_id);
 
+        assert!(contract.next_stake_batch.is_none());
+        assert_eq!(
+            contract.stake_batch.unwrap().balance().balance(),
+            context.attached_deposit.into()
+        );
+
         contract.locked = true;
 
         context.attached_deposit = 50 * YOCTO;
@@ -430,12 +469,18 @@ mod test {
         let next_batch_id = contract.deposit();
         let account = contract.lookup_account(valid_account_id.clone()).unwrap();
         assert_eq!(account.stake_batch.unwrap().id, batch_id);
-        let stake_batch = account.next_stake_batch.unwrap();
+        let next_stake_batch = account.next_stake_batch.unwrap();
         assert_eq!(
-            stake_batch.balance.balance.value(),
+            next_stake_batch.balance.balance.value(),
             context.attached_deposit
         );
-        assert_eq!(stake_batch.id, next_batch_id);
+        assert_eq!(next_stake_batch.id, next_batch_id);
+
+        assert_eq!(contract.stake_batch.unwrap().id().value(), batch_id.0 .0);
+        assert_eq!(
+            contract.next_stake_batch.unwrap().id().value(),
+            next_batch_id.0 .0
+        );
     }
 
     /// Given the account has no funds in stake batches
@@ -635,8 +680,72 @@ mod test {
     /// Then STAKE tokens should be claimed for both
     /// And the receipts should be deleted
     #[test]
-    #[ignore]
     fn claim_all_batch_receipt_funds_with_stake_batch_and_next_stake_batch_funds_with_receipts() {
-        unimplemented!()
+        let account_id = "alfio-zappala.near";
+        let mut context = near::new_context(account_id);
+        context.is_view = false;
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context.clone());
+
+        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
+        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
+        let valid_account_id = ValidAccountId::try_from(account_id).unwrap();
+        let mut contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
+
+        contract.register_account();
+
+        // Given account has funds deposited into the current StakeBatch
+        // And there are no receipts
+        let account_hash = Hash::from(account_id);
+        let mut account = contract.accounts.get(&account_hash).unwrap();
+        let stake_batch_id = contract.apply_stake_batch_credit(&mut account, (2 * YOCTO).into());
+        assert_eq!(
+            contract.stake_batch.unwrap().balance().balance(),
+            (2 * YOCTO).into()
+        );
+        // locking the contract should deposit the funds into the next stake batch
+        contract.locked = true;
+        let next_stake_batch_id =
+            contract.apply_stake_batch_credit(&mut account, (3 * YOCTO).into());
+        assert_eq!(
+            contract.next_stake_batch.unwrap().balance().balance(),
+            (3 * YOCTO).into()
+        );
+        contract.insert_account(&account_hash, &account);
+
+        let account = contract.lookup_account(valid_account_id.clone()).unwrap();
+        assert_eq!(
+            account.stake_batch.unwrap().balance.balance.value(),
+            2 * YOCTO
+        );
+        assert_eq!(
+            account.next_stake_batch.unwrap().balance.balance.value(),
+            3 * YOCTO
+        );
+
+        contract.locked = false;
+
+        // Given that the batches have receipts
+        // And STAKE token value = 1 NEAR
+        let stake_token_value = domain::StakeTokenValue::new(YOCTO.into(), YOCTO.into());
+        let receipt = domain::StakeBatchReceipt::new((2 * YOCTO).into(), stake_token_value);
+        contract
+            .stake_batch_receipts
+            .insert(&domain::BatchId(stake_batch_id.into()), &receipt);
+        let receipt = domain::StakeBatchReceipt::new((3 * YOCTO).into(), stake_token_value);
+        contract
+            .stake_batch_receipts
+            .insert(&domain::BatchId(next_stake_batch_id.into()), &receipt);
+        // When batch receipts are claimed
+        contract.claim_all_batch_receipt_funds();
+        // then receipts should be deleted because all funds have been claimed
+        assert!(contract.stake_batch_receipts.is_empty());
+
+        let account = contract.lookup_account(valid_account_id.clone()).unwrap();
+        // and the account batches have been cleared
+        assert!(account.stake_batch.is_none());
+        assert!(account.next_stake_batch.is_none());
+        // and the STAKE tokens were claimed and credited to the account
+        assert_eq!(account.stake.unwrap().balance.0 .0, 5 * YOCTO);
     }
 }
