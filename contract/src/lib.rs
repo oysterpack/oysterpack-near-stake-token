@@ -18,7 +18,7 @@ use crate::core::Hash;
 use crate::domain::{
     Account, BatchId, BlockHeight, RedeemStakeBatch, RedeemStakeBatchReceipt, StakeBatch,
     StakeBatchReceipt, StorageUsage, TimestampedNearBalance, TimestampedStakeBalance, YoctoNear,
-    YoctoNearValue,
+    YoctoNearValue, YoctoStake,
 };
 use crate::near::storage_keys::{
     ACCOUNTS_KEY_PREFIX, REDEEM_STAKE_BATCH_RECEIPTS_KEY_PREFIX, STAKE_BATCH_RECEIPTS_KEY_PREFIX,
@@ -92,9 +92,11 @@ pub struct StakeTokenContract {
     /// 2. receipts are used by account to claim funds
     ///    - once all funds are claimed from a receipt by accounts, then the receipt will be deleted
     ///      from storage
-    ///    - if batches compeleted successfully, then accounts claim STAKE tokens
-    ///    - if the batches failed. then the accounts claim the NEAR funds
+    ///    - if batches completed successfully, then accounts claim STAKE tokens
+    ///    - if the batches failed. then receipt is never created - the batch can be retried
     stake_batch_receipts: UnorderedMap<BatchId, StakeBatchReceipt>,
+    /// - if batches completed successfully, then accounts claim NEAR tokens
+    /// - if the batches failed. then the receipt is never created - the batch can be retried
     redeem_stake_batch_receipts: UnorderedMap<BatchId, RedeemStakeBatchReceipt>,
 
     staking_pool_id: AccountId,
