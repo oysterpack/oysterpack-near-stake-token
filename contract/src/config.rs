@@ -39,13 +39,17 @@ impl Config {
     }
 }
 
-const BASE_GAS: Gas = Gas(25_000_000_000_000);
+pub const BASE_GAS: Gas = Gas(25_000_000_000_000);
 
-#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Default)]
+#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct GasConfig {
     staking_pool: StakingPoolGasConfig,
     callbacks: CallBacksGasConfig,
+
+    // for StakeTokenContract funcs
+    run_stake_batch: Gas,
+    on_get_account_staked_balance_to_run_stake_batch: Gas,
 }
 
 impl GasConfig {
@@ -55,6 +59,25 @@ impl GasConfig {
 
     pub fn callbacks(&self) -> &CallBacksGasConfig {
         &self.callbacks
+    }
+
+    pub fn run_stake_batch(&self) -> Gas {
+        self.run_stake_batch
+    }
+
+    pub fn on_get_account_staked_balance_to_run_stake_batch(&self) -> Gas {
+        self.on_get_account_staked_balance_to_run_stake_batch
+    }
+}
+
+impl Default for GasConfig {
+    fn default() -> Self {
+        Self {
+            staking_pool: Default::default(),
+            callbacks: Default::default(),
+            run_stake_batch: Gas(20 * 10u64.pow(12)),
+            on_get_account_staked_balance_to_run_stake_batch: Gas(20 * 10u64.pow(12)),
+        }
     }
 }
 

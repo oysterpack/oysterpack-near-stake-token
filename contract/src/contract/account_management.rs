@@ -288,6 +288,7 @@ mod test {
         let receipt: Receipt = serde_json::from_str(&json).unwrap();
         let refund: u128 = match receipt.actions.first().unwrap() {
             Action::Transfer { deposit } => *deposit,
+            action => panic!("unexpected action: {:?}", action),
         };
         assert_eq!(
             refund,

@@ -1,18 +1,19 @@
-use crate::core::Hash;
-use crate::domain::{Account, StakeBatch, StakeBatchReceipt};
-use crate::interface::{StakeTokenValue, YoctoNear};
-use crate::near::NO_DEPOSIT;
-use crate::StakeTokenContract;
 use crate::{
+    core::Hash,
     domain,
-    interface::{BatchId, RedeemStakeBatchReceipt, StakingService, YoctoStake},
+    domain::{Account, StakeBatch, StakeBatchReceipt},
+    interface::{
+        BatchId, RedeemStakeBatchReceipt, StakeTokenValue, StakingService, YoctoNear, YoctoStake,
+    },
+    near::NO_DEPOSIT,
+    StakeTokenContract,
 };
 use near_sdk::{
     env, ext_contract,
     json_types::{U128, U64},
     near_bindgen,
     serde::{Deserialize, Serialize},
-    AccountId, Promise, PromiseOrValue,
+    AccountId, Gas, Promise, PromiseOrValue,
 };
 
 #[near_bindgen]
@@ -39,14 +40,11 @@ impl StakingService for StakeTokenContract {
     }
 
     fn run_stake_batch(&mut self) -> PromiseOrValue<Option<BatchId>> {
-        assert!(
-            !self.locked,
-            "contract is locked - batch run is in progress"
-        );
-
         if self.stake_batch.is_none() {
             return PromiseOrValue::Value(None);
         }
+
+        assert!(!self.locked, "contract is locked");
 
         self.locked = true;
 
@@ -56,8 +54,13 @@ impl StakingService for StakeTokenContract {
             .staking_pool()
             .get_account_balance()
             .value();
-        // give the remainder of the gas to the callback
-        let callback_gas = env::prepaid_gas() - env::used_gas() - get_staked_balance_gas;
+        let gas_needed_to_complete_this_func_call =
+            self.config.gas_config().run_stake_batch().value();
+        // give the remainder of the gas to the callback minus what's needed to complete this func call
+        let callback_gas = env::prepaid_gas()
+            - env::used_gas()
+            - get_staked_balance_gas
+            - gas_needed_to_complete_this_func_call;
 
         ext_staking_pool::get_account_staked_balance(
             env::current_account_id(),
@@ -324,7 +327,7 @@ mod test {
     use crate::config::Config;
     use crate::domain::StakeBatchReceipt;
     use crate::interface::AccountManagement;
-    use crate::near::YOCTO;
+    use crate::near::{is_promise_result_success, YOCTO};
     use crate::test_utils::{
         expected_account_storage_fee, near, Action, Receipt, EXPECTED_ACCOUNT_STORAGE_USAGE,
     };
@@ -747,5 +750,148 @@ mod test {
         assert!(account.next_stake_batch.is_none());
         // and the STAKE tokens were claimed and credited to the account
         assert_eq!(account.stake.unwrap().balance.0 .0, 5 * YOCTO);
+    }
+
+    /// Given there is no stake batch to run
+    /// Then the contract returns None
+    #[test]
+    fn run_stake_batch_no_stake_batch() {
+        let account_id = "alfio-zappala.near";
+        let context = near::new_context(account_id);
+        testing_env!(context);
+
+        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
+        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
+        let mut contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
+
+        match contract.run_stake_batch() {
+            PromiseOrValue::Value(None) => (),
+            _ => panic!("unexpected result"),
+        }
+    }
+
+    /// Given the contract has a stake batch
+    /// When the stake batch is run
+    /// Then the contract is locked
+    /// When the stake batch is run again while the contract is locked
+    /// Then the func call panics
+    #[test]
+    #[should_panic(expected = "contract is locked")]
+    fn run_stake_batch_contract_locked() {
+        let account_id = "alfio-zappala.near";
+        let mut context = near::new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.account_balance = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
+        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
+        let mut contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
+
+        contract.register_account();
+
+        context.attached_deposit = YOCTO;
+        contract.deposit();
+
+        contract.run_stake_batch();
+        assert!(contract.locked);
+
+        // should panic because contract is locked
+        contract.run_stake_batch();
+    }
+
+    /// Given the contract has a stake batch
+    /// And the contract is not locked
+    /// When the stake batch is run
+    /// Then it generates to FunctionCall receipts:
+    ///   1. to get the staked balance from the staking pool contract
+    ///   2. and then to callback into this contract - on_get_account_staked_balance_to_run_stake_batch
+    #[test]
+    fn run_stake_batch_success() {
+        let account_id = "alfio-zappala.near";
+        let mut context = near::new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.account_balance = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
+        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
+        let mut contract =
+            StakeTokenContract::new(staking_pool_id.clone(), operator_id.clone(), None);
+
+        contract.register_account();
+
+        context.attached_deposit = YOCTO;
+        contract.deposit();
+
+        // context.prepaid_gas = 10u64.pow(18);
+        testing_env!(context.clone());
+        contract.run_stake_batch();
+        println!(
+            "prepaid gas: {}, used_gas: {}, unused_gas: {}",
+            context.prepaid_gas,
+            env::used_gas(),
+            context.prepaid_gas - env::used_gas()
+        );
+
+        let txn_receipts = env::created_receipts();
+        let receipts: Vec<Receipt> = txn_receipts
+            .iter()
+            .map(|receipt| {
+                let json = serde_json::to_string_pretty(receipt).unwrap();
+                println!("{}", json);
+                let receipt: Receipt = serde_json::from_str(&json).unwrap();
+                receipt
+            })
+            .collect();
+        assert_eq!(txn_receipts.len(), 2);
+
+        // there should be a `get_account_staked_balance` func call on the staking pool
+        let _get_staked_balance_func_call = receipts
+            .iter()
+            .find(|receipt| {
+                if receipt.receiver_id == staking_pool_id.as_ref().to_string() {
+                    if let Some(Action::FunctionCall { method_name, .. }) = receipt.actions.first()
+                    {
+                        method_name == "get_account_staked_balance"
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            })
+            .unwrap();
+
+        // and a callback - `on_get_account_staked_balance_to_run_stake_batch`
+        let on_get_account_staked_balance_to_run_stake_batch_func_call = receipts
+            .iter()
+            .find(|receipt| {
+                if receipt.receiver_id == context.current_account_id {
+                    if let Some(Action::FunctionCall { method_name, .. }) = receipt.actions.first()
+                    {
+                        method_name == "on_get_account_staked_balance_to_run_stake_batch"
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            })
+            .unwrap();
+        // and the callback requires a data receipt, i.e., the staked balance
+        assert_eq!(
+            on_get_account_staked_balance_to_run_stake_batch_func_call
+                .receipt_indices
+                .len(),
+            1
+        );
+        assert_eq!(
+            *on_get_account_staked_balance_to_run_stake_batch_func_call
+                .receipt_indices
+                .first()
+                .unwrap(),
+            0
+        );
     }
 }

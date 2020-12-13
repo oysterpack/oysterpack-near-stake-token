@@ -32,23 +32,3 @@ impl Gas {
         self.0
     }
 }
-
-impl From<Gas> for u64 {
-    fn from(value: Gas) -> Self {
-        value.0
-    }
-}
-
-impl Deref for Gas {
-    type Target = u64;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for Gas {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}

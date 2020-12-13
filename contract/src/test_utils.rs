@@ -39,11 +39,21 @@ pub mod near {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Receipt {
+    pub receiver_id: String,
+    pub receipt_indices: Vec<usize>,
     pub actions: Vec<Action>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub enum Action {
-    Transfer { deposit: u128 },
+    Transfer {
+        deposit: u128,
+    },
+    FunctionCall {
+        method_name: String,
+        args: String,
+        gas: u64,
+        deposit: u128,
+    },
 }

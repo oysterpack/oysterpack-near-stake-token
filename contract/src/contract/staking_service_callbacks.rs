@@ -47,8 +47,16 @@ impl StakeTokenContract {
             .staking_pool()
             .deposit_and_stake()
             .value();
+        let gas_needed_to_complete_this_func_call = self
+            .config
+            .gas_config()
+            .on_get_account_staked_balance_to_run_stake_batch()
+            .value();
         // give the remainder of the gas to the callback
-        let callback_gas = env::prepaid_gas() - env::used_gas() - deposit_and_stake_gas;
+        let callback_gas = env::prepaid_gas()
+            - env::used_gas()
+            - deposit_and_stake_gas
+            - gas_needed_to_complete_this_func_call;
 
         ext_staking_pool::deposit_and_stake(
             &self.staking_pool_id,
