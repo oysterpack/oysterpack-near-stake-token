@@ -19,6 +19,7 @@ pub fn assert_predecessor_is_self() {
 ///
 /// ## Panics
 /// if there are no promise results - this should only be called if promise results are expected
+#[cfg(test)]
 pub fn promise_result_succeeded() -> bool {
     unsafe {
         match ENV.promise_result(0) {
@@ -28,8 +29,21 @@ pub fn promise_result_succeeded() -> bool {
     }
 }
 
+/// checks if the first PromiseResult was successful
+///
+/// ## Panics
+/// if there are no promise results - this should only be called if promise results are expected
+#[cfg(not(test))]
+pub fn promise_result_succeeded() -> bool {
+    match env::promise_result(0) {
+        PromiseResult::Successful(_) => true,
+        _ => false,
+    }
+}
+
 /// # Panics
 /// if there are no promise results - this should only be called if promise results are expected
+#[cfg(test)]
 pub fn all_promise_results_succeeded() -> bool {
     unsafe {
         let count = ENV.promise_results_count();
@@ -47,40 +61,66 @@ pub fn all_promise_results_succeeded() -> bool {
     }
 }
 
-pub static mut ENV: Env = Env {
-    promise_results_count: env::promise_results_count,
-    promise_result: env::promise_result,
-};
-
-/// intended to plugin a mock for unit testing
-pub fn set_env(env: Env) {
-    unsafe { ENV = env }
-}
-
-/// abstracts away the NEAR env
-/// - this enables the Near env to be decoupled to make it easier to test
-pub struct Env {
-    promise_results_count: fn() -> u64,
-
-    promise_result: fn(u64) -> PromiseResult,
-}
-
-impl Env {
-    pub fn new(
-        promise_results_count: fn() -> u64,
-        promise_result: fn(u64) -> PromiseResult,
-    ) -> Self {
-        Self {
-            promise_results_count,
-            promise_result,
+/// # Panics
+/// if there are no promise results - this should only be called if promise results are expected
+#[cfg(not(test))]
+pub fn all_promise_results_succeeded() -> bool {
+    let count = env::promise_results_count();
+    assert!(count > 0, "there are no promise results");
+    for i in 0..count {
+        let success = match env::promise_result(0) {
+            PromiseResult::Successful(_) => true,
+            _ => false,
+        };
+        if !success {
+            return false;
         }
     }
+    true
+}
 
-    pub fn promise_results_count(&self) -> u64 {
-        (self.promise_results_count)()
+#[cfg(test)]
+pub use test_env::*;
+
+#[cfg(test)]
+pub mod test_env {
+    use near_sdk::{env, PromiseResult};
+
+    pub static mut ENV: Env = Env {
+        promise_results_count: env::promise_results_count,
+        promise_result: env::promise_result,
+    };
+
+    /// intended to plugin a mock for unit testing
+    pub fn set_env(env: Env) {
+        unsafe { ENV = env }
     }
 
-    pub fn promise_result(&self, result_index: u64) -> PromiseResult {
-        (self.promise_result)(result_index)
+    /// abstracts away the NEAR env
+    /// - this enables the Near env to be decoupled to make it easier to test
+    pub struct Env {
+        promise_results_count: fn() -> u64,
+
+        promise_result: fn(u64) -> PromiseResult,
+    }
+
+    impl Env {
+        pub fn new(
+            promise_results_count: fn() -> u64,
+            promise_result: fn(u64) -> PromiseResult,
+        ) -> Self {
+            Self {
+                promise_results_count,
+                promise_result,
+            }
+        }
+
+        pub fn promise_results_count(&self) -> u64 {
+            (self.promise_results_count)()
+        }
+
+        pub fn promise_result(&self, result_index: u64) -> PromiseResult {
+            (self.promise_result)(result_index)
+        }
     }
 }
