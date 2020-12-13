@@ -56,13 +56,13 @@ pub struct StakeTokenContract {
     /// - when an account unregisters, it is refunded its storage fee deposit
     total_storage_escrow: TimestampedNearBalance,
 
-    /// total available NEAR balance across all accounts
-    /// - credit applied when [RedeemStakeBatchReceipt] is created
-    /// - debit applied when account withdraws funds
+    /// total NEAR balance across all accounts that is available for withdrawal
+    /// - credits are applied when [RedeemStakeBatchReceipt] is created
+    /// - debits are applied when account withdraws funds
     total_near: TimestampedNearBalance,
-    /// total STAKE token supply
-    /// - credit applied when [StakeBatchReceipt] is created
-    /// - debit applied when account [RedeemStakeBatchReceipt] is created
+    /// total STAKE token supply in circulation
+    /// - credits are applied when [StakeBatchReceipt] is created
+    /// - debits are applied when account [RedeemStakeBatchReceipt] is created
     total_stake: TimestampedStakeBalance,
 
     /// used to generate new batch IDs
@@ -70,9 +70,13 @@ pub struct StakeTokenContract {
     /// - sequence ID starts at 1
     batch_id_sequence: BatchId,
 
-    /// when the batches are processed, receipts are created
+    /// tracks how much NEAR the account is has deposited into the current batch to be staked
+    /// - when the batch run completes, a [StakeBatchReceipt] is created and recorded
     stake_batch: Option<StakeBatch>,
-    /// used to store batch requests while the contract is locked
+    /// when the contract is locked, i.e., a batch is being run, then NEAR funds are deposited
+    /// into the next batch to be staked
+    /// - when the current [stake_batch] has completed processing, then this batch is "promoted"
+    ///   to the current [stake_batch]
     next_stake_batch: Option<StakeBatch>,
 
     redeem_stake_batch: Option<RedeemStakeBatch>,
@@ -83,8 +87,13 @@ pub struct StakeTokenContract {
     ///   withdrawn, i.e., ig [pending_withdrawal] is None
     pending_withdrawal: Option<RedeemStakeBatchReceipt>,
 
-    /// after users have claimed all funds from a receipt, then the map will clean itself up by removing
-    //. the receipt from storage
+    /// receipts serve 2 purposes:
+    /// 1. receipts record batch results
+    /// 2. receipts are used by account to claim funds
+    ///    - once all funds are claimed from a receipt by accounts, then the receipt will be deleted
+    ///      from storage
+    ///    - if batches compeleted successfully, then accounts claim STAKE tokens
+    ///    - if the batches failed. then the accounts claim the NEAR funds
     stake_batch_receipts: UnorderedMap<BatchId, StakeBatchReceipt>,
     redeem_stake_batch_receipts: UnorderedMap<BatchId, RedeemStakeBatchReceipt>,
 

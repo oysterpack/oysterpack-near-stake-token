@@ -118,3 +118,24 @@ impl StakeTokenContract {
         result
     }
 }
+
+#[cfg(test)]
+mod test {
+
+    use super::*;
+    use crate::config::Config;
+    use crate::domain::StakeBatchReceipt;
+    use crate::interface::AccountManagement;
+    use crate::near::{is_promise_result_success, YOCTO};
+    use crate::test_utils::{
+        expected_account_storage_fee, near, Action, Receipt, EXPECTED_ACCOUNT_STORAGE_USAGE,
+    };
+    use near_sdk::json_types::ValidAccountId;
+    use near_sdk::{serde_json, testing_env, AccountId, MockedBlockchain, VMContext};
+    use std::convert::TryFrom;
+
+    #[test]
+    fn on_get_account_staked_balance_success() {
+        unimplemented!()
+    }
+}

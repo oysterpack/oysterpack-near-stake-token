@@ -35,7 +35,7 @@ impl StakingService for StakeTokenContract {
         );
 
         let batch_id = self.apply_stake_batch_credit(&mut account, env::attached_deposit().into());
-        self.insert_account(&account_hash, &account);
+        self.save_account(&account_hash, &account);
         batch_id
     }
 
@@ -532,7 +532,7 @@ mod test {
         let account_hash = Hash::from(account_id);
         let mut account = contract.accounts.get(&account_hash).unwrap();
         let batch_id = contract.apply_stake_batch_credit(&mut account, YOCTO.into());
-        contract.insert_account(&account_hash, &account);
+        contract.save_account(&account_hash, &account);
 
         // When batch receipts are claimed
         contract.claim_all_batch_receipt_funds();
@@ -568,7 +568,7 @@ mod test {
         let account_hash = Hash::from(account_id);
         let mut account = contract.accounts.get(&account_hash).unwrap();
         let batch_id = contract.apply_stake_batch_credit(&mut account, YOCTO.into());
-        contract.insert_account(&account_hash, &account);
+        contract.save_account(&account_hash, &account);
 
         // Given there is a receipt for the batch
         // And the receipt exists for the stake batch
@@ -601,7 +601,7 @@ mod test {
         let account_hash = Hash::from(account_id);
         let mut account = contract.accounts.get(&account_hash).unwrap();
         let batch_id = contract.apply_stake_batch_credit(&mut account, YOCTO.into());
-        contract.insert_account(&account_hash, &account);
+        contract.save_account(&account_hash, &account);
         // When batch receipts are claimed
         contract.claim_all_batch_receipt_funds();
         // Assert
@@ -648,7 +648,7 @@ mod test {
         let account_hash = Hash::from(account_id);
         let mut account = contract.accounts.get(&account_hash).unwrap();
         let batch_id = contract.apply_stake_batch_credit(&mut account, (2 * YOCTO).into());
-        contract.insert_account(&account_hash, &account);
+        contract.save_account(&account_hash, &account);
 
         // Given there is a receipt for the batch
         // And the receipt exists for the stake batch
@@ -714,7 +714,7 @@ mod test {
             contract.next_stake_batch.unwrap().balance().balance(),
             (3 * YOCTO).into()
         );
-        contract.insert_account(&account_hash, &account);
+        contract.save_account(&account_hash, &account);
 
         let account = contract.lookup_account(valid_account_id.clone()).unwrap();
         assert_eq!(

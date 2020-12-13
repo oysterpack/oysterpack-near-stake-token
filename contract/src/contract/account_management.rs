@@ -38,7 +38,7 @@ impl AccountManagement for StakeTokenContract {
 
         let account = Account::new(account_storage_fee);
         assert!(
-            self.insert_account(&Hash::from(&env::predecessor_account_id()), &account)
+            self.save_account(&Hash::from(&env::predecessor_account_id()), &account)
                 .is_none(),
             "account is already registered"
         );
@@ -54,7 +54,7 @@ impl AccountManagement for StakeTokenContract {
         let account_id = env::predecessor_account_id();
         let account_id_hash = Hash::from(&env::predecessor_account_id());
 
-        match self.remove_account(&account_id_hash) {
+        match self.delete_account(&account_id_hash) {
             None => panic!("account is not registered"),
             Some(account) => {
                 assert!(
@@ -118,7 +118,7 @@ impl StakeTokenContract {
         amount: YoctoNear,
     ) -> Promise {
         account.apply_near_debit(amount);
-        self.insert_account(&account_hash, &account);
+        self.save_account(&account_hash, &account);
         self.total_near.debit(amount);
         Promise::new(env::predecessor_account_id()).transfer(amount.value())
     }
@@ -132,11 +132,7 @@ impl StakeTokenContract {
     /// when a new account is registered the following is tracked:
     /// - total account count is inc
     /// - total storage escrow is updated
-    pub(crate) fn insert_account(
-        &mut self,
-        account_id: &Hash,
-        account: &Account,
-    ) -> Option<Account> {
+    pub(crate) fn save_account(&mut self, account_id: &Hash, account: &Account) -> Option<Account> {
         match self.accounts.insert(account_id, account) {
             None => {
                 self.accounts_len += 1;
@@ -151,7 +147,7 @@ impl StakeTokenContract {
     /// when a new account is registered the following is tracked:
     /// - total account count is dev
     /// - total storage escrow is updated
-    fn remove_account(&mut self, account_id: &Hash) -> Option<Account> {
+    fn delete_account(&mut self, account_id: &Hash) -> Option<Account> {
         match self.accounts.remove(account_id) {
             None => None,
             Some(account) => {
@@ -471,7 +467,7 @@ mod test {
         let contract_hash = Hash::from(&env::predecessor_account_id());
         let mut account = contract.accounts.get(&contract_hash).unwrap();
         account.apply_stake_credit(1.into());
-        contract.insert_account(&contract_hash, &account);
+        contract.save_account(&contract_hash, &account);
 
         // then unregister will fail
         contract.unregister_account();
