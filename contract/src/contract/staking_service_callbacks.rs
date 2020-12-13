@@ -204,4 +204,88 @@ mod test {
         contract.total_stake.credit(YOCTO.into());
         contract.on_get_account_staked_balance(YOCTO.into());
     }
+
+    #[test]
+    fn on_get_account_staked_balance_to_run_stake_batch_success() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+        contract.register_account();
+
+        context.attached_deposit = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        // account deposits into stake batch
+        contract.deposit();
+        contract.run_stake_batch();
+
+        // callback can only be invoked from itself
+        context.predecessor_account_id = context.current_account_id.clone();
+        context.attached_deposit = 100 * YOCTO;
+        testing_env!(context.clone());
+        match contract.on_get_account_staked_balance_to_run_stake_batch(0.into()) {
+            PromiseOrValue::Value(result) => panic!("expecting promise"),
+            PromiseOrValue::Promise(_) => {}
+        }
+        let receipts: Vec<Receipt> = env::created_receipts()
+            .iter()
+            .map(|receipt| {
+                let json = serde_json::to_string_pretty(receipt).unwrap();
+                println!("{}", json);
+                let receipt: Receipt = serde_json::from_str(&json).unwrap();
+                receipt
+            })
+            .collect();
+        assert_eq!(receipts.len(), 2);
+
+        // check `deposit_and_stake` func call action
+        receipts
+            .iter()
+            .find(|receipt| {
+                receipt.receiver_id == contract.staking_pool_id && {
+                    match receipt.actions.first().unwrap() {
+                        Action::FunctionCall {
+                            method_name,
+                            deposit,
+                            gas,
+                            ..
+                        } => {
+                            method_name == "deposit_and_stake"
+                                && *deposit == context.attached_deposit
+                                && *gas
+                                    == contract
+                                        .config
+                                        .gas_config()
+                                        .staking_pool()
+                                        .deposit_and_stake()
+                                        .value()
+                        }
+                        _ => false,
+                    }
+                }
+            })
+            .unwrap();
+
+        // verify that `on_deposit_and_stake` callback is present
+        receipts
+            .iter()
+            .find(|receipt| {
+                receipt.receiver_id == context.current_account_id && {
+                    match receipt.actions.first().unwrap() {
+                        Action::FunctionCall {
+                            method_name,
+                            deposit,
+                            gas,
+                            ..
+                        } => method_name == "on_deposit_and_stake" && *deposit == 0,
+                        _ => false,
+                    }
+                }
+            })
+            .unwrap();
+    }
 }
