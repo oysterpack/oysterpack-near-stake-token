@@ -55,7 +55,7 @@ impl From<&String> for Hash {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::test_utils::near::new_context;
+    use crate::test_utils::*;
     use near_sdk::{testing_env, MockedBlockchain};
 
     #[test]

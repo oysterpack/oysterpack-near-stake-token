@@ -337,7 +337,7 @@ mod test {
     use crate::config::Config;
     use crate::domain::StakeBatchReceipt;
     use crate::interface::AccountManagement;
-    use crate::near::{is_promise_result_success, YOCTO};
+    use crate::near::{promise_result_succeeded, YOCTO};
     use crate::test_utils::*;
     use near_sdk::json_types::ValidAccountId;
     use near_sdk::{serde_json, testing_env, AccountId, MockedBlockchain, VMContext};
@@ -354,12 +354,12 @@ mod test {
     #[test]
     fn deposit_contract_not_locked() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.is_view = false;
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
@@ -396,12 +396,12 @@ mod test {
     #[test]
     fn deposit_contract_locked() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.is_view = false;
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
@@ -441,12 +441,12 @@ mod test {
     #[test]
     fn deposit_contract_not_locked_and_then_locked() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.is_view = false;
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
@@ -502,12 +502,12 @@ mod test {
     #[test]
     fn claim_all_batch_receipt_funds_with_no_batched_funds() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.is_view = false;
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
@@ -523,12 +523,12 @@ mod test {
     #[test]
     fn claim_all_batch_receipt_funds_with_funds_in_stake_batch_and_no_receipt() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.is_view = false;
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
@@ -559,12 +559,12 @@ mod test {
     #[test]
     fn claim_all_batch_receipt_funds_with_funds_in_stake_batch_and_with_receipt() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.is_view = false;
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
@@ -641,12 +641,12 @@ mod test {
     #[test]
     fn claim_all_batch_receipt_funds_with_all_stake_batch_funds_claimed_on_receipt() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.is_view = false;
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
@@ -695,12 +695,12 @@ mod test {
     #[test]
     fn claim_all_batch_receipt_funds_with_stake_batch_and_next_stake_batch_funds_with_receipts() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.is_view = false;
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
@@ -769,10 +769,10 @@ mod test {
     #[test]
     fn run_stake_batch_no_stake_batch() {
         let account_id = "alfio-zappala.near";
-        let context = near::new_context(account_id);
+        let context = new_context(account_id);
         testing_env!(context);
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
         match contract.run_stake_batch() {
@@ -790,12 +790,12 @@ mod test {
     #[should_panic(expected = "contract is locked")]
     fn run_stake_batch_contract_locked() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.attached_deposit = YOCTO;
         context.account_balance = 100 * YOCTO;
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
@@ -819,12 +819,12 @@ mod test {
     #[test]
     fn run_stake_batch_success() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.attached_deposit = YOCTO;
         context.account_balance = 100 * YOCTO;
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings.clone());
 
         contract.register_account();

@@ -97,7 +97,7 @@ impl StakeTokenValue {
 mod test {
 
     use super::*;
-    use crate::test_utils::near::*;
+    use crate::test_utils::*;
     use near_sdk::{serde_json, testing_env, AccountId, MockedBlockchain, VMContext};
 
     #[test]

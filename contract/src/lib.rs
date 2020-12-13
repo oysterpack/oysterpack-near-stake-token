@@ -322,7 +322,7 @@ mod test {
         context.block_index = 10;
         testing_env!(context);
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let contract = StakeTokenContract::new(contract_settings.clone());
 
         // Then [StakeTokenContract::account_storage_usage] is dynamically computed

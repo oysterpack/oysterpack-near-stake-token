@@ -5,7 +5,7 @@ use crate::{
     ext_staking_pool, ext_staking_pool_callbacks,
     interface::{BatchId, RedeemStakeBatchReceipt, StakingService, YoctoStake},
     interface::{StakeBatchReceipt, StakeTokenValue, YoctoNear},
-    near::{assert_predecessor_is_self, is_promise_result_success, NO_DEPOSIT},
+    near::{assert_predecessor_is_self, promise_result_succeeded, NO_DEPOSIT},
     RunStakeBatchFailure, StakeTokenContract,
 };
 use near_sdk::json_types::{U128, U64};
@@ -21,7 +21,7 @@ impl StakeTokenContract {
     ) -> StakeTokenValue {
         assert_predecessor_is_self();
         assert!(
-            is_promise_result_success(env::promise_result(0)),
+            promise_result_succeeded(),
             "failed to get staked balance from staking pool"
         );
         domain::StakeTokenValue::new(staked_balance.0.into(), self.total_stake.balance()).into()
@@ -39,7 +39,7 @@ impl StakeTokenContract {
         // - if the callback was called by itself, and the batch is not present, then there is a bug
         let batch = self.stake_batch.expect("stake batch must be present");
 
-        if !is_promise_result_success(env::promise_result(0)) {
+        if !promise_result_succeeded() {
             self.locked = false;
             return PromiseOrValue::Value(Err(RunStakeBatchFailure::GetStakedBalanceFailure(
                 batch.id().into(),
@@ -91,7 +91,7 @@ impl StakeTokenContract {
             "callback should only be invoked when there is a StakeBatch being processed"
         );
 
-        let deposit_and_stake_succeeded = is_promise_result_success(env::promise_result(0));
+        let deposit_and_stake_succeeded = promise_result_succeeded();
         let result = if deposit_and_stake_succeeded {
             let batch = self.stake_batch.take().unwrap();
 
@@ -128,19 +128,36 @@ impl StakeTokenContract {
 mod test {
 
     use super::*;
-    use crate::config::Config;
-    use crate::domain::StakeBatchReceipt;
-    use crate::interface::AccountManagement;
-    use crate::near::{is_promise_result_success, YOCTO};
-    use crate::test_utils::{
-        expected_account_storage_fee, near, Action, Receipt, EXPECTED_ACCOUNT_STORAGE_USAGE,
+    use crate::{
+        config::Config,
+        domain::StakeBatchReceipt,
+        interface::AccountManagement,
+        near::{self, promise_result_succeeded, YOCTO},
+        test_utils::*,
     };
-    use near_sdk::json_types::ValidAccountId;
-    use near_sdk::{serde_json, testing_env, AccountId, MockedBlockchain, VMContext};
+    use near_sdk::{
+        json_types::ValidAccountId, serde_json, testing_env, AccountId, MockedBlockchain, VMContext,
+    };
     use std::convert::TryFrom;
 
     #[test]
     fn on_get_account_staked_balance_success() {
-        unimplemented!()
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+
+        context.predecessor_account_id = context.current_account_id.clone();
+        testing_env!(context.clone());
+
+        contract.total_stake.credit(YOCTO.into());
+        let stake_token_value = contract.on_get_account_staked_balance(YOCTO.into());
+        assert_eq!(
+            stake_token_value.total_stake_supply,
+            contract.total_stake.balance().into()
+        );
+        assert_eq!(stake_token_value.total_staked_near_balance, YOCTO.into());
     }
 }

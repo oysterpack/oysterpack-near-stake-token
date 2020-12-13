@@ -176,11 +176,11 @@ mod test {
     #[test]
     fn account_registered_is_view_func() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.is_view = false;
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let contract = StakeTokenContract::new(contract_settings);
 
         context.is_view = true;
@@ -191,11 +191,11 @@ mod test {
     #[test]
     fn lookup_account_is_view_func() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.is_view = false;
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let contract = StakeTokenContract::new(contract_settings);
 
         context.is_view = true;
@@ -208,11 +208,11 @@ mod test {
     #[test]
     fn account_storage_fee_is_view_func() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.is_view = false;
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let contract = StakeTokenContract::new(contract_settings);
 
         context.is_view = true;
@@ -223,11 +223,11 @@ mod test {
     #[test]
     fn total_registered_accounts_is_view_func() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.is_view = false;
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let contract = StakeTokenContract::new(contract_settings);
 
         context.is_view = true;
@@ -248,12 +248,12 @@ mod test {
     #[test]
     fn register_account_when_contract_not_locked() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.attached_deposit = 10 * YOCTO;
         context.is_view = false;
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
         // Given the contract is not locked
@@ -315,11 +315,11 @@ mod test {
     #[test]
     fn register_account_with_exact_storage_fee() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.attached_deposit = expected_account_storage_fee();
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
@@ -331,11 +331,11 @@ mod test {
     #[should_panic(expected = "account is already registered")]
     fn register_preexisting_account() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
@@ -346,10 +346,10 @@ mod test {
     #[should_panic(expected = "deposit is required to pay for account storage fees")]
     fn register_account_with_no_attached_deposit() {
         let account_id = "alfio-zappala.near";
-        let context = near::new_context(account_id);
+        let context = new_context(account_id);
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
@@ -359,11 +359,11 @@ mod test {
     #[should_panic(expected = "deposit is required to pay for account storage fees")]
     fn register_account_with_insufficient_deposit_for_storage_fees() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.attached_deposit = 1;
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
@@ -372,11 +372,11 @@ mod test {
     #[test]
     fn lookup_account() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
         assert!(contract
@@ -394,11 +394,11 @@ mod test {
     #[test]
     fn unregister_registered_account_with_no_funds() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.attached_deposit = expected_account_storage_fee();
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
         assert!(contract
@@ -438,11 +438,11 @@ mod test {
     )]
     fn unregister_account_with_staked_funds() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.attached_deposit = expected_account_storage_fee() + 1;
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
         contract.register_account();
 
@@ -462,11 +462,11 @@ mod test {
     )]
     fn unregister_account_with_stake_funds() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.attached_deposit = expected_account_storage_fee();
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
@@ -485,11 +485,11 @@ mod test {
     )]
     fn unregister_account_with_near_funds() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.attached_deposit = expected_account_storage_fee();
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
@@ -506,11 +506,11 @@ mod test {
     #[should_panic(expected = "account is not registered")]
     fn unregister_unknown_account() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.attached_deposit = expected_account_storage_fee() + 1;
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.unregister_account();
@@ -519,12 +519,12 @@ mod test {
     #[test]
     fn withdraw_partial_funds() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.account_balance = 100 * YOCTO;
         context.attached_deposit = expected_account_storage_fee();
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
@@ -546,12 +546,12 @@ mod test {
     #[test]
     fn withdraw_all_has_near_funds() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.account_balance = 100 * YOCTO;
         context.attached_deposit = expected_account_storage_fee();
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
@@ -573,11 +573,11 @@ mod test {
     #[should_panic(expected = "there are no available NEAR funds to withdraw")]
     fn withdraw_with_no_near_funds() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.attached_deposit = 100 * YOCTO;
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
@@ -588,11 +588,11 @@ mod test {
     #[should_panic(expected = "balance is too low to fulfill debit request")]
     fn withdraw_with_insufficient_funds() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.attached_deposit = 100 * YOCTO;
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
@@ -610,11 +610,11 @@ mod test {
     #[should_panic(expected = "there are no available NEAR funds to withdraw")]
     fn withdraw_all_with_no_near_funds() {
         let account_id = "alfio-zappala.near";
-        let mut context = near::new_context(account_id);
+        let mut context = new_context(account_id);
         context.attached_deposit = 100 * YOCTO;
         testing_env!(context.clone());
 
-        let contract_settings = new_contract_settings();
+        let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
