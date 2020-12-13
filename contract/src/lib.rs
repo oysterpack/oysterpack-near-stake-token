@@ -11,24 +11,33 @@ pub mod near;
 pub use contract::*;
 
 #[cfg(test)]
-pub mod test_utils;
+pub(crate) mod test_utils;
 
-use crate::config::Config;
-use crate::core::Hash;
-use crate::domain::{
-    Account, BatchId, BlockHeight, RedeemStakeBatch, RedeemStakeBatchReceipt, StakeBatch,
-    StakeBatchReceipt, StakeTokenValue, StorageUsage, TimestampedNearBalance,
-    TimestampedStakeBalance, YoctoNear, YoctoNearValue, YoctoStake,
+use crate::{
+    config::Config,
+    core::Hash,
+    domain::{
+        Account, BatchId, BlockHeight, RedeemStakeBatch, RedeemStakeBatchReceipt, StakeBatch,
+        StakeBatchReceipt, StakeTokenValue, StorageUsage, TimestampedNearBalance,
+        TimestampedStakeBalance, YoctoNear, YoctoNearValue, YoctoStake,
+    },
+    near::storage_keys::{
+        ACCOUNTS_KEY_PREFIX, REDEEM_STAKE_BATCH_RECEIPTS_KEY_PREFIX,
+        STAKE_BATCH_RECEIPTS_KEY_PREFIX,
+    },
 };
-use crate::near::storage_keys::{
-    ACCOUNTS_KEY_PREFIX, REDEEM_STAKE_BATCH_RECEIPTS_KEY_PREFIX, STAKE_BATCH_RECEIPTS_KEY_PREFIX,
-};
-use near_sdk::collections::UnorderedMap;
-use near_sdk::json_types::ValidAccountId;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    collections::LookupMap,
-    env, near_bindgen, wee_alloc, AccountId,
+    collections::{LookupMap, UnorderedMap},
+    env,
+    json_types::ValidAccountId,
+    near_bindgen,
+    serde::{Deserialize, Serialize},
+    wee_alloc, AccountId,
+};
+use std::{
+    convert::{TryFrom, TryInto},
+    fmt::{self, Display, Formatter},
 };
 
 #[global_allocator]
@@ -107,11 +116,70 @@ pub struct StakeTokenContract {
     locked: bool,
 }
 
-impl StakeTokenContract {}
-
 impl Default for StakeTokenContract {
     fn default() -> Self {
         panic!("contract must be initialized before usage")
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct ContractSettings {
+    pub staking_pool_id: ValidAccountId,
+    pub config: Option<Config>,
+    pub operator_id: ValidAccountId,
+}
+
+impl ContractSettings {
+    /// depends on NEAR runtime env
+    pub fn new(
+        staking_pool_id: AccountId,
+        operator_id: AccountId,
+        config: Option<Config>,
+    ) -> Result<Self, InvalidContractSettings> {
+        let settings = Self {
+            staking_pool_id: staking_pool_id
+                .try_into()
+                .map_err(|_| InvalidContractSettings::InvalidStakingPoolId)?,
+            config,
+            operator_id: operator_id
+                .try_into()
+                .map_err(|_| InvalidContractSettings::InvalidOperatorId)?,
+        };
+
+        match settings.validate() {
+            Some(err) => Err(err),
+            None => Ok(settings),
+        }
+    }
+
+    pub fn validate(&self) -> Option<InvalidContractSettings> {
+        if env::current_account_id().as_str() == self.operator_id.as_ref().as_str() {
+            Some(InvalidContractSettings::OperatorMustNotBeContract)
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum InvalidContractSettings {
+    InvalidStakingPoolId,
+    InvalidOperatorId,
+    OperatorMustNotBeContract,
+}
+
+impl Display for InvalidContractSettings {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            InvalidContractSettings::OperatorMustNotBeContract => {
+                write!(f, "operator account ID must not be the contract account ID")
+            }
+            InvalidContractSettings::InvalidOperatorId => write!(f, "invalid operator account ID"),
+            InvalidContractSettings::InvalidStakingPoolId => {
+                write!(f, "invalid staking pool account ID")
+            }
+        }
     }
 }
 
@@ -121,26 +189,17 @@ impl StakeTokenContract {
     /// - when the contract is deployed it will measure account storage usage
     #[payable]
     #[init]
-    pub fn new(
-        staking_pool_id: ValidAccountId,
-        operator_id: ValidAccountId,
-        config: Option<Config>,
-    ) -> Self {
-        let operator_id: AccountId = operator_id.into();
-        assert_ne!(
-            env::current_account_id(),
-            operator_id,
-            "operator account ID must not be the contract account ID"
-        );
-
+    pub fn new(settings: ContractSettings) -> Self {
         assert!(!env::state_exists(), "contract is already initialized");
 
-        // TODO: verify the staking pool contract interface by invoking functions that this contract depends on
+        if let Some(err) = settings.validate() {
+            panic!(err.to_string());
+        }
 
         let mut contract = Self {
-            operator_id,
+            operator_id: settings.operator_id.into(),
 
-            config: config.unwrap_or_else(Config::default),
+            config: settings.config.unwrap_or_else(Config::default),
             config_change_block_height: env::block_index().into(),
 
             accounts: LookupMap::new(ACCOUNTS_KEY_PREFIX.to_vec()),
@@ -160,7 +219,7 @@ impl StakeTokenContract {
                 REDEEM_STAKE_BATCH_RECEIPTS_KEY_PREFIX.to_vec(),
             ),
             account_storage_usage: Default::default(),
-            staking_pool_id: staking_pool_id.into(),
+            staking_pool_id: settings.staking_pool_id.into(),
             locked: false,
         };
 
@@ -207,12 +266,31 @@ impl StakeTokenContract {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::interface::AccountManagement;
-    use crate::near::YOCTO;
-    use crate::test_utils::near::new_context;
-    use crate::test_utils::{near, EXPECTED_ACCOUNT_STORAGE_USAGE};
-    use near_sdk::{testing_env, AccountId, MockedBlockchain, VMContext};
+    use crate::{interface::AccountManagement, near::YOCTO, test_utils::*};
+    use near_sdk::{serde_json, testing_env, AccountId, MockedBlockchain, VMContext};
     use std::convert::TryFrom;
+
+    #[test]
+    fn contract_settings_serde_json() {
+        testing_env!(new_context("bob.near"));
+
+        let contract_settings = ContractSettings::new(
+            "staking-pool.near".into(),
+            "operator.stake.oysterpack.near".into(),
+            Some(Config::default()),
+        )
+        .unwrap();
+        let json = serde_json::to_string_pretty(&contract_settings).unwrap();
+        println!("{}", json);
+
+        let contract_settings: ContractSettings = serde_json::from_str(
+            r#"{
+  "staking_pool_id": "staking-pool.near",
+  "operator_id": "operator.stake.oysterpack.near"
+}"#,
+        )
+        .unwrap();
+    }
 
     #[test]
     #[should_panic(expected = "contract must be initialized before usage")]
@@ -220,7 +298,7 @@ mod test {
         let account_id = "bob.near";
         let mut context = new_context(account_id);
         context.block_index = 10;
-        testing_env!((context));
+        testing_env!(context);
 
         StakeTokenContract::default();
     }
@@ -242,11 +320,10 @@ mod test {
         let account_id = "bob.near";
         let mut context = new_context(account_id);
         context.block_index = 10;
-        testing_env!((context));
+        testing_env!(context);
 
-        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
-        let operator_id = ValidAccountId::try_from("joe.near").unwrap();
-        let contract = StakeTokenContract::new(staking_pool_id.clone(), operator_id, None);
+        let contract_settings = new_contract_settings();
+        let contract = StakeTokenContract::new(contract_settings.clone());
 
         // Then [StakeTokenContract::account_storage_usage] is dynamically computed
         assert_eq!(
@@ -261,8 +338,8 @@ mod test {
 
         // And staking pool ID was stored
         assert_eq!(
-            contract.staking_pool_id,
-            staking_pool_id.as_ref().to_string()
+            contract.staking_pool_id.as_str(),
+            contract_settings.staking_pool_id.as_ref().as_str()
         );
 
         assert_eq!(

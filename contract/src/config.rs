@@ -4,7 +4,7 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
 };
 
-#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Config {
     storage_cost_per_byte: YoctoNearValue,
@@ -41,7 +41,7 @@ impl Config {
 
 pub const BASE_GAS: Gas = Gas(25_000_000_000_000);
 
-#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct GasConfig {
     staking_pool: StakingPoolGasConfig,
@@ -81,7 +81,7 @@ impl Default for GasConfig {
     }
 }
 
-#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct StakingPoolGasConfig {
     deposit_and_stake: Gas,
@@ -119,7 +119,7 @@ impl StakingPoolGasConfig {
     }
 }
 
-#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct CallBacksGasConfig {
     on_deposit_and_stake: Gas,

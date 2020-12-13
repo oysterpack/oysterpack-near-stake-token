@@ -16,6 +16,8 @@ use near_sdk::{
     AccountId, Gas, Promise, PromiseOrValue,
 };
 
+use std::convert::TryFrom;
+
 #[near_bindgen]
 impl StakingService for StakeTokenContract {
     fn staking_pool_id(&self) -> AccountId {
@@ -336,12 +338,10 @@ mod test {
     use crate::domain::StakeBatchReceipt;
     use crate::interface::AccountManagement;
     use crate::near::{is_promise_result_success, YOCTO};
-    use crate::test_utils::{
-        expected_account_storage_fee, near, Action, Receipt, EXPECTED_ACCOUNT_STORAGE_USAGE,
-    };
+    use crate::test_utils::*;
     use near_sdk::json_types::ValidAccountId;
     use near_sdk::{serde_json, testing_env, AccountId, MockedBlockchain, VMContext};
-    use std::convert::TryFrom;
+    use std::convert::{TryFrom, TryInto};
 
     fn operator_id() -> AccountId {
         "operator.stake.oysterpack.near".to_string()
@@ -359,10 +359,8 @@ mod test {
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context.clone());
 
-        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
-        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
-        let valid_account_id = ValidAccountId::try_from(account_id).unwrap();
-        let mut contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
+        let contract_settings = new_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
 
@@ -372,7 +370,9 @@ mod test {
         let batch_id = contract.deposit();
 
         // Then the funds are deposited into the current stake batch on the account
-        let account = contract.lookup_account(valid_account_id.clone()).unwrap();
+        let account = contract
+            .lookup_account(account_id.try_into().unwrap())
+            .unwrap();
         let stake_batch = account.stake_batch.unwrap();
         assert_eq!(
             stake_batch.balance.balance.value(),
@@ -401,10 +401,8 @@ mod test {
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context.clone());
 
-        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
-        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
-        let valid_account_id = ValidAccountId::try_from(account_id).unwrap();
-        let mut contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
+        let contract_settings = new_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
         contract.locked = true;
@@ -413,7 +411,9 @@ mod test {
         testing_env!(context.clone());
 
         let batch_id = contract.deposit();
-        let account = contract.lookup_account(valid_account_id.clone()).unwrap();
+        let account = contract
+            .lookup_account(account_id.try_into().unwrap())
+            .unwrap();
         assert!(account.stake_batch.is_none());
         let stake_batch = account.next_stake_batch.unwrap();
         assert_eq!(
@@ -446,10 +446,8 @@ mod test {
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context.clone());
 
-        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
-        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
-        let valid_account_id = ValidAccountId::try_from(account_id).unwrap();
-        let mut contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
+        let contract_settings = new_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
 
@@ -457,7 +455,9 @@ mod test {
         testing_env!(context.clone());
 
         let batch_id = contract.deposit();
-        let account = contract.lookup_account(valid_account_id.clone()).unwrap();
+        let account = contract
+            .lookup_account(account_id.try_into().unwrap())
+            .unwrap();
         assert!(account.next_stake_batch.is_none());
         let stake_batch = account.stake_batch.unwrap();
         assert_eq!(
@@ -478,7 +478,9 @@ mod test {
         testing_env!(context.clone());
 
         let next_batch_id = contract.deposit();
-        let account = contract.lookup_account(valid_account_id.clone()).unwrap();
+        let account = contract
+            .lookup_account(account_id.try_into().unwrap())
+            .unwrap();
         assert_eq!(account.stake_batch.unwrap().id, batch_id);
         let next_stake_batch = account.next_stake_batch.unwrap();
         assert_eq!(
@@ -505,10 +507,8 @@ mod test {
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context.clone());
 
-        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
-        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
-        let valid_account_id = ValidAccountId::try_from(account_id).unwrap();
-        let mut contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
+        let contract_settings = new_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
 
@@ -528,10 +528,8 @@ mod test {
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context.clone());
 
-        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
-        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
-        let valid_account_id = ValidAccountId::try_from(account_id).unwrap();
-        let mut contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
+        let contract_settings = new_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
 
@@ -545,7 +543,9 @@ mod test {
         // When batch receipts are claimed
         contract.claim_all_batch_receipt_funds();
         // Then there should be no effect on the account
-        let account = contract.lookup_account(valid_account_id.clone()).unwrap();
+        let account = contract
+            .lookup_account(account_id.try_into().unwrap())
+            .unwrap();
         let stake_batch = account.stake_batch.unwrap();
         assert_eq!(stake_batch.id, batch_id);
         assert_eq!(stake_batch.balance.balance, YOCTO.into());
@@ -564,10 +564,8 @@ mod test {
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context.clone());
 
-        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
-        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
-        let valid_account_id = ValidAccountId::try_from(account_id).unwrap();
-        let mut contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
+        let contract_settings = new_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
 
@@ -588,7 +586,9 @@ mod test {
         // When batch receipts are claimed
         contract.claim_all_batch_receipt_funds();
         // Assert
-        let account = contract.lookup_account(valid_account_id.clone()).unwrap();
+        let account = contract
+            .lookup_account(account_id.try_into().unwrap())
+            .unwrap();
         assert_eq!(
             account.stake.unwrap().balance.0 .0,
             YOCTO,
@@ -613,7 +613,9 @@ mod test {
         // When batch receipts are claimed
         contract.claim_all_batch_receipt_funds();
         // Assert
-        let account = contract.lookup_account(valid_account_id.clone()).unwrap();
+        let account = contract
+            .lookup_account(account_id.try_into().unwrap())
+            .unwrap();
         assert_eq!(
             account.stake.unwrap().balance.0 .0,
             2 * YOCTO,
@@ -644,10 +646,8 @@ mod test {
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context.clone());
 
-        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
-        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
-        let valid_account_id = ValidAccountId::try_from(account_id).unwrap();
-        let mut contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
+        let contract_settings = new_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
 
@@ -669,7 +669,9 @@ mod test {
         contract.claim_all_batch_receipt_funds();
 
         // Assert
-        let account = contract.lookup_account(valid_account_id.clone()).unwrap();
+        let account = contract
+            .lookup_account(account_id.try_into().unwrap())
+            .unwrap();
         assert_eq!(
             account.stake.unwrap().balance.0 .0,
             2 * YOCTO,
@@ -698,10 +700,8 @@ mod test {
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context.clone());
 
-        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
-        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
-        let valid_account_id = ValidAccountId::try_from(account_id).unwrap();
-        let mut contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
+        let contract_settings = new_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
 
@@ -724,7 +724,9 @@ mod test {
         );
         contract.save_account(&account_hash, &account);
 
-        let account = contract.lookup_account(valid_account_id.clone()).unwrap();
+        let account = contract
+            .lookup_account(account_id.try_into().unwrap())
+            .unwrap();
         assert_eq!(
             account.stake_batch.unwrap().balance.balance.value(),
             2 * YOCTO
@@ -752,7 +754,9 @@ mod test {
         // then receipts should be deleted because all funds have been claimed
         assert!(contract.stake_batch_receipts.is_empty());
 
-        let account = contract.lookup_account(valid_account_id.clone()).unwrap();
+        let account = contract
+            .lookup_account(account_id.try_into().unwrap())
+            .unwrap();
         // and the account batches have been cleared
         assert!(account.stake_batch.is_none());
         assert!(account.next_stake_batch.is_none());
@@ -768,9 +772,8 @@ mod test {
         let context = near::new_context(account_id);
         testing_env!(context);
 
-        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
-        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
-        let mut contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
+        let contract_settings = new_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
 
         match contract.run_stake_batch() {
             PromiseOrValue::Value(None) => (),
@@ -792,9 +795,8 @@ mod test {
         context.account_balance = 100 * YOCTO;
         testing_env!(context.clone());
 
-        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
-        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
-        let mut contract = StakeTokenContract::new(staking_pool_id, operator_id, None);
+        let contract_settings = new_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
 
@@ -822,10 +824,8 @@ mod test {
         context.account_balance = 100 * YOCTO;
         testing_env!(context.clone());
 
-        let staking_pool_id = ValidAccountId::try_from("staking-pool.near").unwrap();
-        let operator_id = ValidAccountId::try_from("nob.near").unwrap();
-        let mut contract =
-            StakeTokenContract::new(staking_pool_id.clone(), operator_id.clone(), None);
+        let contract_settings = new_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings.clone());
 
         contract.register_account();
 
@@ -858,7 +858,9 @@ mod test {
         let _get_staked_balance_func_call = receipts
             .iter()
             .find(|receipt| {
-                if receipt.receiver_id == staking_pool_id.as_ref().to_string() {
+                if receipt.receiver_id.as_str()
+                    == contract_settings.staking_pool_id.as_ref().as_str()
+                {
                     if let Some(Action::FunctionCall { method_name, .. }) = receipt.actions.first()
                     {
                         method_name == "get_account_staked_balance"

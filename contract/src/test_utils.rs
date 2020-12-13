@@ -1,10 +1,25 @@
-use crate::config::Config;
-use near_sdk::serde::{Deserialize, Serialize};
+use crate::{config::Config, ContractSettings};
+use near_sdk::{
+    json_types::ValidAccountId,
+    serde::{Deserialize, Serialize},
+};
+use std::convert::TryFrom;
+
+pub use near::*;
 
 pub const EXPECTED_ACCOUNT_STORAGE_USAGE: u64 = 931;
 
 pub fn expected_account_storage_fee() -> u128 {
     EXPECTED_ACCOUNT_STORAGE_USAGE as u128 * Config::default().storage_cost_per_byte().value()
+}
+
+pub fn new_contract_settings() -> ContractSettings {
+    ContractSettings::new(
+        "staking-pool.near".into(),
+        "operator.stake.oysterpack.near".into(),
+        None,
+    )
+    .unwrap()
 }
 
 pub mod near {
