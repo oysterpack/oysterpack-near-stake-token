@@ -17,8 +17,8 @@ use crate::config::Config;
 use crate::core::Hash;
 use crate::domain::{
     Account, BatchId, BlockHeight, RedeemStakeBatch, RedeemStakeBatchReceipt, StakeBatch,
-    StakeBatchReceipt, StorageUsage, TimestampedNearBalance, TimestampedStakeBalance, YoctoNear,
-    YoctoNearValue, YoctoStake,
+    StakeBatchReceipt, StakeTokenValue, StorageUsage, TimestampedNearBalance,
+    TimestampedStakeBalance, YoctoNear, YoctoNearValue, YoctoStake,
 };
 use crate::near::storage_keys::{
     ACCOUNTS_KEY_PREFIX, REDEEM_STAKE_BATCH_RECEIPTS_KEY_PREFIX, STAKE_BATCH_RECEIPTS_KEY_PREFIX,
@@ -64,6 +64,10 @@ pub struct StakeTokenContract {
     /// - credits are applied when [StakeBatchReceipt] is created
     /// - debits are applied when account [RedeemStakeBatchReceipt] is created
     total_stake: TimestampedStakeBalance,
+
+    /// cached value - if the epoch has changed, then the STAKE token value is out of date because
+    /// stake rewars are issued every epoch.
+    stake_token_value: StakeTokenValue,
 
     /// used to generate new batch IDs
     /// - the sequence is incremented to generate a new batch ID
@@ -144,6 +148,7 @@ impl StakeTokenContract {
             total_storage_escrow: Default::default(),
             total_near: Default::default(),
             total_stake: Default::default(),
+            stake_token_value: Default::default(),
             batch_id_sequence: BatchId::default(),
             stake_batch: None,
             redeem_stake_batch: None,

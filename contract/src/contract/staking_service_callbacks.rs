@@ -20,6 +20,10 @@ impl StakeTokenContract {
         #[callback] staked_balance: Balance,
     ) -> StakeTokenValue {
         assert_predecessor_is_self();
+        assert!(
+            is_promise_result_success(env::promise_result(0)),
+            "failed to get staked balance from staking pool"
+        );
         domain::StakeTokenValue::new(staked_balance.0.into(), self.total_stake.balance()).into()
     }
 
@@ -30,9 +34,10 @@ impl StakeTokenContract {
     ) -> PromiseOrValue<Result<StakeBatchReceipt, RunStakeBatchFailure>> {
         assert_predecessor_is_self();
 
-        let batch = self
-            .stake_batch
-            .expect("callback should only be invoked when there is a StakeBatch being processed");
+        // the batch should always be present because the purpose of this callback is a step
+        // in the batch processing workflow
+        // - if the callback was called by itself, and the batch is not present, then there is a bug
+        let batch = self.stake_batch.expect("stake batch must be present");
 
         if !is_promise_result_success(env::promise_result(0)) {
             self.locked = false;

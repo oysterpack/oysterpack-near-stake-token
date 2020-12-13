@@ -110,7 +110,15 @@ impl StakingService for StakeTokenContract {
         unimplemented!()
     }
 
-    fn stake_token_value(&self) -> Promise {
+    fn stake_token_value(&self) -> PromiseOrValue<StakeTokenValue> {
+        if self.stake_token_value.is_current() {
+            return PromiseOrValue::Value(self.stake_token_value.into());
+        }
+
+        self.refresh_stake_token_value().into()
+    }
+
+    fn refresh_stake_token_value(&self) -> Promise {
         ext_staking_pool::get_account_staked_balance(
             env::current_account_id(),
             &self.staking_pool_id,

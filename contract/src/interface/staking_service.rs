@@ -1,5 +1,6 @@
 use crate::interface::{
-    BatchId, BlockTimestamp, RedeemStakeBatchReceipt, StakeBatchReceipt, YoctoNear, YoctoStake,
+    BatchId, BlockTimestamp, RedeemStakeBatchReceipt, StakeBatchReceipt, StakeTokenValue,
+    YoctoNear, YoctoStake,
 };
 use near_sdk::{AccountId, Promise, PromiseOrValue};
 
@@ -83,9 +84,20 @@ pub trait StakingService {
     /// NOTE: pending withdrawals blocks [RedeemStakeBatch] to run
     fn pending_redeem_stake_batch_receipt(&self) -> Option<RedeemStakeBatchReceipt>;
 
-    /// Returns the current STAKE token value based on the current staked balance with the staking
-    /// pool.
+    /// Returns the current STAKE token value which is computed from the total STAKE token supply
+    /// and the staked NEAR account balance with the staking pool:
     ///
-    /// Promise result type is [StakeTokenValue]
-    fn stake_token_value(&self) -> Promise;
+    /// STAKE Token Value = (Total Staked NEAR balance) / (Total STAKE token supply)
+    ///
+    /// Stake rewards are applied once per epoch time period. Thus, the STAKE token value remains
+    /// constant until stake rewards are issued. Based on how stake rewards work, it is safe to
+    /// cache the [StakeTokenValue] until the epoch changes.
+    ///
+    /// In summary, the STAKE token value can be cached for the epoch time period.
+    fn stake_token_value(&self) -> PromiseOrValue<StakeTokenValue>;
+
+    /// always refreshes the staked balance and updates the cached STAKE token value
+    ///
+    /// Promise ultimatley returns: [StakeTokenValue]
+    fn refresh_stake_token_value(&self) -> Promise;
 }

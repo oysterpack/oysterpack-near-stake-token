@@ -80,6 +80,17 @@ impl StakeTokenValue {
     pub fn value(&self) -> YoctoNear {
         self.stake_to_near(YoctoStake(YOCTO))
     }
+
+    /// returns true if the current epoch height is greater than the epoch height when the stake
+    /// token value was last computed
+    pub fn is_stale(&self) -> bool {
+        near_sdk::env::epoch_height() > self.block_time_height.epoch_height().value()
+    }
+
+    /// returns true if the stake token value was computed within the same epoch period
+    pub fn is_current(&self) -> bool {
+        near_sdk::env::epoch_height() == self.block_time_height.epoch_height().value()
+    }
 }
 
 #[cfg(test)]
