@@ -1,7 +1,8 @@
+use crate::near_env::Env;
 use crate::{
     config::Config,
     near::{self, *},
-    ContractSettings,
+    ContractSettings, StakeTokenContract,
 };
 use near_sdk::{
     json_types::ValidAccountId,
@@ -30,7 +31,6 @@ pub fn stake_contract_account_id() -> AccountId {
 }
 
 pub fn new_context(predecessor_account_id: &str) -> VMContext {
-    set_env_with_success_promise_result();
     VMContext {
         current_account_id: stake_contract_account_id(),
         signer_account_id: predecessor_account_id.to_string(),
@@ -73,7 +73,7 @@ pub enum Action {
     },
 }
 
-pub fn set_env_with_success_promise_result() {
+pub fn set_env_with_success_promise_result(contract: &mut StakeTokenContract) {
     pub fn promise_result(result_index: u64) -> PromiseResult {
         PromiseResult::Successful(vec![])
     }
@@ -82,5 +82,23 @@ pub fn set_env_with_success_promise_result() {
         1
     }
 
-    near::set_env(Env::new(promise_results_count, promise_result));
+    contract.set_env(Env {
+        promise_results_count_: promise_results_count,
+        promise_result_: promise_result,
+    });
+}
+
+pub fn set_env_with_failed_promise_result(contract: &mut StakeTokenContract) {
+    pub fn promise_result(result_index: u64) -> PromiseResult {
+        PromiseResult::Failed
+    }
+
+    pub fn promise_results_count() -> u64 {
+        1
+    }
+
+    contract.set_env(Env {
+        promise_results_count_: promise_results_count,
+        promise_result_: promise_result,
+    });
 }

@@ -5,7 +5,7 @@ use near_sdk::{
 };
 use std::cmp::Ordering;
 
-#[derive(BorshSerialize, BorshDeserialize, Debug, Clone, Copy, Default)]
+#[derive(BorshSerialize, BorshDeserialize, Debug, Clone, Copy)]
 pub struct TimestampedStakeBalance {
     balance: YoctoStake,
     block_height: BlockHeight,

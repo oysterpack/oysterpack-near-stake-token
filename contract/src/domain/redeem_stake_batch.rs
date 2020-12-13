@@ -43,13 +43,17 @@
 use crate::domain::{BatchId, TimestampedStakeBalance, YoctoStake};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 
-#[derive(BorshSerialize, BorshDeserialize, Clone, Copy, Default)]
+#[derive(BorshSerialize, BorshDeserialize, Clone, Copy)]
 pub struct RedeemStakeBatch {
     batch_id: BatchId,
     balance: TimestampedStakeBalance,
 }
 
 impl RedeemStakeBatch {
+    pub fn new(batch_id: BatchId, balance: TimestampedStakeBalance) -> Self {
+        Self { batch_id, balance }
+    }
+
     pub fn id(&self) -> BatchId {
         self.batch_id
     }

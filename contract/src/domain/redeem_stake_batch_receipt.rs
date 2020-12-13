@@ -4,13 +4,20 @@ use crate::domain::{
 };
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 
-#[derive(BorshSerialize, BorshDeserialize, Default)]
+#[derive(BorshSerialize, BorshDeserialize)]
 pub struct RedeemStakeBatchReceipt {
     redeemed_stake: YoctoStake,
     stake_token_value: StakeTokenValue,
 }
 
 impl RedeemStakeBatchReceipt {
+    pub fn new(redeemed_stake: YoctoStake, stake_token_value: StakeTokenValue) -> Self {
+        Self {
+            redeemed_stake,
+            stake_token_value,
+        }
+    }
+
     pub fn stake_token_value(&self) -> StakeTokenValue {
         self.stake_token_value
     }

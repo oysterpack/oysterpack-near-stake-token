@@ -5,7 +5,7 @@ use crate::domain::{
 };
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 
-#[derive(BorshSerialize, BorshDeserialize, Default)]
+#[derive(BorshSerialize, BorshDeserialize)]
 pub struct Account {
     /// account is responsible for paying for its own storage fees
     /// the funds are escrowed and refunded when the account is unregistered
@@ -42,9 +42,15 @@ pub struct Account {
 
 impl Account {
     pub fn new(storage_escrow_fee: YoctoNear) -> Self {
-        let mut account = Self::default();
-        account.storage_escrow = TimestampedNearBalance::new(storage_escrow_fee);
-        account
+        Self {
+            storage_escrow: TimestampedNearBalance::new(storage_escrow_fee),
+            near: None,
+            stake: None,
+            stake_batch: None,
+            next_stake_batch: None,
+            redeem_stake_batch: None,
+            next_redeem_stake_batch: None,
+        }
     }
 
     /// the purpose for this constructor is to create a fully allocated [Account] object instance
@@ -53,13 +59,19 @@ impl Account {
     ///   a temporary instance is stored and then the storage usage is measured at runtime
     pub(crate) fn account_template_to_measure_storage_usage() -> Self {
         Self {
-            storage_escrow: Default::default(),
-            near: Some(TimestampedNearBalance::default()),
-            stake: Some(TimestampedStakeBalance::default()),
-            stake_batch: Some(StakeBatch::default()),
-            next_stake_batch: Some(StakeBatch::default()),
-            redeem_stake_batch: Some(RedeemStakeBatch::default()),
-            next_redeem_stake_batch: Some(RedeemStakeBatch::default()),
+            storage_escrow: TimestampedNearBalance::new(0.into()),
+            near: Some(TimestampedNearBalance::new(0.into())),
+            stake: Some(TimestampedStakeBalance::new(0.into())),
+            stake_batch: Some(StakeBatch::new(0.into(), 0.into())),
+            next_stake_batch: Some(StakeBatch::new(0.into(), 0.into())),
+            redeem_stake_batch: Some(RedeemStakeBatch::new(
+                0.into(),
+                TimestampedStakeBalance::new(0.into()),
+            )),
+            next_redeem_stake_batch: Some(RedeemStakeBatch::new(
+                0.into(),
+                TimestampedStakeBalance::new(0.into()),
+            )),
         }
     }
 

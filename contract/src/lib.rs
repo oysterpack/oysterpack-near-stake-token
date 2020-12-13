@@ -8,6 +8,7 @@ pub mod domain;
 pub mod interface;
 pub mod near;
 
+pub use contract::settings::*;
 pub use contract::*;
 
 #[cfg(test)]
@@ -33,7 +34,7 @@ use near_sdk::{
     json_types::ValidAccountId,
     near_bindgen,
     serde::{Deserialize, Serialize},
-    wee_alloc, AccountId,
+    wee_alloc, AccountId, PromiseResult,
 };
 use std::{
     convert::{TryFrom, TryInto},
@@ -114,72 +115,15 @@ pub struct StakeTokenContract {
 
     staking_pool_id: AccountId,
     locked: bool,
+
+    #[cfg(test)]
+    #[borsh_skip]
+    env: near_env::Env,
 }
 
 impl Default for StakeTokenContract {
     fn default() -> Self {
         panic!("contract must be initialized before usage")
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(crate = "near_sdk::serde")]
-pub struct ContractSettings {
-    pub staking_pool_id: ValidAccountId,
-    pub config: Option<Config>,
-    pub operator_id: ValidAccountId,
-}
-
-impl ContractSettings {
-    /// depends on NEAR runtime env
-    pub fn new(
-        staking_pool_id: AccountId,
-        operator_id: AccountId,
-        config: Option<Config>,
-    ) -> Result<Self, InvalidContractSettings> {
-        let settings = Self {
-            staking_pool_id: staking_pool_id
-                .try_into()
-                .map_err(|_| InvalidContractSettings::InvalidStakingPoolId)?,
-            config,
-            operator_id: operator_id
-                .try_into()
-                .map_err(|_| InvalidContractSettings::InvalidOperatorId)?,
-        };
-
-        match settings.validate() {
-            Some(err) => Err(err),
-            None => Ok(settings),
-        }
-    }
-
-    pub fn validate(&self) -> Option<InvalidContractSettings> {
-        if env::current_account_id().as_str() == self.operator_id.as_ref().as_str() {
-            Some(InvalidContractSettings::OperatorMustNotBeContract)
-        } else {
-            None
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum InvalidContractSettings {
-    InvalidStakingPoolId,
-    InvalidOperatorId,
-    OperatorMustNotBeContract,
-}
-
-impl Display for InvalidContractSettings {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            InvalidContractSettings::OperatorMustNotBeContract => {
-                write!(f, "operator account ID must not be the contract account ID")
-            }
-            InvalidContractSettings::InvalidOperatorId => write!(f, "invalid operator account ID"),
-            InvalidContractSettings::InvalidStakingPoolId => {
-                write!(f, "invalid staking pool account ID")
-            }
-        }
     }
 }
 
@@ -204,10 +148,10 @@ impl StakeTokenContract {
 
             accounts: LookupMap::new(ACCOUNTS_KEY_PREFIX.to_vec()),
             accounts_len: 0,
-            total_storage_escrow: Default::default(),
-            total_near: Default::default(),
-            total_stake: Default::default(),
-            stake_token_value: Default::default(),
+            total_storage_escrow: TimestampedNearBalance::new(0.into()),
+            total_near: TimestampedNearBalance::new(0.into()),
+            total_stake: TimestampedStakeBalance::new(0.into()),
+            stake_token_value: StakeTokenValue::new(0.into(), 0.into()),
             batch_id_sequence: BatchId::default(),
             stake_batch: None,
             redeem_stake_batch: None,
@@ -221,6 +165,9 @@ impl StakeTokenContract {
             account_storage_usage: Default::default(),
             staking_pool_id: settings.staking_pool_id.into(),
             locked: false,
+
+            #[cfg(test)]
+            env: near_env::Env::default(),
         };
 
         // compute account storage usage
@@ -231,6 +178,21 @@ impl StakeTokenContract {
                 StorageUsage(env::storage_usage() - initial_storage_usage);
             contract.deallocate_account_template_to_measure_storage_usage();
             assert_eq!(initial_storage_usage, env::storage_usage());
+        }
+
+        if cfg!(test) {
+            pub fn promise_result(result_index: u64) -> PromiseResult {
+                PromiseResult::Successful(vec![])
+            }
+
+            pub fn promise_results_count() -> u64 {
+                1
+            }
+
+            contract.set_env(near_env::Env {
+                promise_results_count_: promise_results_count,
+                promise_result_: promise_result,
+            });
         }
 
         contract
@@ -247,10 +209,14 @@ impl StakeTokenContract {
         self.accounts.insert(&hash, &account_template);
 
         let batch_id = BatchId(0);
-        self.stake_batch_receipts
-            .insert(&batch_id, &StakeBatchReceipt::default());
-        self.redeem_stake_batch_receipts
-            .insert(&batch_id, &RedeemStakeBatchReceipt::default());
+        self.stake_batch_receipts.insert(
+            &batch_id,
+            &StakeBatchReceipt::new(0.into(), StakeTokenValue::new(0.into(), 0.into())),
+        );
+        self.redeem_stake_batch_receipts.insert(
+            &batch_id,
+            &RedeemStakeBatchReceipt::new(0.into(), StakeTokenValue::new(0.into(), 0.into())),
+        );
     }
 
     fn deallocate_account_template_to_measure_storage_usage(&mut self) {

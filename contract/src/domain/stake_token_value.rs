@@ -10,7 +10,7 @@ use primitive_types::U256;
 /// STAKE token value = [total_staked_near_balance] / [total_stake_supply]
 ///
 /// NOTE: The STAKE token value is gathered while the contract is locked.
-#[derive(BorshSerialize, BorshDeserialize, Default, Copy, Clone)]
+#[derive(BorshSerialize, BorshDeserialize, Copy, Clone)]
 pub struct StakeTokenValue {
     block_time_height: BlockTimeHeight,
     total_staked_near_balance: YoctoNear,

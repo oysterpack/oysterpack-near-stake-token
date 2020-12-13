@@ -318,6 +318,11 @@ pub trait ExtStakingPoolCallbacks {
     fn on_get_account_staked_balance(&self, #[callback] staked_balance: Balance)
         -> StakeTokenValue;
 
+    fn on_refresh_account_staked_balance(
+        &mut self,
+        #[callback] staked_balance: Balance,
+    ) -> StakeTokenValue;
+
     fn on_get_account_staked_balance_to_run_stake_batch(
         &mut self,
         #[callback] staked_balance: Balance,
@@ -337,7 +342,7 @@ mod test {
     use crate::config::Config;
     use crate::domain::StakeBatchReceipt;
     use crate::interface::AccountManagement;
-    use crate::near::{promise_result_succeeded, YOCTO};
+    use crate::near::YOCTO;
     use crate::test_utils::*;
     use near_sdk::json_types::ValidAccountId;
     use near_sdk::{serde_json, testing_env, AccountId, MockedBlockchain, VMContext};
@@ -808,6 +813,33 @@ mod test {
 
         // should panic because contract is locked
         contract.run_stake_batch();
+    }
+
+    /// Given the contract has just been deployed
+    /// And the STAKE token value is retrieved within the same epoch
+    /// Then the cached version should be returned
+    #[test]
+    fn stake_token_value_is_current() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.epoch_height = 10;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+
+        contract.total_stake.credit(YOCTO.into());
+        contract.stake_token_value = domain::StakeTokenValue::new(YOCTO.into(), YOCTO.into());
+
+        if let PromiseOrValue::Value(stake_token_value) = contract.stake_token_value() {
+            assert_eq!(
+                stake_token_value.total_stake_supply,
+                contract.total_stake.balance().into()
+            );
+            assert_eq!(stake_token_value.total_staked_near_balance, YOCTO.into());
+        } else {
+            panic!("cached StakeTokenValue should have been returned")
+        }
     }
 
     /// Given the contract has a stake batch
