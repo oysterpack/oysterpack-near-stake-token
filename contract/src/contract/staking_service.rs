@@ -41,6 +41,14 @@ impl StakingService for StakeTokenContract {
         batch_id
     }
 
+    fn withdraw_funds_from_stake_batch(&mut self, amount: YoctoNear) {
+        unimplemented!()
+    }
+
+    fn withdraw_all_funds_from_stake_batch(&mut self) {
+        unimplemented!()
+    }
+
     fn run_stake_batch(&mut self) -> PromiseOrValue<Option<BatchId>> {
         if self.stake_batch.is_none() {
             return PromiseOrValue::Value(None);

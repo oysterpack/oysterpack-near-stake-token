@@ -27,6 +27,22 @@ pub trait StakingService {
     /// #[payable]
     fn deposit(&mut self) -> BatchId;
 
+    /// withdraws specified amount from stake batch funds and refunds the account
+    ///
+    /// ## Panics
+    /// - if the account is not registered
+    /// - if there are insufficient funds to fulfill the request
+    /// - if the contract is locked
+    fn withdraw_funds_from_stake_batch(&mut self, amount: YoctoNear);
+
+    /// withdraws all NEAR from stake batch funds and refunds the account
+    ///
+    /// ## Panics
+    /// - if the account is not registered
+    /// - if there are funds batched
+    /// - if the contract is locked
+    fn withdraw_all_funds_from_stake_batch(&mut self);
+
     /// returns None if there was no batch to run
     ///
     /// ## Panics
