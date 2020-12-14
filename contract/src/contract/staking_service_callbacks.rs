@@ -205,6 +205,11 @@ mod test {
         contract.on_get_account_staked_balance(YOCTO.into());
     }
 
+    /// Given the promise ro get the staked balance completes successfully
+    /// When the callback is invoked
+    /// Then the StakeTokenValue cached value is updated
+    /// And the batch funds are deposited and staked with the staking pool
+    /// And a callback is scheduled to run once the deposit and stake promise completes
     #[test]
     fn on_get_account_staked_balance_to_run_stake_batch_success() {
         let account_id = "alfio-zappala.near";
@@ -216,6 +221,11 @@ mod test {
         let mut contract = StakeTokenContract::new(contract_settings);
         contract.register_account();
 
+        let initial_stake_token_value = match contract.stake_token_value() {
+            PromiseOrValue::Value(value) => value,
+            _ => panic!("expected cached StakeTokenValue to be returned"),
+        };
+
         context.attached_deposit = 100 * YOCTO;
         testing_env!(context.clone());
 
@@ -226,11 +236,28 @@ mod test {
         // callback can only be invoked from itself
         context.predecessor_account_id = context.current_account_id.clone();
         context.attached_deposit = 100 * YOCTO;
+        context.epoch_height += 1;
         testing_env!(context.clone());
         match contract.on_get_account_staked_balance_to_run_stake_batch(0.into()) {
             PromiseOrValue::Value(result) => panic!("expecting promise"),
             PromiseOrValue::Promise(_) => {}
         }
+        let stake_token_value_after_callback = match contract.stake_token_value() {
+            PromiseOrValue::Value(value) => value,
+            _ => panic!("expected cached StakeTokenValue to be returned"),
+        };
+        assert!(
+            stake_token_value_after_callback
+                .block_time_height
+                .epoch_height
+                .value()
+                > initial_stake_token_value
+                    .block_time_height
+                    .epoch_height
+                    .value(),
+            "stake token value should have been updated"
+        );
+
         let receipts: Vec<Receipt> = env::created_receipts()
             .iter()
             .map(|receipt| {
@@ -287,5 +314,43 @@ mod test {
                 }
             })
             .unwrap();
+    }
+
+    /// Given the promise result failed for getting the staked balance
+    /// Then the contract is unlocked
+    /// And the callback returns a GetStakedBalanceFailure failure result
+    #[test]
+    fn on_get_account_staked_balance_to_run_stake_batch_promise_result_fails() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+
+        contract.register_account();
+        context.attached_deposit = 100 * YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+        contract.run_stake_batch();
+
+        assert!(contract.locked);
+
+        // callback can only be invoked from itself
+        context.predecessor_account_id = context.current_account_id.clone();
+        context.attached_deposit = 100 * YOCTO;
+        context.epoch_height += 1;
+        testing_env!(context.clone());
+        set_env_with_failed_promise_result(&mut contract);
+        match contract.on_get_account_staked_balance_to_run_stake_batch(0.into()) {
+            PromiseOrValue::Value(Err(RunStakeBatchFailure::GetStakedBalanceFailure(
+                bactch_id,
+            ))) => {
+                assert_eq!(contract.stake_batch.unwrap().id().value(), bactch_id.into());
+                assert!(!contract.locked, "contract should be unlocked");
+            }
+            _ => panic!("expected failure"),
+        }
     }
 }

@@ -85,6 +85,12 @@ impl From<domain::EpochHeight> for EpochHeight {
     }
 }
 
+impl EpochHeight {
+    pub fn value(&self) -> u64 {
+        self.0 .0
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct BatchId(pub U128);
@@ -104,9 +110,9 @@ impl From<BatchId> for u128 {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct BlockTimeHeight {
-    block_height: BlockHeight,
-    block_timestamp: BlockTimestamp,
-    epoch_height: EpochHeight,
+    pub block_height: BlockHeight,
+    pub block_timestamp: BlockTimestamp,
+    pub epoch_height: EpochHeight,
 }
 
 impl From<domain::BlockTimeHeight> for BlockTimeHeight {
