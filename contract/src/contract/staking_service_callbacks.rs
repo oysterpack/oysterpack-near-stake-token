@@ -63,34 +63,24 @@ impl StakeTokenContract {
         self.stake_token_value =
             domain::StakeTokenValue::new(staked_balance.0.into(), self.total_stake.balance());
 
-        let deposit_and_stake_gas = self
-            .config
-            .gas_config()
-            .staking_pool()
-            .deposit_and_stake()
-            .value();
-        let gas_needed_to_complete_this_func_call = self
-            .config
-            .gas_config()
-            .callbacks()
-            .on_get_account_staked_balance_to_run_stake_batch()
-            .value();
-        // give the remainder of the gas to the callback
-        let callback_gas = env::prepaid_gas()
-            - env::used_gas()
-            - deposit_and_stake_gas
-            - gas_needed_to_complete_this_func_call;
-
         ext_staking_pool::deposit_and_stake(
             &self.staking_pool_id,
             batch.balance().balance().value(),
-            deposit_and_stake_gas,
+            self.config
+                .gas_config()
+                .staking_pool()
+                .deposit_and_stake()
+                .value(),
         )
         .then(ext_staking_pool_callbacks::on_deposit_and_stake(
             staked_balance.0,
             &env::current_account_id(),
             NO_DEPOSIT.into(),
-            callback_gas,
+            self.config
+                .gas_config()
+                .callbacks()
+                .on_deposit_and_stake()
+                .value(),
         ))
         .into()
     }
