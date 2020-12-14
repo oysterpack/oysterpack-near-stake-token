@@ -49,42 +49,38 @@ impl StakingService for StakeTokenContract {
         unimplemented!()
     }
 
-    fn run_stake_batch(&mut self) -> PromiseOrValue<Option<BatchId>> {
-        if self.stake_batch.is_none() {
-            return PromiseOrValue::Value(None);
-        }
-
+    fn run_stake_batch(&mut self) -> Promise {
         assert!(!self.locked, "contract is locked");
+        assert!(self.stake_batch.is_some(), "there is no stake batch");
 
         self.locked = true;
-
-        let get_staked_balance_gas = self
-            .config
-            .gas_config()
-            .staking_pool()
-            .get_account_balance()
-            .value();
-        let gas_needed_to_complete_this_func_call =
-            self.config.gas_config().run_stake_batch().value();
-        // give the remainder of the gas to the callback minus what's needed to complete this func call
-        let callback_gas = env::prepaid_gas()
-            - env::used_gas()
-            - get_staked_balance_gas
-            - gas_needed_to_complete_this_func_call;
 
         ext_staking_pool::get_account_staked_balance(
             env::current_account_id(),
             &self.staking_pool_id,
             NO_DEPOSIT.into(),
-            get_staked_balance_gas,
+            self.config
+                .gas_config()
+                .staking_pool()
+                .get_account_balance()
+                .value(),
         )
         .then(
             ext_staking_pool_callbacks::on_get_account_staked_balance_to_run_stake_batch(
                 &env::current_account_id(),
                 NO_DEPOSIT.into(),
-                callback_gas,
+                self.config
+                    .gas_config()
+                    .callbacks()
+                    .on_get_account_staked_balance_to_run_stake_batch()
+                    .value(),
             ),
         )
+        .then(ext_staking_pool_callbacks::unlock(
+            &env::current_account_id(),
+            NO_DEPOSIT.into(),
+            self.config.gas_config().callbacks().unlock().value(),
+        ))
         .into()
     }
 
@@ -318,11 +314,6 @@ pub trait ExtStakingPool {
 
 #[ext_contract(ext_staking_pool_callbacks)]
 pub trait ExtStakingPoolCallbacks {
-    fn on_deposit_and_stake(
-        &mut self,
-        staked_balance: Balance,
-    ) -> Result<StakeBatchReceipt, RunStakeBatchFailure>;
-
     fn on_get_account_staked_balance(&self, #[callback] staked_balance: Balance)
         -> StakeTokenValue;
 
@@ -331,10 +322,16 @@ pub trait ExtStakingPoolCallbacks {
         #[callback] staked_balance: Balance,
     ) -> StakeTokenValue;
 
+    /// 1. submits the funds to deposit and stake to the staking pool
+    /// 2. schedules the [on_deposit_and_stake] callback to run when the `deposit_and_stake` promise completes
     fn on_get_account_staked_balance_to_run_stake_batch(
         &mut self,
         #[callback] staked_balance: Balance,
-    ) -> PromiseOrValue<Result<StakeBatchReceipt, RunStakeBatchFailure>>;
+    ) -> Promise;
+
+    fn on_deposit_and_stake(&mut self, staked_balance: Balance) -> StakeBatchReceipt;
+
+    fn unlock(&mut self);
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -778,8 +775,9 @@ mod test {
     }
 
     /// Given there is no stake batch to run
-    /// Then the contract returns None
+    /// Then the call fails
     #[test]
+    #[should_panic(expected = "there is no stake batch")]
     fn run_stake_batch_no_stake_batch() {
         let account_id = "alfio-zappala.near";
         let context = new_context(account_id);
@@ -788,10 +786,7 @@ mod test {
         let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
-        match contract.run_stake_batch() {
-            PromiseOrValue::Value(None) => (),
-            _ => panic!("unexpected result"),
-        }
+        contract.run_stake_batch();
     }
 
     /// Given the contract has a stake batch
@@ -816,9 +811,12 @@ mod test {
         context.attached_deposit = YOCTO;
         contract.deposit();
 
+        context.attached_deposit = 0;
+        testing_env!(context.clone());
         contract.run_stake_batch();
         assert!(contract.locked);
 
+        testing_env!(context.clone());
         // should panic because contract is locked
         contract.run_stake_batch();
     }
@@ -856,6 +854,7 @@ mod test {
     /// Then it generates to FunctionCall receipts:
     ///   1. to get the staked balance from the staking pool contract
     ///   2. and then to callback into this contract - on_get_account_staked_balance_to_run_stake_batch
+    ///   3. and finally a callback into this contract to unlock the contract
     #[test]
     fn run_stake_batch_success() {
         let account_id = "alfio-zappala.near";
@@ -872,7 +871,7 @@ mod test {
         context.attached_deposit = YOCTO;
         contract.deposit();
 
-        // context.prepaid_gas = 10u64.pow(18);
+        context.prepaid_gas = 10u64.pow(18);
         testing_env!(context.clone());
         contract.run_stake_batch();
         println!(
@@ -892,7 +891,7 @@ mod test {
                 receipt
             })
             .collect();
-        assert_eq!(txn_receipts.len(), 2);
+        assert_eq!(txn_receipts.len(), 3);
 
         // there should be a `get_account_staked_balance` func call on the staking pool
         let _get_staked_balance_func_call = receipts
@@ -943,5 +942,22 @@ mod test {
                 .unwrap(),
             0
         );
+
+        // and a callback - `unlock`
+        let unlock = receipts
+            .iter()
+            .find(|receipt| {
+                if receipt.receiver_id == context.current_account_id {
+                    if let Some(Action::FunctionCall { method_name, .. }) = receipt.actions.first()
+                    {
+                        method_name == "unlock"
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            })
+            .unwrap();
     }
 }

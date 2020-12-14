@@ -46,10 +46,6 @@ pub const BASE_GAS: Gas = Gas(25_000_000_000_000);
 pub struct GasConfig {
     staking_pool: StakingPoolGasConfig,
     callbacks: CallBacksGasConfig,
-
-    // for StakeTokenContract funcs
-    run_stake_batch: Gas,
-    on_get_account_staked_balance_to_run_stake_batch: Gas,
 }
 
 impl GasConfig {
@@ -60,14 +56,6 @@ impl GasConfig {
     pub fn callbacks(&self) -> &CallBacksGasConfig {
         &self.callbacks
     }
-
-    pub fn run_stake_batch(&self) -> Gas {
-        self.run_stake_batch
-    }
-
-    pub fn on_get_account_staked_balance_to_run_stake_batch(&self) -> Gas {
-        self.on_get_account_staked_balance_to_run_stake_batch
-    }
 }
 
 impl Default for GasConfig {
@@ -75,8 +63,6 @@ impl Default for GasConfig {
         Self {
             staking_pool: Default::default(),
             callbacks: Default::default(),
-            run_stake_batch: Gas(20 * 10u64.pow(12)),
-            on_get_account_staked_balance_to_run_stake_batch: Gas(20 * 10u64.pow(12)),
         }
     }
 }
@@ -122,8 +108,10 @@ impl StakingPoolGasConfig {
 #[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct CallBacksGasConfig {
+    on_get_account_staked_balance_to_run_stake_batch: Gas,
     on_deposit_and_stake: Gas,
     on_get_account_staked_balance: Gas,
+    unlock: Gas,
 }
 
 impl CallBacksGasConfig {
@@ -134,13 +122,23 @@ impl CallBacksGasConfig {
     pub fn on_get_account_staked_balance(&self) -> Gas {
         self.on_get_account_staked_balance
     }
+
+    pub fn unlock(&self) -> Gas {
+        self.unlock
+    }
+
+    pub fn on_get_account_staked_balance_to_run_stake_batch(&self) -> Gas {
+        self.on_get_account_staked_balance_to_run_stake_batch
+    }
 }
 
 impl Default for CallBacksGasConfig {
     fn default() -> Self {
         Self {
-            on_deposit_and_stake: BASE_GAS,
-            on_get_account_staked_balance: BASE_GAS,
+            on_get_account_staked_balance_to_run_stake_batch: (BASE_GAS.value() * 3).into(),
+            on_deposit_and_stake: (BASE_GAS.value() * 3).into(),
+            on_get_account_staked_balance: (BASE_GAS.value() * 3).into(),
+            unlock: (BASE_GAS.value() * 3).into(),
         }
     }
 }

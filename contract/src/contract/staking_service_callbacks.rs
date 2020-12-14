@@ -46,7 +46,7 @@ impl StakeTokenContract {
     pub fn on_get_account_staked_balance_to_run_stake_batch(
         &mut self,
         #[callback] staked_balance: Balance,
-    ) -> PromiseOrValue<Result<StakeBatchReceipt, RunStakeBatchFailure>> {
+    ) -> Promise {
         assert_predecessor_is_self();
 
         // the batch should always be present because the purpose of this callback is a step
@@ -54,12 +54,10 @@ impl StakeTokenContract {
         // - if the callback was called by itself, and the batch is not present, then there is a bug
         let batch = self.stake_batch.expect("stake batch must be present");
 
-        if !self.promise_result_succeeded() {
-            self.locked = false;
-            return PromiseOrValue::Value(Err(RunStakeBatchFailure::GetStakedBalanceFailure(
-                batch.id().into(),
-            )));
-        }
+        assert!(
+            self.promise_result_succeeded(),
+            "failed to get staked balance from staking pool"
+        );
 
         // update the cached STAKE token value
         self.stake_token_value =
@@ -74,6 +72,7 @@ impl StakeTokenContract {
         let gas_needed_to_complete_this_func_call = self
             .config
             .gas_config()
+            .callbacks()
             .on_get_account_staked_balance_to_run_stake_batch()
             .value();
         // give the remainder of the gas to the callback
@@ -100,46 +99,32 @@ impl StakeTokenContract {
     ///
     /// NOTE: if this transaction fails, then the contract will remain stuck in a locked state
     /// TODO: how to recover if this fails and the contract remains locked ?
-    pub fn on_deposit_and_stake(
-        &mut self,
-        staked_balance: Balance,
-    ) -> Result<StakeBatchReceipt, RunStakeBatchFailure> {
+    pub fn on_deposit_and_stake(&mut self, staked_balance: Balance) -> StakeBatchReceipt {
         assert_predecessor_is_self();
-        assert!(
-            self.stake_batch.is_some(),
-            "callback should only be invoked when there is a StakeBatch being processed"
-        );
 
-        let deposit_and_stake_succeeded = self.promise_result_succeeded();
-        let result = if deposit_and_stake_succeeded {
-            let batch = self.stake_batch.take().unwrap();
+        let batch = self
+            .stake_batch
+            .expect("callback should only be invoked when there is a StakeBatch being processed");
+        assert!(self.promise_result_succeeded(),"ERR: failed to process stake batch #{} - `deposit_and_stake` func call on staking pool failed", batch.id().value());
 
-            // create batch receipt
-            let stake_token_value =
-                domain::StakeTokenValue::new(staked_balance.0.into(), self.total_stake.balance());
-            let stake_batch_receipt =
-                domain::StakeBatchReceipt::new(batch.balance().balance(), stake_token_value);
-            self.stake_batch_receipts
-                .insert(&batch.id(), &stake_batch_receipt);
+        let batch = self.stake_batch.take().unwrap();
 
-            // update the total STAKE supply
-            self.total_stake
-                .credit(stake_token_value.near_to_stake(batch.balance().balance()));
+        // create batch receipt
+        let stake_token_value =
+            domain::StakeTokenValue::new(staked_balance.0.into(), self.total_stake.balance());
+        let stake_batch_receipt =
+            domain::StakeBatchReceipt::new(batch.balance().balance(), stake_token_value);
+        self.stake_batch_receipts
+            .insert(&batch.id(), &stake_batch_receipt);
 
-            // move the next batch into the current batch
-            self.stake_batch = self.next_stake_batch.take();
+        // update the total STAKE supply
+        self.total_stake
+            .credit(stake_token_value.near_to_stake(batch.balance().balance()));
 
-            Ok(StakeBatchReceipt::new(batch.id(), stake_batch_receipt))
-        } else {
-            let batch = self.stake_batch.unwrap();
-            env::log(format!("ERR: failed to process stake batch #{} - `deposit_and_stake` func call on staking pool failed", batch.id().value()).as_bytes());
-            Err(RunStakeBatchFailure::DepositAndStakeFailure(
-                batch.id().into(),
-            ))
-        };
+        // move the next batch into the current batch
+        self.stake_batch = self.next_stake_batch.take();
 
-        self.locked = false;
-        result
+        StakeBatchReceipt::new(batch.id(), stake_batch_receipt)
     }
 }
 
@@ -238,10 +223,7 @@ mod test {
         context.attached_deposit = 100 * YOCTO;
         context.epoch_height += 1;
         testing_env!(context.clone());
-        match contract.on_get_account_staked_balance_to_run_stake_batch(0.into()) {
-            PromiseOrValue::Value(result) => panic!("expecting promise"),
-            PromiseOrValue::Promise(_) => {}
-        }
+        contract.on_get_account_staked_balance_to_run_stake_batch(0.into());
         let stake_token_value_after_callback = match contract.stake_token_value() {
             PromiseOrValue::Value(value) => value,
             _ => panic!("expected cached StakeTokenValue to be returned"),
@@ -317,9 +299,9 @@ mod test {
     }
 
     /// Given the promise result failed for getting the staked balance
-    /// Then the contract is unlocked
-    /// And the callback returns a GetStakedBalanceFailure failure result
+    /// Then the callback fails
     #[test]
+    #[should_panic(expected = "failed to get staked balance from staking pool")]
     fn on_get_account_staked_balance_to_run_stake_batch_promise_result_fails() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
@@ -339,18 +321,42 @@ mod test {
 
         // callback can only be invoked from itself
         context.predecessor_account_id = context.current_account_id.clone();
-        context.attached_deposit = 100 * YOCTO;
-        context.epoch_height += 1;
         testing_env!(context.clone());
         set_env_with_failed_promise_result(&mut contract);
-        match contract.on_get_account_staked_balance_to_run_stake_batch(0.into()) {
-            PromiseOrValue::Value(Err(RunStakeBatchFailure::GetStakedBalanceFailure(
-                bactch_id,
-            ))) => {
-                assert_eq!(contract.stake_batch.unwrap().id().value(), bactch_id.into());
-                assert!(!contract.locked, "contract should be unlocked");
-            }
-            _ => panic!("expected failure"),
-        }
+        contract.on_get_account_staked_balance_to_run_stake_batch(0.into());
+    }
+
+    /// Given the funds were successfully deposited and staked into the staking pool
+    /// Then the stake batch receipts is saved
+    /// And the total STAKE supply is updated
+    /// And if there are funds in the next stake batch, then move it into the current batch
+    #[test]
+    fn on_deposit_and_stake_success() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+
+        contract.register_account();
+        let staked_near_amount = 100 * YOCTO;
+        context.attached_deposit = staked_near_amount;
+        testing_env!(context.clone());
+        contract.deposit();
+        let batch_id = contract.stake_batch.unwrap().id();
+        contract.run_stake_batch();
+
+        // callback can only be invoked from itself
+        context.attached_deposit = 0;
+        context.predecessor_account_id = context.current_account_id.clone();
+        testing_env!(context.clone());
+        // staked balance is zero because this is the first deposit_and_stake request
+        let receipt = contract.on_deposit_and_stake((0).into());
+        assert_eq!(batch_id.value(), receipt.batch_id.into());
+        let contract_receipt = contract.stake_batch_receipts.get(&batch_id).unwrap();
+        assert_eq!(contract_receipt.staked_near().value(), staked_near_amount);
+        assert_eq!(contract_receipt.stake_token_value().value(), YOCTO.into());
     }
 }

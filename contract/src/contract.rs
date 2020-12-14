@@ -1,4 +1,5 @@
 pub mod account_management;
+pub mod operator;
 pub mod settings;
 pub mod staking_service;
 pub mod staking_service_callbacks;
@@ -15,6 +16,15 @@ impl StakeTokenContract {
             env::predecessor_account_id(),
             self.operator_id,
             "function can only be invoked by the operator"
+        );
+    }
+
+    pub fn assert_predecessor_is_self_or_operator(&self) {
+        let predecessor_account_id = env::predecessor_account_id();
+        assert!(
+            predecessor_account_id == env::current_account_id()
+                || predecessor_account_id == self.operator_id,
+            "func can only be called by contract or operator accounts"
         );
     }
 }

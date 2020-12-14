@@ -43,10 +43,10 @@ pub trait StakingService {
     /// - if the contract is locked
     fn withdraw_all_funds_from_stake_batch(&mut self);
 
-    /// returns None if there was no batch to run
     ///
     /// ## Panics
-    /// if contract is locked, which means a batch run is in progress
+    /// - if contract is locked, which means a batch run is in progress
+    /// - if there is no stake batch to run
     ///
     /// ## Notes
     /// - takes 5 blocks to complete:
@@ -55,7 +55,7 @@ pub trait StakingService {
     ///     3. StakeTokenContract::on_get_account_staked_balance_to_run_stake_batch
     ///     4. StakingPool:deposit_and_stake
     ///     5. StakeTokenContract::on_deposit_and_stake
-    fn run_stake_batch(&mut self) -> PromiseOrValue<Option<BatchId>>;
+    fn run_stake_batch(&mut self) -> Promise;
 
     /// Redeem the specified amount of STAKE.
     ///
