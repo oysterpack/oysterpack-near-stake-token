@@ -415,7 +415,7 @@ mod test {
 
         let contract_balance_with_registered_account = env::account_balance();
         assert_eq!(
-            contract.total_storage_escrow.balance().value(),
+            contract.total_storage_escrow.balance().value() + context.account_balance,
             contract_balance_with_registered_account
         );
         contract.unregister_account();
@@ -427,7 +427,7 @@ mod test {
         );
         assert_eq!(
             env::account_balance(),
-            0,
+            context.account_balance,
             "storage fees should have been refunded"
         );
     }

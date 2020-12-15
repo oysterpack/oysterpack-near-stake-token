@@ -48,7 +48,13 @@ impl StakingService for StakeTokenContract {
     fn withdraw_all_funds_from_stake_batch(&mut self) {
         unimplemented!()
     }
-
+    /// logical workflow:
+    /// 1. lock the contract
+    /// 2. get account stake balancet
+    /// 3. deposit and stake NEAR funds
+    /// 4. create stake batch receip
+    /// 5. update STAKE token supply
+    /// 6. unlock contract
     fn run_stake_batch(&mut self) -> Promise {
         assert!(!self.locked, "contract is locked");
         assert!(self.stake_batch.is_some(), "there is no stake batch");
@@ -322,14 +328,21 @@ pub trait ExtStakingPoolCallbacks {
         #[callback] staked_balance: Balance,
     ) -> StakeTokenValue;
 
-    /// 1. submits the funds to deposit and stake to the staking pool
-    /// 2. schedules the [on_deposit_and_stake] callback to run when the `deposit_and_stake` promise completes
+    /// callback for getting staked balance from staking pool as part of stake batch processing workflow
+    ///
+    /// ## Success workflow
+    /// 1. update the stake token value
+    /// 2. deposit and stake funds with staking pool
+    /// 3. register [on_deposit_and_stake] callback on the deposit and stake action
     fn on_get_account_staked_balance_to_run_stake_batch(
         &mut self,
         #[callback] staked_balance: Balance,
     ) -> Promise;
 
-    fn on_deposit_and_stake(&mut self, staked_balance: Balance) -> StakeBatchReceipt;
+    /// ## Success WOrkflow
+    /// 1. store the stake batch receipt
+    /// 2. update the STAKE token supply with the new STAKE tokens that were issued
+    fn on_deposit_and_stake(&mut self);
 
     fn unlock(&mut self);
 }
@@ -874,6 +887,7 @@ mod test {
         context.prepaid_gas = 10u64.pow(18);
         testing_env!(context.clone());
         contract.run_stake_batch();
+        assert!(contract.locked);
         println!(
             "prepaid gas: {}, used_gas: {}, unused_gas: {}",
             context.prepaid_gas,

@@ -40,7 +40,7 @@ pub fn new_context(predecessor_account_id: &str) -> VMContext {
         epoch_height: 0,
         block_index: 0,
         block_timestamp: 0,
-        account_balance: 0,
+        account_balance: 100 * YOCTO,
         account_locked_balance: 0,
         storage_usage: 10u64.pow(6),
         attached_deposit: 0,

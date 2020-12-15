@@ -11,7 +11,7 @@ use crate::domain::{BatchId, TimestampedNearBalance, YoctoNear};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 
 /// Gathers NEAR deposits to stake into a batch
-#[derive(BorshSerialize, BorshDeserialize, Clone, Copy)]
+#[derive(BorshSerialize, BorshDeserialize, Clone, Copy, Debug)]
 pub struct StakeBatch {
     batch_id: BatchId,
     balance: TimestampedNearBalance,

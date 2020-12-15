@@ -73,7 +73,6 @@ impl StakeTokenContract {
                 .value(),
         )
         .then(ext_staking_pool_callbacks::on_deposit_and_stake(
-            staked_balance.0,
             &env::current_account_id(),
             NO_DEPOSIT.into(),
             self.config
@@ -85,11 +84,10 @@ impl StakeTokenContract {
         .into()
     }
 
-    /// This is the last step in the [StakeBatch] run.
-    ///
-    /// NOTE: if this transaction fails, then the contract will remain stuck in a locked state
-    /// TODO: how to recover if this fails and the contract remains locked ?
-    pub fn on_deposit_and_stake(&mut self, staked_balance: Balance) -> StakeBatchReceipt {
+    /// ## Success Workflow
+    /// 1. create [StakeBatchReceipt]
+    /// 2.
+    pub fn on_deposit_and_stake(&mut self) {
         assert_predecessor_is_self();
 
         let batch = self
@@ -100,21 +98,19 @@ impl StakeTokenContract {
         let batch = self.stake_batch.take().unwrap();
 
         // create batch receipt
-        let stake_token_value =
-            domain::StakeTokenValue::new(staked_balance.0.into(), self.total_stake.balance());
         let stake_batch_receipt =
-            domain::StakeBatchReceipt::new(batch.balance().balance(), stake_token_value);
+            domain::StakeBatchReceipt::new(batch.balance().balance(), self.stake_token_value);
         self.stake_batch_receipts
             .insert(&batch.id(), &stake_batch_receipt);
 
         // update the total STAKE supply
-        self.total_stake
-            .credit(stake_token_value.near_to_stake(batch.balance().balance()));
+        self.total_stake.credit(
+            self.stake_token_value
+                .near_to_stake(batch.balance().balance()),
+        );
 
         // move the next batch into the current batch
         self.stake_batch = self.next_stake_batch.take();
-
-        StakeBatchReceipt::new(batch.id(), stake_batch_receipt)
     }
 }
 
@@ -122,6 +118,7 @@ impl StakeTokenContract {
 mod test {
 
     use super::*;
+    use crate::interface::Operator;
     use crate::{
         config::Config,
         domain::StakeBatchReceipt,
@@ -321,7 +318,7 @@ mod test {
     /// And the total STAKE supply is updated
     /// And if there are funds in the next stake batch, then move it into the current batch
     #[test]
-    fn on_deposit_and_stake_success() {
+    fn run_stake_batch_workflow_success() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
         context.attached_deposit = YOCTO;
@@ -331,22 +328,50 @@ mod test {
         let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
-        let staked_near_amount = 100 * YOCTO;
-        context.attached_deposit = staked_near_amount;
-        testing_env!(context.clone());
-        contract.deposit();
-        let batch_id = contract.stake_batch.unwrap().id();
-        contract.run_stake_batch();
 
-        // callback can only be invoked from itself
-        context.attached_deposit = 0;
-        context.predecessor_account_id = context.current_account_id.clone();
-        testing_env!(context.clone());
-        // staked balance is zero because this is the first deposit_and_stake request
-        let receipt = contract.on_deposit_and_stake((0).into());
-        assert_eq!(batch_id.value(), receipt.batch_id.into());
-        let contract_receipt = contract.stake_batch_receipts.get(&batch_id).unwrap();
-        assert_eq!(contract_receipt.staked_near().value(), staked_near_amount);
-        assert_eq!(contract_receipt.stake_token_value().value(), YOCTO.into());
+        {
+            let staked_near_amount = 100 * YOCTO;
+            context.attached_deposit = staked_near_amount;
+            testing_env!(context.clone());
+            contract.deposit();
+
+            {
+                context.attached_deposit = 0;
+                testing_env!(context.clone());
+                // capture the batch ID to lookup the batch receipt after the workflow is done
+                let batch_id = contract.stake_batch.unwrap().id();
+                contract.run_stake_batch();
+                assert!(contract.locked);
+                {
+                    context.predecessor_account_id = context.current_account_id.clone();
+                    testing_env!(context.clone());
+                    contract.on_get_account_staked_balance_to_run_stake_batch(0.into());
+
+                    {
+                        context.predecessor_account_id = context.current_account_id.clone();
+                        testing_env!(context.clone());
+                        contract.on_deposit_and_stake();
+
+                        let receipt = contract.stake_batch_receipts.get(&batch_id).expect(
+                            "receipt should have been created by `on_deposit_and_stake` callback",
+                        );
+
+                        assert_eq!(
+                            contract.total_stake.balance(),
+                            contract
+                                .stake_token_value
+                                .near_to_stake(staked_near_amount.into())
+                        );
+
+                        {
+                            context.predecessor_account_id = context.current_account_id.clone();
+                            testing_env!(context.clone());
+                            contract.unlock();
+                            assert!(!contract.locked);
+                        }
+                    }
+                }
+            }
+        }
     }
 }
