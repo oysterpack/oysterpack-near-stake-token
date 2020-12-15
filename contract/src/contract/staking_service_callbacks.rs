@@ -344,12 +344,12 @@ mod test {
                 {
                     context.predecessor_account_id = context.current_account_id.clone();
                     testing_env!(context.clone());
-                    contract.on_run_stake_batch(0.into());
+                    contract.on_run_stake_batch(0.into()); // callback
 
                     {
                         context.predecessor_account_id = context.current_account_id.clone();
                         testing_env!(context.clone());
-                        contract.on_deposit_and_stake();
+                        contract.on_deposit_and_stake(); // callback
 
                         let receipt = contract.stake_batch_receipts.get(&batch_id).expect(
                             "receipt should have been created by `on_deposit_and_stake` callback",
