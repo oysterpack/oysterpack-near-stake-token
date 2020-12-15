@@ -108,7 +108,7 @@ impl StakingPoolGasConfig {
 #[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct CallBacksGasConfig {
-    on_get_account_staked_balance_to_run_stake_batch: Gas,
+    on_run_stake_batch: Gas,
     on_deposit_and_stake: Gas,
     on_get_account_staked_balance: Gas,
     unlock: Gas,
@@ -127,15 +127,15 @@ impl CallBacksGasConfig {
         self.unlock
     }
 
-    pub fn on_get_account_staked_balance_to_run_stake_batch(&self) -> Gas {
-        self.on_get_account_staked_balance_to_run_stake_batch
+    pub fn on_run_stake_batch(&self) -> Gas {
+        self.on_run_stake_batch
     }
 }
 
 impl Default for CallBacksGasConfig {
     fn default() -> Self {
         Self {
-            on_get_account_staked_balance_to_run_stake_batch: (BASE_GAS.value() * 3).into(),
+            on_run_stake_batch: (BASE_GAS.value() * 3).into(),
             on_deposit_and_stake: (BASE_GAS.value() * 3).into(),
             on_get_account_staked_balance: (BASE_GAS.value() * 3).into(),
             unlock: (BASE_GAS.value() * 3).into(),

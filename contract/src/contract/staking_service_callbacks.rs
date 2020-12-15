@@ -43,10 +43,7 @@ impl StakeTokenContract {
     }
 
     /// part of the [run_stake_batch] workflow
-    pub fn on_get_account_staked_balance_to_run_stake_batch(
-        &mut self,
-        #[callback] staked_balance: Balance,
-    ) -> Promise {
+    pub fn on_run_stake_batch(&mut self, #[callback] staked_balance: Balance) -> Promise {
         assert_predecessor_is_self();
 
         // the batch should always be present because the purpose of this callback is a step
@@ -63,7 +60,7 @@ impl StakeTokenContract {
         self.stake_token_value =
             domain::StakeTokenValue::new(staked_balance.0.into(), self.total_stake.balance());
 
-        ext_staking_pool::deposit_and_stake(
+        let deposit_and_stake = ext_staking_pool::deposit_and_stake(
             &self.staking_pool_id,
             batch.balance().balance().value(),
             self.config
@@ -71,8 +68,9 @@ impl StakeTokenContract {
                 .staking_pool()
                 .deposit_and_stake()
                 .value(),
-        )
-        .then(ext_staking_pool_callbacks::on_deposit_and_stake(
+        );
+
+        let on_deposit_and_stake = ext_staking_pool_callbacks::on_deposit_and_stake(
             &env::current_account_id(),
             NO_DEPOSIT.into(),
             self.config
@@ -80,8 +78,9 @@ impl StakeTokenContract {
                 .callbacks()
                 .on_deposit_and_stake()
                 .value(),
-        ))
-        .into()
+        );
+
+        deposit_and_stake.then(on_deposit_and_stake)
     }
 
     /// ## Success Workflow
@@ -183,7 +182,7 @@ mod test {
     /// And the batch funds are deposited and staked with the staking pool
     /// And a callback is scheduled to run once the deposit and stake promise completes
     #[test]
-    fn on_get_account_staked_balance_to_run_stake_batch_success() {
+    fn on_run_stake_batch_success() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
         context.attached_deposit = 100 * YOCTO;
@@ -210,7 +209,7 @@ mod test {
         context.attached_deposit = 100 * YOCTO;
         context.epoch_height += 1;
         testing_env!(context.clone());
-        contract.on_get_account_staked_balance_to_run_stake_batch(0.into());
+        contract.on_run_stake_batch(0.into());
         let stake_token_value_after_callback = match contract.stake_token_value() {
             PromiseOrValue::Value(value) => value,
             _ => panic!("expected cached StakeTokenValue to be returned"),
@@ -289,7 +288,7 @@ mod test {
     /// Then the callback fails
     #[test]
     #[should_panic(expected = "failed to get staked balance from staking pool")]
-    fn on_get_account_staked_balance_to_run_stake_batch_promise_result_fails() {
+    fn on_run_stake_batch_promise_result_fails() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
         context.attached_deposit = 100 * YOCTO;
@@ -310,7 +309,7 @@ mod test {
         context.predecessor_account_id = context.current_account_id.clone();
         testing_env!(context.clone());
         set_env_with_failed_promise_result(&mut contract);
-        contract.on_get_account_staked_balance_to_run_stake_batch(0.into());
+        contract.on_run_stake_batch(0.into());
     }
 
     /// Given the funds were successfully deposited and staked into the staking pool
@@ -345,7 +344,7 @@ mod test {
                 {
                     context.predecessor_account_id = context.current_account_id.clone();
                     testing_env!(context.clone());
-                    contract.on_get_account_staked_balance_to_run_stake_batch(0.into());
+                    contract.on_run_stake_batch(0.into());
 
                     {
                         context.predecessor_account_id = context.current_account_id.clone();

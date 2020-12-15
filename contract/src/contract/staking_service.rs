@@ -50,9 +50,9 @@ impl StakingService for StakeTokenContract {
     }
     /// logical workflow:
     /// 1. lock the contract
-    /// 2. get account stake balancet
+    /// 2. get account stake balance
     /// 3. deposit and stake NEAR funds
-    /// 4. create stake batch receip
+    /// 4. create stake batch receipt
     /// 5. update STAKE token supply
     /// 6. unlock contract
     fn run_stake_batch(&mut self) -> Promise {
@@ -61,7 +61,7 @@ impl StakingService for StakeTokenContract {
 
         self.locked = true;
 
-        ext_staking_pool::get_account_staked_balance(
+        let get_account_staked_balance = ext_staking_pool::get_account_staked_balance(
             env::current_account_id(),
             &self.staking_pool_id,
             NO_DEPOSIT.into(),
@@ -70,24 +70,27 @@ impl StakingService for StakeTokenContract {
                 .staking_pool()
                 .get_account_balance()
                 .value(),
-        )
-        .then(
-            ext_staking_pool_callbacks::on_get_account_staked_balance_to_run_stake_batch(
-                &env::current_account_id(),
-                NO_DEPOSIT.into(),
-                self.config
-                    .gas_config()
-                    .callbacks()
-                    .on_get_account_staked_balance_to_run_stake_batch()
-                    .value(),
-            ),
-        )
-        .then(ext_staking_pool_callbacks::unlock(
+        );
+
+        let on_run_stake_batch = ext_staking_pool_callbacks::on_run_stake_batch(
+            &env::current_account_id(),
+            NO_DEPOSIT.into(),
+            self.config
+                .gas_config()
+                .callbacks()
+                .on_run_stake_batch()
+                .value(),
+        );
+
+        let unlock = ext_staking_pool_callbacks::unlock(
             &env::current_account_id(),
             NO_DEPOSIT.into(),
             self.config.gas_config().callbacks().unlock().value(),
-        ))
-        .into()
+        );
+
+        get_account_staked_balance
+            .then(on_run_stake_batch)
+            .then(unlock)
     }
 
     fn redeem(&mut self, amount: YoctoStake) -> PromiseOrValue<BatchId> {
@@ -334,10 +337,7 @@ pub trait ExtStakingPoolCallbacks {
     /// 1. update the stake token value
     /// 2. deposit and stake funds with staking pool
     /// 3. register [on_deposit_and_stake] callback on the deposit and stake action
-    fn on_get_account_staked_balance_to_run_stake_batch(
-        &mut self,
-        #[callback] staked_balance: Balance,
-    ) -> Promise;
+    fn on_run_stake_batch(&mut self, #[callback] staked_balance: Balance) -> Promise;
 
     /// ## Success WOrkflow
     /// 1. store the stake batch receipt
@@ -866,7 +866,7 @@ mod test {
     /// When the stake batch is run
     /// Then it generates to FunctionCall receipts:
     ///   1. to get the staked balance from the staking pool contract
-    ///   2. and then to callback into this contract - on_get_account_staked_balance_to_run_stake_batch
+    ///   2. and then to callback into this contract - on_run_stake_batch
     ///   3. and finally a callback into this contract to unlock the contract
     #[test]
     fn run_stake_batch_success() {
@@ -926,14 +926,14 @@ mod test {
             })
             .unwrap();
 
-        // and a callback - `on_get_account_staked_balance_to_run_stake_batch`
-        let on_get_account_staked_balance_to_run_stake_batch_func_call = receipts
+        // and a callback - `on_run_stake_batch`
+        let on_run_stake_batch_func_call = receipts
             .iter()
             .find(|receipt| {
                 if receipt.receiver_id == context.current_account_id {
                     if let Some(Action::FunctionCall { method_name, .. }) = receipt.actions.first()
                     {
-                        method_name == "on_get_account_staked_balance_to_run_stake_batch"
+                        method_name == "on_run_stake_batch"
                     } else {
                         false
                     }
@@ -943,14 +943,9 @@ mod test {
             })
             .unwrap();
         // and the callback requires a data receipt, i.e., the staked balance
+        assert_eq!(on_run_stake_batch_func_call.receipt_indices.len(), 1);
         assert_eq!(
-            on_get_account_staked_balance_to_run_stake_batch_func_call
-                .receipt_indices
-                .len(),
-            1
-        );
-        assert_eq!(
-            *on_get_account_staked_balance_to_run_stake_batch_func_call
+            *on_run_stake_batch_func_call
                 .receipt_indices
                 .first()
                 .unwrap(),
