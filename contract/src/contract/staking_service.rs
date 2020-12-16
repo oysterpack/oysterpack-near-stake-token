@@ -456,7 +456,7 @@ pub enum RunStakeBatchFailure {
 mod test {
     use super::*;
     use crate::config::Config;
-    use crate::domain::StakeBatchReceipt;
+    use crate::domain::{EpochHeight, StakeBatchReceipt};
     use crate::interface::AccountManagement;
     use crate::near::YOCTO;
     use crate::test_utils::*;
@@ -1199,7 +1199,18 @@ mod test {
     /// Then the STAKE funds are moved from the the account's STAKE balance to the account's current redeem stake batch
     /// And the contract redeem stake batch is credited
     #[test]
-    fn redeem_all_no_locks() {
+    fn redeem_all_with_redeem_lock_unstaking() {
+        redeem_all_with_lock(RedeemLock::Unstaking);
+    }
+
+    #[test]
+    fn redeem_all_with_redeem_lock_pending_withdrawal() {
+        redeem_all_with_lock(RedeemLock::PendingWithdrawal {
+            available_on: EpochHeight::default(),
+        });
+    }
+
+    fn redeem_all_with_lock(lock: RedeemLock) {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
         context.attached_deposit = YOCTO;
@@ -1208,6 +1219,11 @@ mod test {
 
         let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings.clone());
+        contract.run_redeem_stake_batch_lock = Some(lock);
+
+        context.attached_deposit = YOCTO;
+        context.account_balance = 100 * YOCTO;
+        testing_env!(context.clone());
 
         contract.register_account();
         assert!(contract.redeem_stake_batch.is_none());
@@ -1225,8 +1241,8 @@ mod test {
         let batch_id = contract.redeem_all();
 
         let batch = contract
-            .redeem_stake_batch
-            .expect("current stake batch should have funds");
+            .next_redeem_stake_batch
+            .expect("next stake batch should have funds");
         assert_eq!(batch_id, batch.id().into());
         assert_eq!(
             initial_account_stake.value(),
@@ -1238,7 +1254,9 @@ mod test {
             .unwrap();
         // assert STAKE was moved from account STAKE balance to redeem stake batch
         assert!(account.stake.is_none());
-        let redeem_stake_batch = account.redeem_stake_batch.unwrap();
+        let redeem_stake_batch = account
+            .next_redeem_stake_batch
+            .expect("redeemed STAKE should have been put into next batch");
         assert_eq!(
             redeem_stake_batch.balance.balance,
             initial_account_stake.into()
