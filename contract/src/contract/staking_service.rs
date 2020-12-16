@@ -818,7 +818,7 @@ mod test {
     /// Then the func call panics
     #[test]
     #[should_panic(expected = "stake batch run is in progress")]
-    fn run_stake_batch_contract_locked() {
+    fn run_stake_batch_contract_when_stake_batch_in_progress() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
         context.attached_deposit = YOCTO;
@@ -840,6 +840,54 @@ mod test {
 
         testing_env!(context.clone());
         // should panic because contract is locked
+        contract.run_stake_batch();
+    }
+
+    /// Given the contract is running the redeem stake batch
+    /// When the stake batch is run
+    /// Then the func call panics
+    #[test]
+    #[should_panic(expected = "redeem stake batch run is in progress")]
+    fn run_stake_batch_contract_when_redeem_stake_batch_in_progress_unstaking() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.account_balance = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+
+        contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
+
+        contract.register_account();
+        contract.run_stake_batch();
+    }
+
+    /// Given the contract is redeem status is pending withdrawal
+    /// Then it is allowed to run stake batches
+    #[test]
+    fn run_stake_batch_contract_when_redeem_status_pending_withdrawal() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.account_balance = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+
+        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal {
+            available_on: (env::epoch_height() + 4).into(),
+        });
+
+        contract.register_account();
+
+        context.attached_deposit = YOCTO;
+        context.account_balance = 100 * YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+
         contract.run_stake_batch();
     }
 
