@@ -235,8 +235,7 @@ mod test {
         contract.total_registered_accounts();
     }
 
-    /// - Given the contract is not locked
-    /// - And the account is not currently registered
+    /// - Given the account is not currently registered
     /// - When a new account is registered with attached deposit to stake
     /// - Then [AccountRegistry::account_registered()] returns true for the registered account ID
     /// - And the total accounts registered count is incremented
@@ -246,7 +245,7 @@ mod test {
     /// - And the next stake batch is set to None
     /// - And the redeem stake batches are set to None
     #[test]
-    fn register_account_when_contract_not_locked() {
+    fn register_new_account() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
         context.attached_deposit = 10 * YOCTO;
@@ -256,9 +255,7 @@ mod test {
         let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
-        // Given the contract is not locked
-        assert!(!contract.locked);
-        // And the account is not currently registered
+        // Given the account is not currently registered
         assert!(
             !contract.account_registered(account_id.try_into().unwrap()),
             "account should not be registered"

@@ -1,7 +1,6 @@
 use crate::{
     core::Hash,
-    domain,
-    domain::{Account, StakeBatch, StakeBatchReceipt},
+    domain::{self, Account, RedeemLock, StakeBatch, StakeBatchReceipt},
     interface::{
         BatchId, RedeemStakeBatchReceipt, StakeTokenValue, StakingService, YoctoNear, YoctoStake,
     },
@@ -15,7 +14,6 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
     AccountId, Gas, Promise, PromiseOrValue,
 };
-
 use std::convert::TryFrom;
 
 #[near_bindgen]
@@ -56,10 +54,18 @@ impl StakingService for StakeTokenContract {
     /// 5. update STAKE token supply
     /// 6. unlock contract
     fn run_stake_batch(&mut self) -> Promise {
-        assert!(!self.locked, "contract is locked");
+        assert!(
+            !self.run_stake_batch_locked,
+            "stake batch run is in progress"
+        );
+        assert_ne!(
+            self.run_redeem_stake_batch_lock,
+            Some(RedeemLock::Unstaking),
+            "redeem stake batch run is in progress"
+        );
         assert!(self.stake_batch.is_some(), "there is no stake batch");
 
-        self.locked = true;
+        self.run_stake_batch_locked = true;
 
         let get_account_staked_balance = ext_staking_pool::get_account_staked_balance(
             env::current_account_id(),
@@ -82,7 +88,7 @@ impl StakingService for StakeTokenContract {
                 .value(),
         );
 
-        let unlock = ext_staking_pool_callbacks::unlock(
+        let unlock = ext_staking_pool_callbacks::release_run_stake_batch_lock(
             &env::current_account_id(),
             NO_DEPOSIT.into(),
             self.config.gas_config().callbacks().unlock().value(),
@@ -93,11 +99,11 @@ impl StakingService for StakeTokenContract {
             .then(unlock)
     }
 
-    fn redeem(&mut self, amount: YoctoStake) -> PromiseOrValue<BatchId> {
+    fn redeem(&mut self, amount: YoctoStake) -> BatchId {
         unimplemented!()
     }
 
-    fn redeem_all(&mut self) -> PromiseOrValue<BatchId> {
+    fn redeem_all(&mut self) -> BatchId {
         unimplemented!()
     }
 
@@ -105,7 +111,7 @@ impl StakingService for StakeTokenContract {
         unimplemented!()
     }
 
-    fn run_redeem_stake_batch(&mut self) -> PromiseOrValue<Option<BatchId>> {
+    fn run_redeem_stake_batch(&mut self) -> Promise {
         unimplemented!()
     }
 
@@ -173,41 +179,44 @@ impl StakeTokenContract {
 
         self.claim_stake_batch_receipts(account);
 
-        let batch_id = if self.locked {
-            // deposit the funds in the next batch
-            let mut batch = self.next_stake_batch.unwrap_or_else(|| {
-                // create the next batch
+        // use current batch if not staking, i.e., the stake batch is not running
+        if !self.run_stake_batch_locked {
+            // apply at contract level
+            let mut contract_batch = self.stake_batch.unwrap_or_else(|| {
                 *self.batch_id_sequence += 1;
                 StakeBatch::new(self.batch_id_sequence, domain::YoctoNear(0))
             });
-            batch.add(amount);
-            self.next_stake_batch = Some(batch);
+            contract_batch.add(amount);
+            self.stake_batch = Some(contract_batch);
 
-            let mut batch = account
-                .next_stake_batch
-                .unwrap_or_else(|| StakeBatch::new(self.batch_id_sequence, domain::YoctoNear(0)));
-            batch.add(amount);
-            account.next_stake_batch = Some(batch);
-            batch.id()
-        } else {
-            // deposit the funds in the current batch
-            let mut batch = self.stake_batch.unwrap_or_else(|| {
-                // create the next batch
-                *self.batch_id_sequence += 1;
-                StakeBatch::new(self.batch_id_sequence, domain::YoctoNear(0))
-            });
-            batch.add(amount);
-            self.stake_batch = Some(batch);
-
-            let mut batch = account
+            // apply at account level
+            // NOTE: account batch ID must match contract batch ID
+            let mut account_batch = account
                 .stake_batch
-                .unwrap_or_else(|| StakeBatch::new(self.batch_id_sequence, domain::YoctoNear(0)));
-            batch.add(amount);
-            account.stake_batch = Some(batch);
-            batch.id()
-        };
+                .unwrap_or_else(|| StakeBatch::new(contract_batch.id(), domain::YoctoNear(0)));
+            account_batch.add(amount);
+            account.stake_batch = Some(account_batch);
 
-        batch_id.into()
+            account_batch.id().into()
+        } else {
+            // apply at contract level
+            let mut contract_batch = self.next_stake_batch.unwrap_or_else(|| {
+                *self.batch_id_sequence += 1;
+                StakeBatch::new(self.batch_id_sequence, domain::YoctoNear(0))
+            });
+            contract_batch.add(amount);
+            self.next_stake_batch = Some(contract_batch);
+
+            // apply at account level
+            // NOTE: account batch ID must match contract batch ID
+            let mut account_batch = account
+                .next_stake_batch
+                .unwrap_or_else(|| StakeBatch::new(contract_batch.id(), domain::YoctoNear(0)));
+            account_batch.add(amount);
+            account.next_stake_batch = Some(account_batch);
+
+            account_batch.id().into()
+        }
     }
 
     /// returns true if funds were claimed, which means the account's state has changed and requires
@@ -344,7 +353,7 @@ pub trait ExtStakingPoolCallbacks {
     /// 2. update the STAKE token supply with the new STAKE tokens that were issued
     fn on_deposit_and_stake(&mut self);
 
-    fn unlock(&mut self);
+    fn release_run_stake_batch_lock(&mut self);
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -428,7 +437,7 @@ mod test {
         let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.register_account();
-        contract.locked = true;
+        contract.run_stake_batch_locked = true;
 
         context.attached_deposit = 100 * YOCTO;
         testing_env!(context.clone());
@@ -495,7 +504,7 @@ mod test {
             context.attached_deposit.into()
         );
 
-        contract.locked = true;
+        contract.run_stake_batch_locked = true;
 
         context.attached_deposit = 50 * YOCTO;
         testing_env!(context.clone());
@@ -738,7 +747,7 @@ mod test {
             (2 * YOCTO).into()
         );
         // locking the contract should deposit the funds into the next stake batch
-        contract.locked = true;
+        contract.run_stake_batch_locked = true;
         let next_stake_batch_id =
             contract.apply_stake_batch_credit(&mut account, (3 * YOCTO).into());
         assert_eq!(
@@ -759,7 +768,7 @@ mod test {
             3 * YOCTO
         );
 
-        contract.locked = false;
+        contract.run_stake_batch_locked = false;
 
         // Given that the batches have receipts
         // And STAKE token value = 1 NEAR
@@ -808,7 +817,7 @@ mod test {
     /// When the stake batch is run again while the contract is locked
     /// Then the func call panics
     #[test]
-    #[should_panic(expected = "contract is locked")]
+    #[should_panic(expected = "stake batch run is in progress")]
     fn run_stake_batch_contract_locked() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
@@ -827,7 +836,7 @@ mod test {
         context.attached_deposit = 0;
         testing_env!(context.clone());
         contract.run_stake_batch();
-        assert!(contract.locked);
+        assert!(contract.run_stake_batch_locked);
 
         testing_env!(context.clone());
         // should panic because contract is locked
@@ -887,7 +896,7 @@ mod test {
         context.prepaid_gas = 10u64.pow(18);
         testing_env!(context.clone());
         contract.run_stake_batch();
-        assert!(contract.locked);
+        assert!(contract.run_stake_batch_locked);
         println!(
             "prepaid gas: {}, used_gas: {}, unused_gas: {}",
             context.prepaid_gas,
@@ -959,7 +968,7 @@ mod test {
                 if receipt.receiver_id == context.current_account_id {
                     if let Some(Action::FunctionCall { method_name, .. }) = receipt.actions.first()
                     {
-                        method_name == "unlock"
+                        method_name == "release_run_stake_batch_lock"
                     } else {
                         false
                     }

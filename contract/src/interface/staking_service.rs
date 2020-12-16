@@ -59,35 +59,26 @@ pub trait StakingService {
 
     /// Redeem the specified amount of STAKE.
     ///
-    /// If the contract is locked or if there is a pending withdrawal, then the request is batched
-    /// and the [BatchId] is returned.
-    ///
-    /// If the contract is not locked and there is no pending withdrawal, then the redeem batch is
-    /// run.
-    ///
-    /// This will schedule NEAR tokens to be unstaked in the
-    /// next [RedeemStakeBatch]. The next batch will run when all available funds are available to
-    /// be withdrawn from the staking pool.
+    /// If the contract is locked for redeeming, then the request is put into the next batch.    ///
+    /// If the contract is not locked for redeeming, then the request is put into the current batch.
     ///
     /// ## Panics
     /// - if account is not registered
     /// - if there is not enough STAKE in the account to fulfill the request
-    fn redeem(&mut self, amount: YoctoStake) -> PromiseOrValue<BatchId>;
+    fn redeem(&mut self, amount: YoctoStake) -> BatchId;
 
     /// Redeems all available STAKE - see [redeem]
-    ///
-    /// Returns the total amount of STAKE that was redeemed.
     ///
     /// ## Panics
     /// - if account is not registered
     /// - if the account has no STAKE to redeem
-    fn redeem_all(&mut self) -> PromiseOrValue<BatchId>;
+    fn redeem_all(&mut self) -> BatchId;
 
     /// Returns false if there was no pending request.
     fn cancel_pending_redeem_stake_request(&mut self) -> bool;
 
     /// returns None if there was no batch to run
-    fn run_redeem_stake_batch(&mut self) -> PromiseOrValue<Option<BatchId>>;
+    fn run_redeem_stake_batch(&mut self) -> Promise;
 
     /// Explicitly claims any available funds for batch receipts:
     /// - updates STAKE and NEAR account balances
@@ -114,6 +105,6 @@ pub trait StakingService {
 
     /// always refreshes the staked balance and updates the cached STAKE token value
     ///
-    /// Promise ultimatley returns: [StakeTokenValue]
+    /// Promise returns: [StakeTokenValue]
     fn refresh_stake_token_value(&self) -> Promise;
 }

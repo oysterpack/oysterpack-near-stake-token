@@ -18,8 +18,8 @@ use crate::{
     config::Config,
     core::Hash,
     domain::{
-        Account, BatchId, BlockHeight, RedeemStakeBatch, RedeemStakeBatchReceipt, StakeBatch,
-        StakeBatchReceipt, StakeTokenValue, StorageUsage, TimestampedNearBalance,
+        Account, BatchId, BlockHeight, RedeemLock, RedeemStakeBatch, RedeemStakeBatchReceipt,
+        StakeBatch, StakeBatchReceipt, StakeTokenValue, StorageUsage, TimestampedNearBalance,
         TimestampedStakeBalance, YoctoNear, YoctoNearValue, YoctoStake,
     },
     near::storage_keys::{
@@ -114,7 +114,8 @@ pub struct StakeTokenContract {
     redeem_stake_batch_receipts: UnorderedMap<BatchId, RedeemStakeBatchReceipt>,
 
     staking_pool_id: AccountId,
-    locked: bool,
+    run_stake_batch_locked: bool,
+    run_redeem_stake_batch_lock: Option<RedeemLock>,
 
     #[cfg(test)]
     #[borsh_skip]
@@ -169,7 +170,8 @@ impl StakeTokenContract {
             ),
             account_storage_usage: Default::default(),
             staking_pool_id: settings.staking_pool_id.into(),
-            locked: false,
+            run_stake_batch_locked: false,
+            run_redeem_stake_batch_lock: None,
 
             #[cfg(test)]
             env: near_env::Env::default(),
@@ -323,7 +325,10 @@ mod test {
             10,
             "config change block height should be set from the NEAR runtime env"
         );
-        assert!(!contract.locked, "contract should not be locked");
+        assert!(
+            !contract.run_stake_batch_locked,
+            "contract should not be locked"
+        );
         assert_eq!(
             contract.total_storage_escrow.balance().value(),
             0,

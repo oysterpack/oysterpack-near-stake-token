@@ -303,7 +303,7 @@ mod test {
         contract.deposit();
         contract.run_stake_batch();
 
-        assert!(contract.locked);
+        assert!(contract.run_stake_batch_locked);
 
         // callback can only be invoked from itself
         context.predecessor_account_id = context.current_account_id.clone();
@@ -340,7 +340,7 @@ mod test {
                 // capture the batch ID to lookup the batch receipt after the workflow is done
                 let batch_id = contract.stake_batch.unwrap().id();
                 contract.run_stake_batch();
-                assert!(contract.locked);
+                assert!(contract.run_stake_batch_locked);
                 {
                     context.predecessor_account_id = context.current_account_id.clone();
                     testing_env!(context.clone());
@@ -365,8 +365,8 @@ mod test {
                         {
                             context.predecessor_account_id = context.current_account_id.clone();
                             testing_env!(context.clone());
-                            contract.unlock();
-                            assert!(!contract.locked);
+                            contract.release_run_stake_batch_lock();
+                            assert!(!contract.run_stake_batch_locked);
                         }
                     }
                 }
