@@ -55,6 +55,18 @@ impl From<domain::YoctoStake> for YoctoStake {
     }
 }
 
+impl From<u128> for YoctoStake {
+    fn from(value: u128) -> Self {
+        Self(value.into())
+    }
+}
+
+impl YoctoStake {
+    pub fn value(&self) -> u128 {
+        self.0 .0
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct BlockHeight(pub U64);

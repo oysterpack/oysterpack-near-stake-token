@@ -1,6 +1,6 @@
 use crate::{
     core::Hash,
-    domain::{self, Account, RedeemLock, StakeBatch, StakeBatchReceipt},
+    domain::{self, Account, RedeemLock, RedeemStakeBatch, StakeBatch, StakeBatchReceipt},
     interface::{
         BatchId, RedeemStakeBatchReceipt, StakeTokenValue, StakingService, YoctoNear, YoctoStake,
     },
@@ -100,11 +100,28 @@ impl StakingService for StakeTokenContract {
     }
 
     fn redeem(&mut self, amount: YoctoStake) -> BatchId {
-        unimplemented!()
+        let account_hash = Hash::from(&env::predecessor_account_id());
+        let mut account = self
+            .accounts
+            .get(&account_hash)
+            .expect("account is not registered");
+
+        let batch_id = self.apply_redeem_stake_batch_credit(&mut account, amount.into());
+        self.save_account(&account_hash, &account);
+        batch_id
     }
 
     fn redeem_all(&mut self) -> BatchId {
-        unimplemented!()
+        let account_hash = Hash::from(&env::predecessor_account_id());
+        let mut account = self
+            .accounts
+            .get(&account_hash)
+            .expect("account is not registered");
+
+        let amount = account.stake.expect("account has no stake").balance();
+        let batch_id = self.apply_redeem_stake_batch_credit(&mut account, amount);
+        self.save_account(&account_hash, &account);
+        batch_id
     }
 
     fn cancel_pending_redeem_stake_request(&mut self) -> bool {
@@ -177,7 +194,7 @@ impl StakeTokenContract {
     ) -> BatchId {
         assert_ne!(amount.value(), 0, "amount must not be zero");
 
-        self.claim_stake_batch_receipts(account);
+        self.claim_receipt_funds(account);
 
         // use current batch if not staking, i.e., the stake batch is not running
         if !self.run_stake_batch_locked {
@@ -216,6 +233,74 @@ impl StakeTokenContract {
             account.next_stake_batch = Some(account_batch);
 
             account_batch.id().into()
+        }
+    }
+
+    /// moves STAKE [amount] from account balance to redeem stake batch
+    ///
+    /// ## Panics
+    /// - if amount == 0
+    /// - if STAKE account balance is too low to fulfill request
+    fn apply_redeem_stake_batch_credit(
+        &mut self,
+        account: &mut Account,
+        amount: domain::YoctoStake,
+    ) -> BatchId {
+        assert_ne!(amount.value(), 0, "redeem amount must not be zero");
+
+        assert!(
+            account
+                .stake
+                .map_or(false, |stake| stake.balance() >= amount),
+            "account STAKE balance is insufficient to fulfill request"
+        );
+
+        // debit the amount of STAKE to redeem from the account
+        let mut stake = account.stake.expect("account has zero STAKE token balance");
+        stake.debit(amount);
+        account.stake = Some(stake);
+
+        self.claim_receipt_funds(account);
+
+        match self.run_redeem_stake_batch_lock {
+            None => {
+                // apply at contract level
+                let mut contract_batch = self.redeem_stake_batch.unwrap_or_else(|| {
+                    *self.batch_id_sequence += 1;
+                    domain::RedeemStakeBatch::new(self.batch_id_sequence, domain::YoctoStake(0))
+                });
+                contract_batch.add(amount);
+                self.redeem_stake_batch = Some(contract_batch);
+
+                // apply at account level
+                // NOTE: account batch ID must match contract batch ID
+                let mut account_batch = account.redeem_stake_batch.unwrap_or_else(|| {
+                    RedeemStakeBatch::new(contract_batch.id(), domain::YoctoStake(0))
+                });
+                account_batch.add(amount);
+                account.redeem_stake_batch = Some(account_batch);
+
+                account_batch.id().into()
+            }
+            Some(_redeem_lock) => {
+                // apply at contract level
+                let mut contract_batch = self.next_redeem_stake_batch.unwrap_or_else(|| {
+                    *self.batch_id_sequence += 1;
+                    domain::RedeemStakeBatch::new(self.batch_id_sequence, domain::YoctoStake(0))
+                });
+                contract_batch.add(amount);
+                self.next_redeem_stake_batch = Some(contract_batch);
+
+                // apply at account level
+                // NOTE: account batch ID must match contract batch ID
+                let mut account_batch = account.next_redeem_stake_batch.unwrap_or_else(|| {
+                    RedeemStakeBatch::new(contract_batch.id(), domain::YoctoStake(0))
+                });
+                account_batch.add(amount);
+                account.next_redeem_stake_batch = Some(account_batch);
+
+                account_batch.id().into()
+            }
         }
     }
 
@@ -1025,5 +1110,82 @@ mod test {
                 }
             })
             .unwrap();
+    }
+
+    /// Given a registered account has STAKE
+    /// And there are no contract locks, i.e., no batches are being run
+    /// When the account redeems STAKE
+    /// Then the STAKE funds are moved from the the account's STAKE balance to the account's current redeem stake batch
+    /// And the contract redeem stake batch is credited
+    /// When the account redeems more STAKE
+    /// And the batch has not yet run
+    /// Then the STAKE will be added to the batch
+    #[test]
+    fn redeem_no_locks() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.account_balance = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings.clone());
+
+        contract.register_account();
+        assert!(contract.redeem_stake_batch.is_none());
+        assert!(contract.next_redeem_stake_batch.is_none());
+
+        // Given the account has STAKE
+        let account_hash = Hash::from(account_id);
+        let mut account = contract.accounts.get(&account_hash).unwrap();
+        assert!(account.redeem_stake_batch.is_none());
+        assert!(account.next_redeem_stake_batch.is_none());
+        let initial_account_stake = (50 * YOCTO).into();
+        account.apply_stake_credit(initial_account_stake);
+        contract.save_account(&account_hash, &account);
+
+        let redeem_amount = YoctoStake::from(10 * YOCTO);
+        let batch_id = contract.redeem(redeem_amount.clone());
+
+        let batch = contract
+            .redeem_stake_batch
+            .expect("current stake batch should have funds");
+        assert_eq!(batch_id, batch.id().into());
+        assert_eq!(redeem_amount, batch.balance().balance().into());
+
+        let account = contract
+            .lookup_account(ValidAccountId::try_from(account_id).unwrap())
+            .unwrap();
+        // assert STAKE was moved from account STAKE balance to redeem stake batch
+        assert_eq!(
+            account.stake.unwrap().balance,
+            (initial_account_stake.value() - redeem_amount.value()).into()
+        );
+        let redeem_stake_batch = account.redeem_stake_batch.unwrap();
+        assert_eq!(redeem_stake_batch.balance.balance, redeem_amount);
+        assert_eq!(redeem_stake_batch.id, batch_id);
+
+        let batch_id_2 = contract.redeem(redeem_amount.clone());
+
+        let batch = contract
+            .redeem_stake_batch
+            .expect("current stake batch should have funds");
+        assert_eq!(batch_id, batch.id().into());
+        assert_eq!(redeem_amount.value() * 2, batch.balance().balance().value());
+
+        let account = contract
+            .lookup_account(ValidAccountId::try_from(account_id).unwrap())
+            .unwrap();
+        // assert STAKE was moved from account STAKE balance to redeem stake batch
+        assert_eq!(
+            account.stake.unwrap().balance,
+            (initial_account_stake.value() - (redeem_amount.value() * 2)).into()
+        );
+        let redeem_stake_batch = account.redeem_stake_batch.unwrap();
+        assert_eq!(
+            redeem_stake_batch.balance.balance,
+            (redeem_amount.value() * 2).into()
+        );
+        assert_eq!(redeem_stake_batch.id, batch_id);
     }
 }

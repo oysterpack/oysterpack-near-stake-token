@@ -1,3 +1,4 @@
+use crate::interface;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::serde::export::Formatter;
 use primitive_types::U256;
@@ -24,6 +25,12 @@ impl YoctoStake {
 impl From<YoctoStake> for u128 {
     fn from(value: YoctoStake) -> Self {
         value.0
+    }
+}
+
+impl From<interface::YoctoStake> for YoctoStake {
+    fn from(value: interface::YoctoStake) -> Self {
+        Self(value.0 .0)
     }
 }
 

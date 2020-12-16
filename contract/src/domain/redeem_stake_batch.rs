@@ -50,8 +50,11 @@ pub struct RedeemStakeBatch {
 }
 
 impl RedeemStakeBatch {
-    pub fn new(batch_id: BatchId, balance: TimestampedStakeBalance) -> Self {
-        Self { batch_id, balance }
+    pub fn new(batch_id: BatchId, balance: YoctoStake) -> Self {
+        Self {
+            batch_id,
+            balance: TimestampedStakeBalance::new(balance),
+        }
     }
 
     pub fn id(&self) -> BatchId {

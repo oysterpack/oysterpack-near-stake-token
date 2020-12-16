@@ -64,14 +64,8 @@ impl Account {
             stake: Some(TimestampedStakeBalance::new(0.into())),
             stake_batch: Some(StakeBatch::new(0.into(), 0.into())),
             next_stake_batch: Some(StakeBatch::new(0.into(), 0.into())),
-            redeem_stake_batch: Some(RedeemStakeBatch::new(
-                0.into(),
-                TimestampedStakeBalance::new(0.into()),
-            )),
-            next_redeem_stake_batch: Some(RedeemStakeBatch::new(
-                0.into(),
-                TimestampedStakeBalance::new(0.into()),
-            )),
+            redeem_stake_batch: Some(RedeemStakeBatch::new(0.into(), 0.into())),
+            next_redeem_stake_batch: Some(RedeemStakeBatch::new(0.into(), 0.into())),
         }
     }
 
