@@ -1,3 +1,4 @@
+use crate::domain::EpochHeight;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
@@ -19,5 +20,5 @@ use near_sdk::{
 #[serde(crate = "near_sdk::serde")]
 pub enum RedeemLock {
     Unstaking,
-    PendingWithdrawal,
+    PendingWithdrawal { available_on: EpochHeight },
 }
