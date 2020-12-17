@@ -26,11 +26,6 @@ impl StakingService for StakeTokenContract {
         let account_hash = Hash::from(&env::predecessor_account_id());
         let mut account = self.registered_account(&account_hash);
 
-        assert!(
-            env::attached_deposit() > 0,
-            "deposit is required in order to stake"
-        );
-
         let batch_id =
             self.deposit_near_for_account_to_stake(&mut account, env::attached_deposit().into());
         self.save_account(&account_hash, &account);
@@ -44,6 +39,7 @@ impl StakingService for StakeTokenContract {
     fn withdraw_all_funds_from_stake_batch(&mut self) {
         unimplemented!()
     }
+
     /// logical workflow:
     /// 1. lock the contract
     /// 2. get account stake balance
@@ -182,7 +178,7 @@ impl StakeTokenContract {
         account: &mut Account,
         amount: domain::YoctoNear,
     ) -> BatchId {
-        assert_ne!(amount.value(), 0, "amount must not be zero");
+        assert!(amount.value() > 0, "deposit is required in order to stake");
 
         self.claim_receipt_funds(account);
 
