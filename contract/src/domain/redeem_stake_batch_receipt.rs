@@ -14,7 +14,6 @@ use near_sdk::{
 pub struct RedeemStakeBatchReceipt {
     redeemed_stake: YoctoStake,
     stake_token_value: StakeTokenValue,
-    funds_withdrawn: bool,
 }
 
 impl RedeemStakeBatchReceipt {
@@ -22,7 +21,6 @@ impl RedeemStakeBatchReceipt {
         Self {
             redeemed_stake,
             stake_token_value,
-            funds_withdrawn: false,
         }
     }
 
@@ -48,15 +46,5 @@ impl RedeemStakeBatchReceipt {
 
     pub fn all_claimed(&self) -> bool {
         self.redeemed_stake.value() == 0
-    }
-
-    /// returns true if funds have been withdrawn from staking pool and available to be claimed by the account
-    pub fn funds_withdrawn(&self) -> bool {
-        self.funds_withdrawn
-    }
-
-    /// marks the receipt as done, i.e., indicates funds have been withdrawn from the staking
-    pub fn funds_successfully_withdrawn(&mut self) {
-        self.funds_withdrawn = true;
     }
 }

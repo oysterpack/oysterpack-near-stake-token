@@ -116,11 +116,12 @@ impl StakingPoolGasConfig {
 pub struct CallBacksGasConfig {
     on_run_stake_batch: Gas,
     on_deposit_and_stake: Gas,
+    on_unstake: Gas,
     on_get_account_staked_balance: Gas,
     unlock: Gas,
 
     // used by redeem stake workflow
-    on_checking_staking_pool_for_fund_withdrawal_availability: Gas,
+    on_staking_pool_withdrawal: Gas,
 }
 
 impl CallBacksGasConfig {
@@ -140,8 +141,12 @@ impl CallBacksGasConfig {
         self.on_run_stake_batch
     }
 
-    pub fn on_checking_staking_pool_for_fund_withdrawal_availability(&self) -> Gas {
-        self.on_checking_staking_pool_for_fund_withdrawal_availability
+    pub fn on_staking_pool_withdrawal(&self) -> Gas {
+        self.on_staking_pool_withdrawal
+    }
+
+    pub fn on_unstake(&self) -> Gas {
+        self.on_unstake
     }
 }
 
@@ -150,10 +155,10 @@ impl Default for CallBacksGasConfig {
         Self {
             on_run_stake_batch: (BASE_GAS.value() * 3).into(),
             on_deposit_and_stake: (BASE_GAS.value() * 3).into(),
+            on_unstake: (BASE_GAS.value() * 3).into(),
             on_get_account_staked_balance: (BASE_GAS.value() * 3).into(),
             unlock: (BASE_GAS.value() * 3).into(),
-            on_checking_staking_pool_for_fund_withdrawal_availability: (BASE_GAS.value() * 3)
-                .into(),
+            on_staking_pool_withdrawal: (BASE_GAS.value() * 3).into(),
         }
     }
 }

@@ -11,7 +11,7 @@ use near_sdk::{
 };
 use std::convert::TryFrom;
 
-pub const EXPECTED_ACCOUNT_STORAGE_USAGE: u64 = 682;
+pub const EXPECTED_ACCOUNT_STORAGE_USAGE: u64 = 681;
 
 pub fn expected_account_storage_fee() -> u128 {
     EXPECTED_ACCOUNT_STORAGE_USAGE as u128 * Config::default().storage_cost_per_byte().value()

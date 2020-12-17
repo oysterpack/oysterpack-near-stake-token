@@ -1,3 +1,4 @@
+use crate::domain::RedeemLock;
 use crate::{
     core::Hash,
     domain,
@@ -85,16 +86,17 @@ impl StakeTokenContract {
 
     /// ## Success Workflow
     /// 1. create [StakeBatchReceipt]
-    /// 2.
+    /// 2. update total STAKE supply
+    /// 3. clear the current STAKE batch
+    /// 4. move the next batch into the current batch
     pub fn on_deposit_and_stake(&mut self) {
         assert_predecessor_is_self();
 
         let batch = self
             .stake_batch
+            .take()
             .expect("callback should only be invoked when there is a StakeBatch being processed");
         assert!(self.promise_result_succeeded(),"ERR: failed to process stake batch #{} - `deposit_and_stake` func call on staking pool failed", batch.id().value());
-
-        let batch = self.stake_batch.take().unwrap();
 
         // create batch receipt
         let stake_batch_receipt =
@@ -112,40 +114,87 @@ impl StakeTokenContract {
         self.stake_batch = self.next_stake_batch.take();
     }
 
-    /// ## Workflow
-    /// 1. lookup the redeem stake batch receipt and mark it as done, i.e., funds_withdrawn=true
-    /// 2. clear the [run_redeem_stake_batch] lock
-    ///
-    /// ## Panics
-    /// - not invoked by self
-    /// - if withdrawal from staking pool failed
-    pub fn on_staking_pool_withdrawal(&mut self, redeem_stake_batch_id: BatchId) {
+    pub fn on_run_redeem_stake_batch(&mut self, #[callback] staked_balance: Balance) -> Promise {
         assert_predecessor_is_self();
+
+        // the batch should always be present because the purpose of this callback is a step
+        // in the batch processing workflow
+        // - if the callback was called by itself, and the batch is not present, then there is a bug
+        let batch = self
+            .redeem_stake_batch
+            .expect("redeem stake batch must be present");
 
         assert!(
             self.promise_result_succeeded(),
             "failed to get staked balance from staking pool"
         );
 
-        // mark receipt as done
-        let batch_id = domain::BatchId(redeem_stake_batch_id.into());
-        let mut receipt = self
-            .redeem_stake_batch_receipts
-            .get(&batch_id)
-            .expect("redeem stake batch receipt was not found");
-        receipt.funds_successfully_withdrawn();
-        self.redeem_stake_batch_receipts.insert(&batch_id, &receipt);
+        // update the cached STAKE token value
+        self.stake_token_value =
+            domain::StakeTokenValue::new(staked_balance.0.into(), self.total_stake.balance());
 
-        // clear lock
-        self.run_redeem_stake_batch_lock = None;
+        let unstake_amount = self
+            .stake_token_value
+            .stake_to_near(batch.balance().balance());
+
+        let unstake = ext_staking_pool::unstake(
+            unstake_amount.value().into(),
+            &self.staking_pool_id,
+            NO_DEPOSIT.value(),
+            self.config.gas_config().staking_pool().unstake().value(),
+        );
+
+        let on_unstake = ext_staking_pool_callbacks::on_unstake(
+            &env::current_account_id(),
+            NO_DEPOSIT.into(),
+            self.config.gas_config().callbacks().on_unstake().value(),
+        );
+
+        unstake.then(on_unstake)
     }
 
-    pub fn on_checking_staking_pool_for_fund_withdrawal_availability(
-        &self,
-        #[callback] unstaked_balance: Balance,
-        #[callback] available: bool,
-    ) -> Promise {
-        unimplemented!()
+    /// ## Success Workflow
+    pub fn on_unstake(&mut self) {
+        assert_predecessor_is_self();
+
+        let batch = self.redeem_stake_batch.take().expect(
+            "callback should only be invoked when there is a RedeemStakeBatch being processed",
+        );
+
+        assert!(self.promise_result_succeeded(),"ERR: failed to process stake batch #{} - `on_unstake` func call on staking pool failed", batch.id().value());
+
+        // create batch receipt
+        let batch_receipt =
+            domain::RedeemStakeBatchReceipt::new(batch.balance().balance(), self.stake_token_value);
+        self.redeem_stake_batch_receipts
+            .insert(&batch.id(), &batch_receipt);
+
+        // update the total STAKE supply
+        self.total_stake.debit(batch.balance().balance());
+
+        // move the next batch into the current batch
+        self.redeem_stake_batch = self.next_redeem_stake_batch.take();
+        // progress the workflow to pending withdrawal
+        self.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal(batch.id()))
+    }
+
+    /// ## Workflow
+    /// 1. clear the [run_redeem_stake_batch] lock
+    /// 2. try running the redeem stake batch  
+    ///
+    /// ## Panics
+    /// - not invoked by self
+    /// - if withdrawal from staking pool failed
+    pub fn on_staking_pool_withdrawal(&mut self, redeem_stake_batch_id: BatchId) -> Promise {
+        assert_predecessor_is_self();
+
+        assert!(
+            self.promise_result_succeeded(),
+            "failed to withdraw unstaked balance from staking pool"
+        );
+
+        self.run_redeem_stake_batch_lock = None;
+        self.run_redeem_stake_batch()
     }
 }
 

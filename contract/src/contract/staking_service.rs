@@ -122,21 +122,19 @@ impl StakingService for StakeTokenContract {
                     .value()
             );
 
-            self.get_account_unstaked_balance_from_staking_pool()
-                .and(self.is_account_unstaked_balance_available_from_staking_pool())
-                .then(self.invoke_on_checking_staking_pool_for_fund_withdrawal_availability());
+            self.withdraw_all_funds_from_staking_pool()
+                .then(self.invoke_on_staking_pool_withdrawal(batch_id.into()))
+        } else {
+            assert!(
+                self.redeem_stake_batch.is_some(),
+                "there is no redeem stake batch"
+            );
+            self.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
 
-            // self.withdraw_all_funds_from_staking_pool();
+            self.get_account_staked_balance_from_staking_pool()
+                .then(self.invoke_on_run_redeem_stake_batch())
+                .then(self.invoke_release_run_redeem_stake_batch_unstaking_lock())
         }
-
-        assert!(
-            self.redeem_stake_batch.is_some(),
-            "there is no redeem stake batch"
-        );
-
-        self.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
-
-        unimplemented!()
     }
 
     fn claim_all_batch_receipt_funds(&mut self) {
@@ -231,6 +229,18 @@ impl StakeTokenContract {
         )
     }
 
+    fn invoke_on_run_redeem_stake_batch(&self) -> Promise {
+        ext_staking_pool_callbacks::on_run_redeem_stake_batch(
+            &env::current_account_id(),
+            NO_DEPOSIT.into(),
+            self.config
+                .gas_config()
+                .callbacks()
+                .on_run_stake_batch()
+                .value(),
+        )
+    }
+
     fn invoke_release_run_stake_batch_lock(&self) -> Promise {
         ext_staking_pool_callbacks::release_run_stake_batch_lock(
             &env::current_account_id(),
@@ -239,14 +249,23 @@ impl StakeTokenContract {
         )
     }
 
-    fn invoke_on_checking_staking_pool_for_fund_withdrawal_availability(&self) -> Promise {
-        ext_staking_pool_callbacks::on_checking_staking_pool_for_fund_withdrawal_availability(
+    fn invoke_release_run_redeem_stake_batch_unstaking_lock(&self) -> Promise {
+        ext_staking_pool_callbacks::release_run_redeem_stake_batch_unstaking_lock(
+            &env::current_account_id(),
+            NO_DEPOSIT.into(),
+            self.config.gas_config().callbacks().unlock().value(),
+        )
+    }
+
+    fn invoke_on_staking_pool_withdrawal(&mut self, redeem_stake_batch_id: BatchId) -> Promise {
+        ext_staking_pool_callbacks::on_staking_pool_withdrawal(
+            redeem_stake_batch_id,
             &env::current_account_id(),
             NO_DEPOSIT.into(),
             self.config
                 .gas_config()
                 .callbacks()
-                .on_checking_staking_pool_for_fund_withdrawal_availability()
+                .on_staking_pool_withdrawal()
                 .value(),
         )
     }
@@ -466,23 +485,51 @@ impl StakeTokenContract {
 
         let mut claimed_funds = false;
 
-        if let Some(batch) = account.redeem_stake_batch {
-            if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
-                if receipt.funds_withdrawn() {
-                    claim_redeemed_stake_for_batch(self, account, batch, receipt);
-                    account.redeem_stake_batch = None;
-                    claimed_funds = true;
+        match self.run_redeem_stake_batch_lock {
+            // we can try to redeem receipts from previous batches
+            // NOTE: batch IDs are sequential
+            Some(RedeemLock::PendingWithdrawal(pending_batch_id)) => {
+                if let Some(batch) = account.redeem_stake_batch {
+                    if batch.id().value() < pending_batch_id.value() {
+                        if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
+                            claim_redeemed_stake_for_batch(self, account, batch, receipt);
+                            account.redeem_stake_batch = None;
+                            claimed_funds = true;
+                        }
+                    }
+                }
+
+                if let Some(batch) = account.next_redeem_stake_batch {
+                    if batch.id().value() < pending_batch_id.value() {
+                        if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
+                            claim_redeemed_stake_for_batch(self, account, batch, receipt);
+                            account.next_redeem_stake_batch = None;
+                            claimed_funds = true;
+                        }
+                    }
                 }
             }
-        }
-
-        if let Some(batch) = account.next_redeem_stake_batch {
-            if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
-                if receipt.funds_withdrawn() {
-                    claim_redeemed_stake_for_batch(self, account, batch, receipt);
-                    account.next_redeem_stake_batch = None;
-                    claimed_funds = true;
+            None => {
+                if let Some(batch) = account.redeem_stake_batch {
+                    if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
+                        claim_redeemed_stake_for_batch(self, account, batch, receipt);
+                        account.redeem_stake_batch = None;
+                        claimed_funds = true;
+                    }
                 }
+
+                if let Some(batch) = account.next_redeem_stake_batch {
+                    if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
+                        claim_redeemed_stake_for_batch(self, account, batch, receipt);
+                        account.next_redeem_stake_batch = None;
+                        claimed_funds = true;
+                    }
+                }
+            }
+            Some(RedeemLock::Unstaking) => {
+                // this should never be reachable
+                // while unstaking STAKE balances need to be locked, which means no receipts should be claimed
+                return false;
             }
         }
 
@@ -495,6 +542,8 @@ type Balance = U128;
 #[ext_contract(ext_staking_pool)]
 pub trait ExtStakingPool {
     fn deposit_and_stake(&mut self);
+
+    fn unstake(&mut self, amount: Balance);
 
     fn get_account_staked_balance(&self, account_id: AccountId) -> Balance;
 
@@ -517,28 +566,33 @@ pub trait ExtStakingPoolCallbacks {
 
     /// callback for getting staked balance from staking pool as part of stake batch processing workflow
     ///
-    /// ## Success workflow
+    /// ## Success Workflow
     /// 1. update the stake token value
     /// 2. deposit and stake funds with staking pool
     /// 3. register [on_deposit_and_stake] callback on the deposit and stake action
     fn on_run_stake_batch(&mut self, #[callback] staked_balance: Balance) -> Promise;
 
-    /// ## Success WOrkflow
+    fn on_run_redeem_stake_batch(&mut self, #[callback] staked_balance: Balance) -> Promise;
+
+    /// ## Success Workflow
     /// 1. store the stake batch receipt
     /// 2. update the STAKE token supply with the new STAKE tokens that were issued
     fn on_deposit_and_stake(&mut self);
 
+    /// ## Success Workflow
+    /// 1. store the redeem stake batch receipt
+    /// 2. set the redeem stake batch lock state to pending withdrawal
+    fn on_unstake(&mut self);
+
+    /// defined on [Operator] interface
     fn release_run_stake_batch_lock(&mut self);
 
-    /// used to check if there are unstaked funds available for withdrawal'
-    /// - if there are funds available to withdraw, then withdraw all
-    fn on_checking_staking_pool_for_fund_withdrawal_availability(
-        &self,
-        #[callback] unstaked_balance: Balance,
-        #[callback] available: bool,
-    ) -> Promise;
+    fn release_run_redeem_stake_batch_unstaking_lock(&mut self);
 
-    fn on_staking_pool_withdrawal(&mut self, redeem_stake_batch_id: BatchId);
+    /// on successful staking pool withdrawal:
+    /// 1. clear [run_redeem_stake_batch_lock]
+    /// 2. try running the [RedeemStakeBatch]
+    fn on_staking_pool_withdrawal(&mut self, redeem_stake_batch_id: BatchId) -> Promise;
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
