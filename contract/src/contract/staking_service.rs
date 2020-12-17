@@ -1,3 +1,4 @@
+use crate::interface::Operator;
 use crate::{
     core::Hash,
     domain::{self, Account, RedeemLock, RedeemStakeBatch, StakeBatch, StakeBatchReceipt},
@@ -107,6 +108,7 @@ impl StakingService for StakeTokenContract {
             "redeem stake batch run is in progress"
         );
 
+        // check if funds need to be withdrawn from the staking pool
         if let Some(RedeemLock::PendingWithdrawal(batch_id)) = self.run_redeem_stake_batch_lock {
             let redeem_stake_batch_receipt = self
                 .redeem_stake_batch_receipts
@@ -119,6 +121,12 @@ impl StakingService for StakeTokenContract {
                     .unstaked_near_withdrawal_availability()
                     .value()
             );
+
+            self.get_account_unstaked_balance_from_staking_pool()
+                .and(self.is_account_unstaked_balance_available_from_staking_pool())
+                .then(self.invoke_on_checking_staking_pool_for_fund_withdrawal_availability());
+
+            // self.withdraw_all_funds_from_staking_pool();
         }
 
         assert!(
@@ -126,7 +134,7 @@ impl StakingService for StakeTokenContract {
             "there is no redeem stake batch"
         );
 
-        // self.run_redeem_stake_batch_locked = Some();
+        self.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
 
         unimplemented!()
     }
@@ -172,7 +180,33 @@ impl StakingService for StakeTokenContract {
 
 // promises
 impl StakeTokenContract {
-    fn get_account_staked_balance_from_staking_pool(&self) -> Promise {
+    pub(crate) fn get_account_unstaked_balance_from_staking_pool(&self) -> Promise {
+        ext_staking_pool::get_account_unstaked_balance(
+            env::current_account_id(),
+            &self.staking_pool_id,
+            NO_DEPOSIT.into(),
+            self.config
+                .gas_config()
+                .staking_pool()
+                .get_account_balance()
+                .value(),
+        )
+    }
+
+    pub(crate) fn is_account_unstaked_balance_available_from_staking_pool(&self) -> Promise {
+        ext_staking_pool::is_account_unstaked_balance_available(
+            env::current_account_id(),
+            &self.staking_pool_id,
+            NO_DEPOSIT.into(),
+            self.config
+                .gas_config()
+                .staking_pool()
+                .is_account_unstaked_balance_available()
+                .value(),
+        )
+    }
+
+    pub(crate) fn get_account_staked_balance_from_staking_pool(&self) -> Promise {
         ext_staking_pool::get_account_staked_balance(
             env::current_account_id(),
             &self.staking_pool_id,
@@ -202,6 +236,18 @@ impl StakeTokenContract {
             &env::current_account_id(),
             NO_DEPOSIT.into(),
             self.config.gas_config().callbacks().unlock().value(),
+        )
+    }
+
+    fn invoke_on_checking_staking_pool_for_fund_withdrawal_availability(&self) -> Promise {
+        ext_staking_pool_callbacks::on_checking_staking_pool_for_fund_withdrawal_availability(
+            &env::current_account_id(),
+            NO_DEPOSIT.into(),
+            self.config
+                .gas_config()
+                .callbacks()
+                .on_checking_staking_pool_for_fund_withdrawal_availability()
+                .value(),
         )
     }
 }
@@ -452,6 +498,10 @@ pub trait ExtStakingPool {
 
     fn get_account_staked_balance(&self, account_id: AccountId) -> Balance;
 
+    fn get_account_unstaked_balance(&self, account_id: AccountId) -> Balance;
+
+    fn is_account_unstaked_balance_available(&self, account_id: AccountId) -> bool;
+
     fn withdraw_all(&mut self);
 }
 
@@ -479,6 +529,14 @@ pub trait ExtStakingPoolCallbacks {
     fn on_deposit_and_stake(&mut self);
 
     fn release_run_stake_batch_lock(&mut self);
+
+    /// used to check if there are unstaked funds available for withdrawal'
+    /// - if there are funds available to withdraw, then withdraw all
+    fn on_checking_staking_pool_for_fund_withdrawal_availability(
+        &self,
+        #[callback] unstaked_balance: Balance,
+        #[callback] available: bool,
+    ) -> Promise;
 
     fn on_staking_pool_withdrawal(&mut self, redeem_stake_batch_id: BatchId);
 }

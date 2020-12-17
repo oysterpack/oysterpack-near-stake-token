@@ -54,4 +54,9 @@ impl RedeemStakeBatchReceipt {
     pub fn funds_withdrawn(&self) -> bool {
         self.funds_withdrawn
     }
+
+    /// marks the receipt as done, i.e., indicates funds have been withdrawn from the staking
+    pub fn funds_successfully_withdrawn(&mut self) {
+        self.funds_withdrawn = true;
+    }
 }

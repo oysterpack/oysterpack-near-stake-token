@@ -112,7 +112,41 @@ impl StakeTokenContract {
         self.stake_batch = self.next_stake_batch.take();
     }
 
-    pub fn on_staking_pool_withdrawal(&mut self, redeem_stake_batch_id: BatchId) {}
+    /// ## Workflow
+    /// 1. lookup the redeem stake batch receipt and mark it as done, i.e., funds_withdrawn=true
+    /// 2. clear the [run_redeem_stake_batch] lock
+    ///
+    /// ## Panics
+    /// - not invoked by self
+    /// - if withdrawal from staking pool failed
+    pub fn on_staking_pool_withdrawal(&mut self, redeem_stake_batch_id: BatchId) {
+        assert_predecessor_is_self();
+
+        assert!(
+            self.promise_result_succeeded(),
+            "failed to get staked balance from staking pool"
+        );
+
+        // mark receipt as done
+        let batch_id = domain::BatchId(redeem_stake_batch_id.into());
+        let mut receipt = self
+            .redeem_stake_batch_receipts
+            .get(&batch_id)
+            .expect("redeem stake batch receipt was not found");
+        receipt.funds_successfully_withdrawn();
+        self.redeem_stake_batch_receipts.insert(&batch_id, &receipt);
+
+        // clear lock
+        self.run_redeem_stake_batch_lock = None;
+    }
+
+    pub fn on_checking_staking_pool_for_fund_withdrawal_availability(
+        &self,
+        #[callback] unstaked_balance: Balance,
+        #[callback] available: bool,
+    ) -> Promise {
+        unimplemented!()
+    }
 }
 
 #[cfg(test)]
