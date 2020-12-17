@@ -14,6 +14,7 @@ use near_sdk::{
 pub struct RedeemStakeBatchReceipt {
     redeemed_stake: YoctoStake,
     stake_token_value: StakeTokenValue,
+    funds_withdrawn: bool,
 }
 
 impl RedeemStakeBatchReceipt {
@@ -21,6 +22,7 @@ impl RedeemStakeBatchReceipt {
         Self {
             redeemed_stake,
             stake_token_value,
+            funds_withdrawn: false,
         }
     }
 
@@ -33,7 +35,9 @@ impl RedeemStakeBatchReceipt {
             + UNSTAKED_NEAR_FUNDS_NUM_EPOCHS_TO_UNLOCK
     }
 
-    pub fn unstaked_funds_available(&self) -> bool {
+    /// returns true if unstaked funds are available to withdraw, i.e., at least 3 epochs have passed
+    /// since the funds were unstaked
+    pub fn unstaked_funds_available_for_withdrawal(&self) -> bool {
         self.unstaked_near_withdrawal_availability().value() <= env::epoch_height()
     }
 
@@ -44,5 +48,10 @@ impl RedeemStakeBatchReceipt {
 
     pub fn all_claimed(&self) -> bool {
         self.redeemed_stake.value() == 0
+    }
+
+    /// returns true if funds have been withdrawn from staking pool and available to be claimed by the account
+    pub fn funds_withdrawn(&self) -> bool {
+        self.funds_withdrawn
     }
 }

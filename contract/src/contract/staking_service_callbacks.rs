@@ -111,6 +111,8 @@ impl StakeTokenContract {
         // move the next batch into the current batch
         self.stake_batch = self.next_stake_batch.take();
     }
+
+    pub fn on_staking_pool_withdrawal(&mut self, redeem_stake_batch_id: BatchId) {}
 }
 
 #[cfg(test)]

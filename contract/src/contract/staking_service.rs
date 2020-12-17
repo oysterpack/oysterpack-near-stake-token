@@ -61,36 +61,9 @@ impl StakingService for StakeTokenContract {
 
         self.run_stake_batch_locked = true;
 
-        let get_account_staked_balance = ext_staking_pool::get_account_staked_balance(
-            env::current_account_id(),
-            &self.staking_pool_id,
-            NO_DEPOSIT.into(),
-            self.config
-                .gas_config()
-                .staking_pool()
-                .get_account_balance()
-                .value(),
-        );
-
-        let on_run_stake_batch = ext_staking_pool_callbacks::on_run_stake_batch(
-            &env::current_account_id(),
-            NO_DEPOSIT.into(),
-            self.config
-                .gas_config()
-                .callbacks()
-                .on_run_stake_batch()
-                .value(),
-        );
-
-        let unlock = ext_staking_pool_callbacks::release_run_stake_batch_lock(
-            &env::current_account_id(),
-            NO_DEPOSIT.into(),
-            self.config.gas_config().callbacks().unlock().value(),
-        );
-
-        get_account_staked_balance
-            .then(on_run_stake_batch)
-            .then(unlock)
+        self.get_account_staked_balance_from_staking_pool()
+            .then(self.invoke_on_run_stake_batch())
+            .then(self.invoke_release_run_stake_batch_lock())
     }
 
     fn redeem(&mut self, amount: YoctoStake) -> BatchId {
@@ -139,6 +112,13 @@ impl StakingService for StakeTokenContract {
                 .redeem_stake_batch_receipts
                 .get(&batch_id)
                 .expect("redeem stake batch receipt does not exist");
+            assert!(
+                redeem_stake_batch_receipt.unstaked_funds_available_for_withdrawal(),
+                "redeeming STAKE is blocked on pending withdrawal available at epoch: {}",
+                redeem_stake_batch_receipt
+                    .unstaked_near_withdrawal_availability()
+                    .value()
+            );
         }
 
         assert!(
@@ -176,6 +156,23 @@ impl StakingService for StakeTokenContract {
     }
 
     fn refresh_stake_token_value(&self) -> Promise {
+        self.get_account_staked_balance_from_staking_pool().then(
+            ext_staking_pool_callbacks::on_get_account_staked_balance(
+                &env::current_account_id(),
+                NO_DEPOSIT.into(),
+                self.config
+                    .gas_config()
+                    .callbacks()
+                    .on_get_account_staked_balance()
+                    .value(),
+            ),
+        )
+    }
+}
+
+// promises
+impl StakeTokenContract {
+    fn get_account_staked_balance_from_staking_pool(&self) -> Promise {
         ext_staking_pool::get_account_staked_balance(
             env::current_account_id(),
             &self.staking_pool_id,
@@ -186,15 +183,26 @@ impl StakingService for StakeTokenContract {
                 .get_account_balance()
                 .value(),
         )
-        .then(ext_staking_pool_callbacks::on_get_account_staked_balance(
+    }
+
+    fn invoke_on_run_stake_batch(&self) -> Promise {
+        ext_staking_pool_callbacks::on_run_stake_batch(
             &env::current_account_id(),
             NO_DEPOSIT.into(),
             self.config
                 .gas_config()
                 .callbacks()
-                .on_get_account_staked_balance()
+                .on_run_stake_batch()
                 .value(),
-        ))
+        )
+    }
+
+    fn invoke_release_run_stake_batch_lock(&self) -> Promise {
+        ext_staking_pool_callbacks::release_run_stake_batch_lock(
+            &env::current_account_id(),
+            NO_DEPOSIT.into(),
+            self.config.gas_config().callbacks().unlock().value(),
+        )
     }
 }
 
@@ -414,17 +422,21 @@ impl StakeTokenContract {
 
         if let Some(batch) = account.redeem_stake_batch {
             if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
-                claim_redeemed_stake_for_batch(self, account, batch, receipt);
-                account.redeem_stake_batch = None;
-                claimed_funds = true;
+                if receipt.funds_withdrawn() {
+                    claim_redeemed_stake_for_batch(self, account, batch, receipt);
+                    account.redeem_stake_batch = None;
+                    claimed_funds = true;
+                }
             }
         }
 
         if let Some(batch) = account.next_redeem_stake_batch {
             if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
-                claim_redeemed_stake_for_batch(self, account, batch, receipt);
-                account.next_redeem_stake_batch = None;
-                claimed_funds = true;
+                if receipt.funds_withdrawn() {
+                    claim_redeemed_stake_for_batch(self, account, batch, receipt);
+                    account.next_redeem_stake_batch = None;
+                    claimed_funds = true;
+                }
             }
         }
 
@@ -439,6 +451,8 @@ pub trait ExtStakingPool {
     fn deposit_and_stake(&mut self);
 
     fn get_account_staked_balance(&self, account_id: AccountId) -> Balance;
+
+    fn withdraw_all(&mut self);
 }
 
 #[ext_contract(ext_staking_pool_callbacks)]
@@ -465,6 +479,8 @@ pub trait ExtStakingPoolCallbacks {
     fn on_deposit_and_stake(&mut self);
 
     fn release_run_stake_batch_lock(&mut self);
+
+    fn on_staking_pool_withdrawal(&mut self, redeem_stake_batch_id: BatchId);
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
