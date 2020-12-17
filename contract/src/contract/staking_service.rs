@@ -1185,6 +1185,90 @@ mod test {
 
     /// Given a registered account has STAKE
     /// And there are no contract locks, i.e., no batches are being run
+    /// When the account redeems STAKE
+    /// Then the STAKE funds are moved from the the account's STAKE balance to the account's current redeem stake batch
+    /// And the contract redeem stake batch is credited
+    /// Given the contract is locked on the redeem stake batch for unstaking
+    /// When the account redeems more STAKE
+    /// Then the STAKE will be added to the next batch
+    #[test]
+    fn redeem_while_redeem_stake_batch_locked() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.account_balance = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings.clone());
+
+        contract.register_account();
+        assert!(contract.redeem_stake_batch.is_none());
+        assert!(contract.next_redeem_stake_batch.is_none());
+
+        // Given the account has STAKE
+        let account_hash = Hash::from(account_id);
+        let mut account = contract.accounts.get(&account_hash).unwrap();
+        assert!(account.redeem_stake_batch.is_none());
+        assert!(account.next_redeem_stake_batch.is_none());
+        let initial_account_stake = (50 * YOCTO).into();
+        account.apply_stake_credit(initial_account_stake);
+        contract.save_account(&account_hash, &account);
+
+        let redeem_amount = YoctoStake::from(10 * YOCTO);
+        let batch_id = contract.redeem(redeem_amount.clone());
+
+        let batch = contract
+            .redeem_stake_batch
+            .expect("current stake batch should have funds");
+        assert_eq!(batch_id, batch.id().into());
+        assert_eq!(redeem_amount, batch.balance().balance().into());
+
+        let account = contract
+            .lookup_account(ValidAccountId::try_from(account_id).unwrap())
+            .unwrap();
+        // assert STAKE was moved from account STAKE balance to redeem stake batch
+        assert_eq!(
+            account.stake.unwrap().balance,
+            (initial_account_stake.value() - redeem_amount.value()).into()
+        );
+        let redeem_stake_batch = account.redeem_stake_batch.unwrap();
+        assert_eq!(redeem_stake_batch.balance.balance, redeem_amount);
+        assert_eq!(redeem_stake_batch.id, batch_id);
+
+        // Given the contract is locked for unstaking
+        contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
+        let batch_id_2 = contract.redeem(redeem_amount.clone());
+
+        let batch = contract
+            .redeem_stake_batch
+            .expect("current stake batch should have funds");
+        assert_eq!(redeem_amount.value(), batch.balance().balance().value());
+
+        let account = contract
+            .lookup_account(ValidAccountId::try_from(account_id).unwrap())
+            .unwrap();
+        assert_eq!(
+            account.stake.unwrap().balance,
+            (initial_account_stake.value() - (redeem_amount.value() * 2)).into()
+        );
+        let redeem_stake_batch = account.redeem_stake_batch.unwrap();
+        assert_eq!(
+            redeem_stake_batch.balance.balance,
+            (redeem_amount.value()).into()
+        );
+        assert_eq!(redeem_stake_batch.id, batch_id);
+
+        let next_redeem_stake_batch = account.next_redeem_stake_batch.unwrap();
+        assert_eq!(
+            next_redeem_stake_batch.balance.balance,
+            (redeem_amount.value()).into()
+        );
+        assert_eq!(next_redeem_stake_batch.id, batch_id_2);
+    }
+
+    /// Given a registered account has STAKE
+    /// And there are no contract locks, i.e., no batches are being run
     /// When the account redeems all STAKE
     /// Then the STAKE funds are moved from the the account's STAKE balance to the account's current redeem stake batch
     /// And the contract redeem stake batch is credited
