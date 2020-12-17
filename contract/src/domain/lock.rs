@@ -1,24 +1,11 @@
-use crate::domain::EpochHeight;
+use crate::domain::BatchId;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
 };
 
-#[derive(
-    BorshSerialize,
-    BorshDeserialize,
-    Serialize,
-    Deserialize,
-    Debug,
-    Clone,
-    Copy,
-    Eq,
-    PartialEq,
-    Ord,
-    PartialOrd,
-)]
-#[serde(crate = "near_sdk::serde")]
+#[derive(BorshSerialize, BorshDeserialize, Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 pub enum RedeemLock {
     Unstaking,
-    PendingWithdrawal { available_on: EpochHeight },
+    PendingWithdrawal(BatchId),
 }

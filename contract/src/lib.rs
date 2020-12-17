@@ -72,7 +72,7 @@ pub struct StakeTokenContract {
     total_near: TimestampedNearBalance,
     /// total STAKE token supply in circulation
     /// - credits are applied when [StakeBatchReceipt] is created
-    /// - debits are applied when account [RedeemStakeBatchReceipt] is created
+    /// - debits are applied when [RedeemStakeBatchReceipt] is created
     total_stake: TimestampedStakeBalance,
 
     /// cached value - if the epoch has changed, then the STAKE token value is out of date because
@@ -108,10 +108,10 @@ pub struct StakeTokenContract {
     ///      from storage
     ///    - if batches completed successfully, then accounts claim STAKE tokens
     ///    - if the batches failed. then receipt is never created - the batch can be retried
-    stake_batch_receipts: UnorderedMap<BatchId, StakeBatchReceipt>,
+    stake_batch_receipts: LookupMap<BatchId, StakeBatchReceipt>,
     /// - if batches completed successfully, then accounts claim NEAR tokens
     /// - if the batches failed. then the receipt is never created - the batch can be retried
-    redeem_stake_batch_receipts: UnorderedMap<BatchId, RedeemStakeBatchReceipt>,
+    redeem_stake_batch_receipts: LookupMap<BatchId, RedeemStakeBatchReceipt>,
 
     staking_pool_id: AccountId,
     run_stake_batch_locked: bool,
@@ -164,8 +164,8 @@ impl StakeTokenContract {
             next_stake_batch: None,
             next_redeem_stake_batch: None,
             pending_withdrawal: None,
-            stake_batch_receipts: UnorderedMap::new(STAKE_BATCH_RECEIPTS_KEY_PREFIX.to_vec()),
-            redeem_stake_batch_receipts: UnorderedMap::new(
+            stake_batch_receipts: LookupMap::new(STAKE_BATCH_RECEIPTS_KEY_PREFIX.to_vec()),
+            redeem_stake_batch_receipts: LookupMap::new(
                 REDEEM_STAKE_BATCH_RECEIPTS_KEY_PREFIX.to_vec(),
             ),
             account_storage_usage: Default::default(),
@@ -352,8 +352,5 @@ mod test {
         // And batches should be None
         assert!(contract.stake_batch.is_none());
         assert!(contract.redeem_stake_batch.is_none());
-        // And there should be no receipts
-        assert!(contract.stake_batch_receipts.is_empty());
-        assert!(contract.redeem_stake_batch_receipts.is_empty())
     }
 }

@@ -114,7 +114,40 @@ impl StakingService for StakeTokenContract {
         unimplemented!()
     }
 
+    /// logical workflow:
+    /// 1. If pending withdrawal, then check if funds can be withdrawn
+    ///    - if not then fail
+    /// 2. lock the contract
+    /// 3. get account stake balance
+    /// 4. unstake NEAR funds
+    /// 5. create redeem stake batch receipt
+    /// 6. update STAKE token supply
+    /// 7. unlock contract
     fn run_redeem_stake_batch(&mut self) -> Promise {
+        assert!(
+            !self.run_stake_batch_locked,
+            "stake batch run is in progress"
+        );
+        assert_ne!(
+            self.run_redeem_stake_batch_lock,
+            Some(RedeemLock::Unstaking),
+            "redeem stake batch run is in progress"
+        );
+
+        if let Some(RedeemLock::PendingWithdrawal(batch_id)) = self.run_redeem_stake_batch_lock {
+            let redeem_stake_batch_receipt = self
+                .redeem_stake_batch_receipts
+                .get(&batch_id)
+                .expect("redeem stake batch receipt does not exist");
+        }
+
+        assert!(
+            self.redeem_stake_batch.is_some(),
+            "there is no redeem stake batch"
+        );
+
+        // self.run_redeem_stake_batch_locked = Some();
+
         unimplemented!()
     }
 
@@ -819,8 +852,11 @@ mod test {
         // And there are no receipts
         let account_hash = Hash::from(account_id);
         let mut account = contract.accounts.get(&account_hash).unwrap();
-        let stake_batch_id =
-            contract.deposit_near_for_account_to_stake(&mut account, (2 * YOCTO).into());
+        let stake_batch_id = domain::BatchId(
+            contract
+                .deposit_near_for_account_to_stake(&mut account, (2 * YOCTO).into())
+                .into(),
+        );
         assert_eq!(
             contract.stake_batch.unwrap().balance().balance(),
             (2 * YOCTO).into()
@@ -863,7 +899,10 @@ mod test {
         // When batch receipts are claimed
         contract.claim_all_batch_receipt_funds();
         // then receipts should be deleted because all funds have been claimed
-        assert!(contract.stake_batch_receipts.is_empty());
+        assert!(contract
+            .stake_batch_receipts
+            .get(&domain::BatchId(stake_batch_id.into()))
+            .is_none());
 
         let account = contract
             .lookup_account(account_id.try_into().unwrap())
@@ -956,9 +995,8 @@ mod test {
         let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal {
-            available_on: (env::epoch_height() + 4).into(),
-        });
+        contract.run_redeem_stake_batch_lock =
+            Some(RedeemLock::PendingWithdrawal(domain::BatchId(1)));
 
         contract.register_account();
 
@@ -1279,9 +1317,7 @@ mod test {
 
     #[test]
     fn redeem_all_with_redeem_lock_pending_withdrawal() {
-        redeem_all_with_lock(RedeemLock::PendingWithdrawal {
-            available_on: EpochHeight::default(),
-        });
+        redeem_all_with_lock(RedeemLock::PendingWithdrawal(domain::BatchId(1)));
     }
 
     fn redeem_all_with_lock(lock: RedeemLock) {

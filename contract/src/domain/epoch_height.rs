@@ -47,3 +47,11 @@ impl Add<u64> for EpochHeight {
         EpochHeight(self.0 + rhs)
     }
 }
+
+impl Add<EpochHeight> for EpochHeight {
+    type Output = EpochHeight;
+
+    fn add(self, rhs: EpochHeight) -> Self::Output {
+        EpochHeight(self.0 + rhs.0)
+    }
+}

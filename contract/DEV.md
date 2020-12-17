@@ -7,3 +7,4 @@
    - contract operator role is required
 3. Simulation testing
    - https://github.com/near-examples/simulation-testing
+4. rust WASM frontend - https://www.webassemblyman.com/rustwasm/frontendframeworksrustwebassembly.html 

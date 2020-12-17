@@ -1,8 +1,14 @@
-use crate::domain::{
-    BlockTimeHeight, EpochHeight, StakeTokenValue, TimestampedNearBalance, TimestampedStakeBalance,
-    YoctoNear, YoctoStake,
+use crate::{
+    domain::{
+        BlockTimeHeight, EpochHeight, StakeTokenValue, TimestampedNearBalance,
+        TimestampedStakeBalance, YoctoNear, YoctoStake,
+    },
+    near::UNSTAKED_NEAR_FUNDS_NUM_EPOCHS_TO_UNLOCK,
 };
-use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
+use near_sdk::{
+    borsh::{self, BorshDeserialize, BorshSerialize},
+    env,
+};
 
 #[derive(BorshSerialize, BorshDeserialize)]
 pub struct RedeemStakeBatchReceipt {
@@ -23,7 +29,12 @@ impl RedeemStakeBatchReceipt {
     }
 
     pub fn unstaked_near_withdrawal_availability(&self) -> EpochHeight {
-        self.stake_token_value.block_time_height().epoch_height() + 4
+        self.stake_token_value.block_time_height().epoch_height()
+            + UNSTAKED_NEAR_FUNDS_NUM_EPOCHS_TO_UNLOCK
+    }
+
+    pub fn unstaked_funds_available(&self) -> bool {
+        self.unstaked_near_withdrawal_availability().value() <= env::epoch_height()
     }
 
     /// Used to track when an account has claimed their STAKE tokens for the NEAR they have staked
