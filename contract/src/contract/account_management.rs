@@ -123,7 +123,9 @@ impl StakeTokenContract {
         Promise::new(env::predecessor_account_id()).transfer(amount.value())
     }
 
-    fn registered_account(&self, account_hash: &Hash) -> Account {
+    /// ## Panics
+    /// if account is not registered
+    pub(crate) fn registered_account(&self, account_hash: &Hash) -> Account {
         self.accounts
             .get(&account_hash)
             .expect("account is not registered")
