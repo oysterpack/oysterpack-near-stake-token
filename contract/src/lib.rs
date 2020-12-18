@@ -330,17 +330,17 @@ mod test {
             "contract should not be locked"
         );
         assert_eq!(
-            contract.total_storage_escrow.balance().value(),
+            contract.total_storage_escrow.amount().value(),
             0,
             "the total storage escrow should be zero"
         );
         assert_eq!(
-            contract.total_near.balance().value(),
+            contract.total_near.amount().value(),
             0,
             "the total NEAR balance aggregated across all account should be zero"
         );
         assert_eq!(
-            contract.total_stake.balance().value(),
+            contract.total_stake.amount().value(),
             0,
             "the total STAKE supply should be zero"
         );

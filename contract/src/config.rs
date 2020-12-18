@@ -74,7 +74,7 @@ pub struct StakingPoolGasConfig {
     unstake: Gas,
     withdraw: Gas,
     get_account_balance: Gas,
-    is_account_unstaked_balance_available: Gas,
+    get_account: Gas,
 }
 
 impl Default for StakingPoolGasConfig {
@@ -84,7 +84,7 @@ impl Default for StakingPoolGasConfig {
             unstake: (BASE_GAS.value() * 3).into(),
             withdraw: (BASE_GAS.value() * 3).into(),
             get_account_balance: BASE_GAS,
-            is_account_unstaked_balance_available: BASE_GAS,
+            get_account: (BASE_GAS.value() * 3).into(),
         }
     }
 }
@@ -106,8 +106,8 @@ impl StakingPoolGasConfig {
         self.get_account_balance
     }
 
-    pub fn is_account_unstaked_balance_available(&self) -> Gas {
-        self.is_account_unstaked_balance_available
+    pub fn get_account(&self) -> Gas {
+        self.get_account
     }
 }
 
@@ -121,7 +121,7 @@ pub struct CallBacksGasConfig {
     unlock: Gas,
 
     // used by redeem stake workflow
-    on_staking_pool_withdrawal: Gas,
+    on_redeeming_stake_pending_withdrawal: Gas,
 }
 
 impl CallBacksGasConfig {
@@ -141,8 +141,8 @@ impl CallBacksGasConfig {
         self.on_run_stake_batch
     }
 
-    pub fn on_staking_pool_withdrawal(&self) -> Gas {
-        self.on_staking_pool_withdrawal
+    pub fn on_redeeming_stake_pending_withdrawal(&self) -> Gas {
+        self.on_redeeming_stake_pending_withdrawal
     }
 
     pub fn on_unstake(&self) -> Gas {
@@ -158,7 +158,7 @@ impl Default for CallBacksGasConfig {
             on_unstake: (BASE_GAS.value() * 3).into(),
             on_get_account_staked_balance: (BASE_GAS.value() * 3).into(),
             unlock: (BASE_GAS.value() * 3).into(),
-            on_staking_pool_withdrawal: (BASE_GAS.value() * 3).into(),
+            on_redeeming_stake_pending_withdrawal: (BASE_GAS.value() * 3).into(),
         }
     }
 }

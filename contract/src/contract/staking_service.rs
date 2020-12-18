@@ -78,7 +78,7 @@ impl StakingService for StakeTokenContract {
     fn redeem_all(&mut self) -> BatchId {
         let account_hash = Hash::from(&env::predecessor_account_id());
         let mut account = self.registered_account(&account_hash);
-        let amount = account.stake.expect("account has no stake").balance();
+        let amount = account.stake.expect("account has no stake").amount();
         let batch_id = self.redeem_stake_for_account(&mut account, amount);
         self.save_account(&account_hash, &account);
         batch_id
@@ -100,40 +100,40 @@ impl StakingService for StakeTokenContract {
     fn run_redeem_stake_batch(&mut self) -> Promise {
         assert!(
             !self.run_stake_batch_locked,
-            "stake batch run is in progress"
-        );
-        assert_ne!(
-            self.run_redeem_stake_batch_lock,
-            Some(RedeemLock::Unstaking),
-            "redeem stake batch run is in progress"
+            "batch cannot be run while NEAR is being staked"
         );
 
-        // check if funds need to be withdrawn from the staking pool
-        if let Some(RedeemLock::PendingWithdrawal(batch_id)) = self.run_redeem_stake_batch_lock {
-            let redeem_stake_batch_receipt = self
-                .redeem_stake_batch_receipts
-                .get(&batch_id)
-                .expect("redeem stake batch receipt does not exist");
-            assert!(
-                redeem_stake_batch_receipt.unstaked_funds_available_for_withdrawal(),
-                "redeeming STAKE is blocked on pending withdrawal available at epoch: {}",
-                redeem_stake_batch_receipt
-                    .unstaked_near_withdrawal_availability()
-                    .value()
-            );
+        match self.run_redeem_stake_batch_lock {
+            Some(RedeemLock::Unstaking) => panic!("batch is already in progress"),
+            None => {
+                assert!(
+                    self.redeem_stake_batch.is_some(),
+                    "there is no redeem stake batch"
+                );
+                self.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
 
-            self.withdraw_all_funds_from_staking_pool()
-                .then(self.invoke_on_staking_pool_withdrawal(batch_id.into()))
-        } else {
-            assert!(
-                self.redeem_stake_batch.is_some(),
-                "there is no redeem stake batch"
-            );
-            self.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
+                self.get_account_from_staking_pool()
+                    .then(self.invoke_on_run_redeem_stake_batch())
+                    .then(self.invoke_release_run_redeem_stake_batch_unstaking_lock())
+            }
+            Some(RedeemLock::PendingWithdrawal) => {
+                let batch = self.redeem_stake_batch.expect("batch does not exist");
+                let batch_id = batch.id();
+                let batch_receipt = self
+                    .redeem_stake_batch_receipts
+                    .get(&batch_id)
+                    .expect("batch receipt does not exist");
+                assert!(
+                    batch_receipt.unstaked_funds_available_for_withdrawal(),
+                    "batch processing is blocked on pending withdrawal available at epoch: {}",
+                    batch_receipt
+                        .unstaked_near_withdrawal_availability()
+                        .value()
+                );
 
-            self.get_account_staked_balance_from_staking_pool()
-                .then(self.invoke_on_run_redeem_stake_batch())
-                .then(self.invoke_release_run_redeem_stake_batch_unstaking_lock())
+                self.get_account_from_staking_pool()
+                    .then(self.invoke_on_redeeming_stake_pending_withdrawal())
+            }
         }
     }
 
@@ -178,28 +178,15 @@ impl StakingService for StakeTokenContract {
 
 // promises
 impl StakeTokenContract {
-    pub(crate) fn get_account_unstaked_balance_from_staking_pool(&self) -> Promise {
-        ext_staking_pool::get_account_unstaked_balance(
+    pub(crate) fn get_account_from_staking_pool(&self) -> Promise {
+        ext_staking_pool::get_account(
             env::current_account_id(),
             &self.staking_pool_id,
             NO_DEPOSIT.into(),
             self.config
                 .gas_config()
                 .staking_pool()
-                .get_account_balance()
-                .value(),
-        )
-    }
-
-    pub(crate) fn is_account_unstaked_balance_available_from_staking_pool(&self) -> Promise {
-        ext_staking_pool::is_account_unstaked_balance_available(
-            env::current_account_id(),
-            &self.staking_pool_id,
-            NO_DEPOSIT.into(),
-            self.config
-                .gas_config()
-                .staking_pool()
-                .is_account_unstaked_balance_available()
+                .get_account()
                 .value(),
         )
     }
@@ -229,7 +216,7 @@ impl StakeTokenContract {
         )
     }
 
-    fn invoke_on_run_redeem_stake_batch(&self) -> Promise {
+    pub(crate) fn invoke_on_run_redeem_stake_batch(&self) -> Promise {
         ext_staking_pool_callbacks::on_run_redeem_stake_batch(
             &env::current_account_id(),
             NO_DEPOSIT.into(),
@@ -257,15 +244,14 @@ impl StakeTokenContract {
         )
     }
 
-    fn invoke_on_staking_pool_withdrawal(&mut self, redeem_stake_batch_id: BatchId) -> Promise {
-        ext_staking_pool_callbacks::on_staking_pool_withdrawal(
-            redeem_stake_batch_id,
+    pub(crate) fn invoke_on_redeeming_stake_pending_withdrawal(&mut self) -> Promise {
+        ext_staking_pool_callbacks::on_redeeming_stake_pending_withdrawal(
             &env::current_account_id(),
             NO_DEPOSIT.into(),
             self.config
                 .gas_config()
                 .callbacks()
-                .on_staking_pool_withdrawal()
+                .on_redeeming_stake_pending_withdrawal()
                 .value(),
         )
     }
@@ -346,14 +332,14 @@ impl StakeTokenContract {
         assert!(
             account
                 .stake
-                .map_or(false, |stake| stake.balance() >= amount),
+                .map_or(false, |stake| stake.amount() >= amount),
             "account STAKE balance is insufficient to fulfill request"
         );
 
         // debit the amount of STAKE to redeem from the account
         let mut stake = account.stake.expect("account has zero STAKE token balance");
         stake.debit(amount);
-        if stake.balance().value() > 0 {
+        if stake.amount().value() > 0 {
             account.stake = Some(stake);
         } else {
             account.stake = None;
@@ -419,7 +405,7 @@ impl StakeTokenContract {
             mut receipt: domain::StakeBatchReceipt,
         ) {
             // how much NEAR did the account stake in the batch
-            let staked_near = batch.balance().balance();
+            let staked_near = batch.balance().amount();
 
             // claim the STAKE tokens for the account
             let stake = receipt.stake_token_value().near_to_stake(staked_near);
@@ -465,7 +451,7 @@ impl StakeTokenContract {
             mut receipt: domain::RedeemStakeBatchReceipt,
         ) {
             // how much NEAR did the account stake in the batch
-            let redeemed_stake = batch.balance().balance();
+            let redeemed_stake = batch.balance().amount();
 
             // claim the STAKE tokens for the account
             let near = receipt.stake_token_value().stake_to_near(redeemed_stake);
@@ -488,7 +474,9 @@ impl StakeTokenContract {
         match self.run_redeem_stake_batch_lock {
             // we can try to redeem receipts from previous batches
             // NOTE: batch IDs are sequential
-            Some(RedeemLock::PendingWithdrawal(pending_batch_id)) => {
+            Some(RedeemLock::PendingWithdrawal) => {
+                let pending_batch_id = self.redeem_stake_batch.expect("illegal state - if redeem lock is pending withdrawal, then there must be a batch").id();
+
                 if let Some(batch) = account.redeem_stake_batch {
                     if batch.id().value() < pending_batch_id.value() {
                         if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
@@ -526,7 +514,7 @@ impl StakeTokenContract {
                     }
                 }
             }
-            Some(RedeemLock::Unstaking) => {
+            Some(_) => {
                 // this should never be reachable
                 // while unstaking STAKE balances need to be locked, which means no receipts should be claimed
                 return false;
@@ -539,8 +527,22 @@ impl StakeTokenContract {
 
 type Balance = U128;
 
+#[derive(Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct StakingPoolAccount {
+    pub account_id: AccountId,
+    /// The unstaked balance that can be withdrawn or staked.
+    pub unstaked_balance: Balance,
+    /// The amount balance staked at the current "stake" share price.
+    pub staked_balance: Balance,
+    /// Whether the unstaked balance is available for withdrawal now.
+    pub can_withdraw: bool,
+}
+
 #[ext_contract(ext_staking_pool)]
 pub trait ExtStakingPool {
+    fn get_account(&self, account_id: AccountId) -> StakingPoolAccount;
+
     fn deposit_and_stake(&mut self);
 
     fn unstake(&mut self, amount: Balance);
@@ -572,7 +574,10 @@ pub trait ExtStakingPoolCallbacks {
     /// 3. register [on_deposit_and_stake] callback on the deposit and stake action
     fn on_run_stake_batch(&mut self, #[callback] staked_balance: Balance) -> Promise;
 
-    fn on_run_redeem_stake_batch(&mut self, #[callback] staked_balance: Balance) -> Promise;
+    fn on_run_redeem_stake_batch(
+        &mut self,
+        #[callback] staking_pool_account: StakingPoolAccount,
+    ) -> Promise;
 
     /// ## Success Workflow
     /// 1. store the stake batch receipt
@@ -589,10 +594,11 @@ pub trait ExtStakingPoolCallbacks {
 
     fn release_run_redeem_stake_batch_unstaking_lock(&mut self);
 
-    /// on successful staking pool withdrawal:
-    /// 1. clear [run_redeem_stake_batch_lock]
-    /// 2. try running the [RedeemStakeBatch]
-    fn on_staking_pool_withdrawal(&mut self, redeem_stake_batch_id: BatchId) -> Promise;
+    /// batch ID is returned when all unstaked NEAR has been withdrawn
+    fn on_redeeming_stake_pending_withdrawal(
+        &mut self,
+        #[callback] staking_pool_account: StakingPoolAccount,
+    ) -> PromiseOrValue<BatchId>;
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -645,16 +651,13 @@ mod test {
             .lookup_account(account_id.try_into().unwrap())
             .unwrap();
         let stake_batch = account.stake_batch.unwrap();
-        assert_eq!(
-            stake_batch.balance.balance.value(),
-            context.attached_deposit
-        );
+        assert_eq!(stake_batch.balance.amount.value(), context.attached_deposit);
         assert_eq!(stake_batch.id, batch_id);
         assert!(account.next_stake_batch.is_none());
 
         // And the funds are deposited into the current stake batch on the contract
         assert_eq!(
-            contract.stake_batch.unwrap().balance().balance(),
+            contract.stake_batch.unwrap().balance().amount(),
             context.attached_deposit.into()
         );
         assert!(contract.next_stake_batch.is_none());
@@ -687,16 +690,13 @@ mod test {
             .unwrap();
         assert!(account.stake_batch.is_none());
         let stake_batch = account.next_stake_batch.unwrap();
-        assert_eq!(
-            stake_batch.balance.balance.value(),
-            context.attached_deposit
-        );
+        assert_eq!(stake_batch.balance.amount.value(), context.attached_deposit);
         assert_eq!(stake_batch.id, batch_id);
         assert!(account.stake_batch.is_none());
 
         // And the funds are deposited into the next stake batch on the contract
         assert_eq!(
-            contract.next_stake_batch.unwrap().balance().balance(),
+            contract.next_stake_batch.unwrap().balance().amount(),
             context.attached_deposit.into()
         );
         assert!(contract.stake_batch.is_none());
@@ -731,15 +731,12 @@ mod test {
             .unwrap();
         assert!(account.next_stake_batch.is_none());
         let stake_batch = account.stake_batch.unwrap();
-        assert_eq!(
-            stake_batch.balance.balance.value(),
-            context.attached_deposit
-        );
+        assert_eq!(stake_batch.balance.amount.value(), context.attached_deposit);
         assert_eq!(stake_batch.id, batch_id);
 
         assert!(contract.next_stake_batch.is_none());
         assert_eq!(
-            contract.stake_batch.unwrap().balance().balance(),
+            contract.stake_batch.unwrap().balance().amount(),
             context.attached_deposit.into()
         );
 
@@ -755,7 +752,7 @@ mod test {
         assert_eq!(account.stake_batch.unwrap().id, batch_id);
         let next_stake_batch = account.next_stake_batch.unwrap();
         assert_eq!(
-            next_stake_batch.balance.balance.value(),
+            next_stake_batch.balance.amount.value(),
             context.attached_deposit
         );
         assert_eq!(next_stake_batch.id, next_batch_id);
@@ -819,7 +816,7 @@ mod test {
             .unwrap();
         let stake_batch = account.stake_batch.unwrap();
         assert_eq!(stake_batch.id, batch_id);
-        assert_eq!(stake_batch.balance.balance, YOCTO.into());
+        assert_eq!(stake_batch.balance.amount, YOCTO.into());
     }
 
     /// Given the account has funds in the stake batch
@@ -861,7 +858,7 @@ mod test {
             .lookup_account(account_id.try_into().unwrap())
             .unwrap();
         assert_eq!(
-            account.stake.unwrap().balance.0 .0,
+            account.stake.unwrap().amount.0 .0,
             YOCTO,
             "the funds should have been claimed by the account"
         );
@@ -888,7 +885,7 @@ mod test {
             .lookup_account(account_id.try_into().unwrap())
             .unwrap();
         assert_eq!(
-            account.stake.unwrap().balance.0 .0,
+            account.stake.unwrap().amount.0 .0,
             2 * YOCTO,
             "the funds should have been claimed by the account"
         );
@@ -944,7 +941,7 @@ mod test {
             .lookup_account(account_id.try_into().unwrap())
             .unwrap();
         assert_eq!(
-            account.stake.unwrap().balance.0 .0,
+            account.stake.unwrap().amount.0 .0,
             2 * YOCTO,
             "the funds should have been claimed by the account"
         );
@@ -986,7 +983,7 @@ mod test {
                 .into(),
         );
         assert_eq!(
-            contract.stake_batch.unwrap().balance().balance(),
+            contract.stake_batch.unwrap().balance().amount(),
             (2 * YOCTO).into()
         );
         // locking the contract should deposit the funds into the next stake batch
@@ -994,7 +991,7 @@ mod test {
         let next_stake_batch_id =
             contract.deposit_near_for_account_to_stake(&mut account, (3 * YOCTO).into());
         assert_eq!(
-            contract.next_stake_batch.unwrap().balance().balance(),
+            contract.next_stake_batch.unwrap().balance().amount(),
             (3 * YOCTO).into()
         );
         contract.save_account(&account_hash, &account);
@@ -1003,11 +1000,11 @@ mod test {
             .lookup_account(account_id.try_into().unwrap())
             .unwrap();
         assert_eq!(
-            account.stake_batch.unwrap().balance.balance.value(),
+            account.stake_batch.unwrap().balance.amount.value(),
             2 * YOCTO
         );
         assert_eq!(
-            account.next_stake_batch.unwrap().balance.balance.value(),
+            account.next_stake_batch.unwrap().balance.amount.value(),
             3 * YOCTO
         );
 
@@ -1039,7 +1036,7 @@ mod test {
         assert!(account.stake_batch.is_none());
         assert!(account.next_stake_batch.is_none());
         // and the STAKE tokens were claimed and credited to the account
-        assert_eq!(account.stake.unwrap().balance.0 .0, 5 * YOCTO);
+        assert_eq!(account.stake.unwrap().amount.0 .0, 5 * YOCTO);
     }
 
     /// Given there is no stake batch to run
@@ -1123,9 +1120,6 @@ mod test {
         let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
-        contract.run_redeem_stake_batch_lock =
-            Some(RedeemLock::PendingWithdrawal(domain::BatchId(1)));
-
         contract.register_account();
 
         context.attached_deposit = YOCTO;
@@ -1133,6 +1127,7 @@ mod test {
         testing_env!(context.clone());
         contract.deposit();
 
+        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
         contract.run_stake_batch();
     }
 
@@ -1155,7 +1150,7 @@ mod test {
         if let PromiseOrValue::Value(stake_token_value) = contract.stake_token_value() {
             assert_eq!(
                 stake_token_value.total_stake_supply,
-                contract.total_stake.balance().into()
+                contract.total_stake.amount().into()
             );
             assert_eq!(stake_token_value.total_staked_near_balance, YOCTO.into());
         } else {
@@ -1311,18 +1306,18 @@ mod test {
             .redeem_stake_batch
             .expect("current stake batch should have funds");
         assert_eq!(batch_id, batch.id().into());
-        assert_eq!(redeem_amount, batch.balance().balance().into());
+        assert_eq!(redeem_amount, batch.balance().amount().into());
 
         let account = contract
             .lookup_account(ValidAccountId::try_from(account_id).unwrap())
             .unwrap();
         // assert STAKE was moved from account STAKE balance to redeem stake batch
         assert_eq!(
-            account.stake.unwrap().balance,
+            account.stake.unwrap().amount,
             (initial_account_stake.value() - redeem_amount.value()).into()
         );
         let redeem_stake_batch = account.redeem_stake_batch.unwrap();
-        assert_eq!(redeem_stake_batch.balance.balance, redeem_amount);
+        assert_eq!(redeem_stake_batch.balance.amount, redeem_amount);
         assert_eq!(redeem_stake_batch.id, batch_id);
 
         let batch_id_2 = contract.redeem(redeem_amount.clone());
@@ -1331,19 +1326,19 @@ mod test {
             .redeem_stake_batch
             .expect("current stake batch should have funds");
         assert_eq!(batch_id, batch.id().into());
-        assert_eq!(redeem_amount.value() * 2, batch.balance().balance().value());
+        assert_eq!(redeem_amount.value() * 2, batch.balance().amount().value());
 
         let account = contract
             .lookup_account(ValidAccountId::try_from(account_id).unwrap())
             .unwrap();
         // assert STAKE was moved from account STAKE balance to redeem stake batch
         assert_eq!(
-            account.stake.unwrap().balance,
+            account.stake.unwrap().amount,
             (initial_account_stake.value() - (redeem_amount.value() * 2)).into()
         );
         let redeem_stake_batch = account.redeem_stake_batch.unwrap();
         assert_eq!(
-            redeem_stake_batch.balance.balance,
+            redeem_stake_batch.balance.amount,
             (redeem_amount.value() * 2).into()
         );
         assert_eq!(redeem_stake_batch.id, batch_id);
@@ -1388,18 +1383,18 @@ mod test {
             .redeem_stake_batch
             .expect("current stake batch should have funds");
         assert_eq!(batch_id, batch.id().into());
-        assert_eq!(redeem_amount, batch.balance().balance().into());
+        assert_eq!(redeem_amount, batch.balance().amount().into());
 
         let account = contract
             .lookup_account(ValidAccountId::try_from(account_id).unwrap())
             .unwrap();
         // assert STAKE was moved from account STAKE balance to redeem stake batch
         assert_eq!(
-            account.stake.unwrap().balance,
+            account.stake.unwrap().amount,
             (initial_account_stake.value() - redeem_amount.value()).into()
         );
         let redeem_stake_batch = account.redeem_stake_batch.unwrap();
-        assert_eq!(redeem_stake_batch.balance.balance, redeem_amount);
+        assert_eq!(redeem_stake_batch.balance.amount, redeem_amount);
         assert_eq!(redeem_stake_batch.id, batch_id);
 
         // Given the contract is locked for unstaking
@@ -1409,25 +1404,25 @@ mod test {
         let batch = contract
             .redeem_stake_batch
             .expect("current stake batch should have funds");
-        assert_eq!(redeem_amount.value(), batch.balance().balance().value());
+        assert_eq!(redeem_amount.value(), batch.balance().amount().value());
 
         let account = contract
             .lookup_account(ValidAccountId::try_from(account_id).unwrap())
             .unwrap();
         assert_eq!(
-            account.stake.unwrap().balance,
+            account.stake.unwrap().amount,
             (initial_account_stake.value() - (redeem_amount.value() * 2)).into()
         );
         let redeem_stake_batch = account.redeem_stake_batch.unwrap();
         assert_eq!(
-            redeem_stake_batch.balance.balance,
+            redeem_stake_batch.balance.amount,
             (redeem_amount.value()).into()
         );
         assert_eq!(redeem_stake_batch.id, batch_id);
 
         let next_redeem_stake_batch = account.next_redeem_stake_batch.unwrap();
         assert_eq!(
-            next_redeem_stake_batch.balance.balance,
+            next_redeem_stake_batch.balance.amount,
             (redeem_amount.value()).into()
         );
         assert_eq!(next_redeem_stake_batch.id, batch_id_2);
@@ -1445,7 +1440,7 @@ mod test {
 
     #[test]
     fn redeem_all_with_redeem_lock_pending_withdrawal() {
-        redeem_all_with_lock(RedeemLock::PendingWithdrawal(domain::BatchId(1)));
+        redeem_all_with_lock(RedeemLock::PendingWithdrawal);
     }
 
     fn redeem_all_with_lock(lock: RedeemLock) {
@@ -1457,7 +1452,6 @@ mod test {
 
         let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings.clone());
-        contract.run_redeem_stake_batch_lock = Some(lock);
 
         context.attached_deposit = YOCTO;
         context.account_balance = 100 * YOCTO;
@@ -1477,14 +1471,15 @@ mod test {
         contract.save_account(&account_hash, &account);
 
         let batch_id = contract.redeem_all();
+        contract.run_redeem_stake_batch_lock = Some(lock);
 
         let batch = contract
-            .next_redeem_stake_batch
+            .redeem_stake_batch
             .expect("next stake batch should have funds");
         assert_eq!(batch_id, batch.id().into());
         assert_eq!(
             initial_account_stake.value(),
-            batch.balance().balance().value()
+            batch.balance().amount().value()
         );
 
         let account = contract
@@ -1493,10 +1488,10 @@ mod test {
         // assert STAKE was moved from account STAKE balance to redeem stake batch
         assert!(account.stake.is_none());
         let redeem_stake_batch = account
-            .next_redeem_stake_batch
-            .expect("redeemed STAKE should have been put into next batch");
+            .redeem_stake_batch
+            .expect("redeemed STAKE should have been put into batch");
         assert_eq!(
-            redeem_stake_batch.balance.balance,
+            redeem_stake_batch.balance.amount,
             initial_account_stake.into()
         );
         assert_eq!(redeem_stake_batch.id, batch_id);

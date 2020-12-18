@@ -95,7 +95,7 @@ impl Account {
             .get_or_insert_with(|| TimestampedNearBalance::new(YoctoNear(0)))
             .debit(debit);
         if let Some(balance) = self.near {
-            if balance.balance().value() == 0 {
+            if balance.amount().value() == 0 {
                 self.near = None
             }
         }
@@ -113,7 +113,7 @@ impl Account {
             .debit(debit);
 
         if let Some(balance) = self.stake {
-            if balance.balance().value() == 0 {
+            if balance.amount().value() == 0 {
                 self.stake = None
             }
         }

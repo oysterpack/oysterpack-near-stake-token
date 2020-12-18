@@ -1,13 +1,11 @@
-use crate::domain::RedeemLock;
 use crate::{
     core::Hash,
-    domain,
-    domain::{Account, StakeBatch},
+    domain::{self, Account, RedeemLock, StakeBatch},
     ext_staking_pool, ext_staking_pool_callbacks,
-    interface::{BatchId, RedeemStakeBatchReceipt, StakingService, YoctoStake},
+    interface::{BatchId, Operator, RedeemStakeBatchReceipt, StakingService, YoctoStake},
     interface::{StakeBatchReceipt, StakeTokenValue, YoctoNear},
     near::{assert_predecessor_is_self, NO_DEPOSIT},
-    RunStakeBatchFailure, StakeTokenContract,
+    RunStakeBatchFailure, StakeTokenContract, StakingPoolAccount,
 };
 use near_sdk::json_types::{U128, U64};
 use near_sdk::{env, ext_contract, near_bindgen, AccountId, Promise, PromiseOrValue};
@@ -25,7 +23,7 @@ impl StakeTokenContract {
             self.promise_result_succeeded(),
             "failed to get staked balance from staking pool"
         );
-        domain::StakeTokenValue::new(staked_balance.0.into(), self.total_stake.balance()).into()
+        domain::StakeTokenValue::new(staked_balance.0.into(), self.total_stake.amount()).into()
     }
 
     /// updates the cached [StakeTokenValue]
@@ -39,7 +37,7 @@ impl StakeTokenContract {
             "failed to get staked balance from staking pool"
         );
         self.stake_token_value =
-            domain::StakeTokenValue::new(staked_balance.0.into(), self.total_stake.balance());
+            domain::StakeTokenValue::new(staked_balance.0.into(), self.total_stake.amount());
         self.stake_token_value.into()
     }
 
@@ -59,11 +57,11 @@ impl StakeTokenContract {
 
         // update the cached STAKE token value
         self.stake_token_value =
-            domain::StakeTokenValue::new(staked_balance.0.into(), self.total_stake.balance());
+            domain::StakeTokenValue::new(staked_balance.0.into(), self.total_stake.amount());
 
         let deposit_and_stake = ext_staking_pool::deposit_and_stake(
             &self.staking_pool_id,
-            batch.balance().balance().value(),
+            batch.balance().amount().value(),
             self.config
                 .gas_config()
                 .staking_pool()
@@ -100,21 +98,23 @@ impl StakeTokenContract {
 
         // create batch receipt
         let stake_batch_receipt =
-            domain::StakeBatchReceipt::new(batch.balance().balance(), self.stake_token_value);
+            domain::StakeBatchReceipt::new(batch.balance().amount(), self.stake_token_value);
         self.stake_batch_receipts
             .insert(&batch.id(), &stake_batch_receipt);
 
         // update the total STAKE supply
         self.total_stake.credit(
             self.stake_token_value
-                .near_to_stake(batch.balance().balance()),
+                .near_to_stake(batch.balance().amount()),
         );
 
-        // move the next batch into the current batch
-        self.stake_batch = self.next_stake_batch.take();
+        self.pop_stake_batch();
     }
 
-    pub fn on_run_redeem_stake_batch(&mut self, #[callback] staked_balance: Balance) -> Promise {
+    pub fn on_run_redeem_stake_batch(
+        &mut self,
+        #[callback] staking_pool_account: StakingPoolAccount,
+    ) -> Promise {
         assert_predecessor_is_self();
 
         // the batch should always be present because the purpose of this callback is a step
@@ -129,13 +129,30 @@ impl StakeTokenContract {
             "failed to get staked balance from staking pool"
         );
 
+        // all unstaked NEAR must be withdrawn before we are allowed to unstake more NEAR
+        // - per the staking pool contract, unstaked NEAR funds are locked for 4 epoch periods and
+        //   if more funds are unstaked, then the lock period resets to 4 epochs
+        if staking_pool_account.unstaked_balance.0 > 0 {
+            assert!(
+                staking_pool_account.can_withdraw,
+                "unstaking is blocked until all unstaked NEAR can be withdrawn"
+            );
+
+            return self
+                .withdraw_all_funds_from_staking_pool()
+                .then(self.get_account_from_staking_pool())
+                .then(self.invoke_on_run_redeem_stake_batch());
+        }
+
         // update the cached STAKE token value
-        self.stake_token_value =
-            domain::StakeTokenValue::new(staked_balance.0.into(), self.total_stake.balance());
+        self.stake_token_value = domain::StakeTokenValue::new(
+            staking_pool_account.staked_balance.0.into(),
+            self.total_stake.amount(),
+        );
 
         let unstake_amount = self
             .stake_token_value
-            .stake_to_near(batch.balance().balance());
+            .stake_to_near(batch.balance().amount());
 
         let unstake = ext_staking_pool::unstake(
             unstake_amount.value().into(),
@@ -153,39 +170,22 @@ impl StakeTokenContract {
         unstake.then(on_unstake)
     }
 
-    /// ## Success Workflow
     pub fn on_unstake(&mut self) {
         assert_predecessor_is_self();
 
-        let batch = self.redeem_stake_batch.take().expect(
-            "callback should only be invoked when there is a RedeemStakeBatch being processed",
+        assert!(
+            self.promise_result_succeeded(),
+            "failed to unstake NEAR with staking pool"
         );
 
-        assert!(self.promise_result_succeeded(),"ERR: failed to process stake batch #{} - `on_unstake` func call on staking pool failed", batch.id().value());
-
-        // create batch receipt
-        let batch_receipt =
-            domain::RedeemStakeBatchReceipt::new(batch.balance().balance(), self.stake_token_value);
-        self.redeem_stake_batch_receipts
-            .insert(&batch.id(), &batch_receipt);
-
-        // update the total STAKE supply
-        self.total_stake.debit(batch.balance().balance());
-
-        // move the next batch into the current batch
-        self.redeem_stake_batch = self.next_redeem_stake_batch.take();
-        // progress the workflow to pending withdrawal
-        self.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal(batch.id()))
+        self.create_redeem_stake_batch_receipt();
+        self.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal)
     }
 
-    /// ## Workflow
-    /// 1. clear the [run_redeem_stake_batch] lock
-    /// 2. try running the redeem stake batch  
-    ///
-    /// ## Panics
-    /// - not invoked by self
-    /// - if withdrawal from staking pool failed
-    pub fn on_staking_pool_withdrawal(&mut self, redeem_stake_batch_id: BatchId) -> Promise {
+    pub fn on_redeeming_stake_pending_withdrawal(
+        &mut self,
+        #[callback] staking_pool_account: StakingPoolAccount,
+    ) -> PromiseOrValue<BatchId> {
         assert_predecessor_is_self();
 
         assert!(
@@ -193,8 +193,55 @@ impl StakeTokenContract {
             "failed to withdraw unstaked balance from staking pool"
         );
 
+        if staking_pool_account.unstaked_balance.0 > 0 {
+            assert!(
+                staking_pool_account.can_withdraw,
+                "unstaked NEAR funds are not yet available for withdrawal"
+            );
+
+            return self
+                .withdraw_all_funds_from_staking_pool()
+                .then(self.get_account_from_staking_pool())
+                .then(self.invoke_on_redeeming_stake_pending_withdrawal())
+                .into();
+        }
+
+        let batch_id = self
+            .redeem_stake_batch
+            .expect("illegal state - batch should exist while pending withdrawal")
+            .id();
+
         self.run_redeem_stake_batch_lock = None;
-        self.run_redeem_stake_batch()
+        self.pop_redeem_stake_batch();
+        PromiseOrValue::Value(batch_id.into())
+    }
+}
+
+impl StakeTokenContract {
+    fn create_redeem_stake_batch_receipt(&mut self) {
+        let batch = self
+            .redeem_stake_batch
+            .take()
+            .expect("illegal state - batch should exist");
+
+        // create batch receipt
+        let batch_receipt =
+            domain::RedeemStakeBatchReceipt::new(batch.balance().amount(), self.stake_token_value);
+        self.redeem_stake_batch_receipts
+            .insert(&batch.id(), &batch_receipt);
+
+        // update the total STAKE supply
+        self.total_stake.debit(batch_receipt.redeemed_stake());
+    }
+
+    /// moves the next batch into the current batch
+    fn pop_stake_batch(&mut self) {
+        self.stake_batch = self.next_stake_batch.take();
+    }
+
+    /// moves the next batch into the current batch
+    fn pop_redeem_stake_batch(&mut self) {
+        self.redeem_stake_batch = self.next_redeem_stake_batch.take();
     }
 }
 
@@ -232,7 +279,7 @@ mod test {
         let stake_token_value = contract.on_get_account_staked_balance(YOCTO.into());
         assert_eq!(
             stake_token_value.total_stake_supply,
-            contract.total_stake.balance().into()
+            contract.total_stake.amount().into()
         );
         assert_eq!(stake_token_value.total_staked_near_balance, YOCTO.into());
     }
@@ -441,7 +488,7 @@ mod test {
                         );
 
                         assert_eq!(
-                            contract.total_stake.balance(),
+                            contract.total_stake.amount(),
                             contract
                                 .stake_token_value
                                 .near_to_stake(staked_near_amount.into())

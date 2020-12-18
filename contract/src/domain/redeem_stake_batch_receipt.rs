@@ -24,6 +24,10 @@ impl RedeemStakeBatchReceipt {
         }
     }
 
+    pub fn redeemed_stake(&self) -> YoctoStake {
+        self.redeemed_stake
+    }
+
     pub fn stake_token_value(&self) -> StakeTokenValue {
         self.stake_token_value
     }

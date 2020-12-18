@@ -62,7 +62,7 @@ impl AccountManagement for StakeTokenContract {
                     "all funds must be withdrawn from the account in order to unregister"
                 );
                 // refund the escrowed storage fee
-                Promise::new(account_id).transfer(account.storage_escrow.balance().value());
+                Promise::new(account_id).transfer(account.storage_escrow.amount().value());
             }
         };
     }
@@ -104,7 +104,7 @@ impl AccountManagement for StakeTokenContract {
         match account.near {
             None => panic!("there are no available NEAR funds to withdraw"),
             Some(balance) => {
-                self.withdraw_near_funds(&mut account, &account_hash, balance.balance())
+                self.withdraw_near_funds(&mut account, &account_hash, balance.amount())
             }
         }
     }
@@ -139,7 +139,7 @@ impl StakeTokenContract {
             None => {
                 self.accounts_len += 1;
                 self.total_storage_escrow
-                    .credit(account.storage_escrow.balance());
+                    .credit(account.storage_escrow.amount());
                 None
             }
             Some(previous) => Some(previous),
@@ -155,7 +155,7 @@ impl StakeTokenContract {
             Some(account) => {
                 self.accounts_len -= 1;
                 self.total_storage_escrow
-                    .debit(account.storage_escrow.balance());
+                    .debit(account.storage_escrow.amount());
                 Some(account)
             }
         }
@@ -302,11 +302,11 @@ mod test {
 
         // And the storage fee credit is applied on the account and on the contract
         assert_eq!(
-            account.storage_escrow.balance(),
+            account.storage_escrow.amount(),
             contract.account_storage_fee().into()
         );
         assert_eq!(
-            contract.total_storage_escrow.balance(),
+            contract.total_storage_escrow.amount(),
             contract.account_storage_fee().into()
         );
     }
@@ -414,13 +414,13 @@ mod test {
 
         let contract_balance_with_registered_account = env::account_balance();
         assert_eq!(
-            contract.total_storage_escrow.balance().value() + context.account_balance,
+            contract.total_storage_escrow.amount().value() + context.account_balance,
             contract_balance_with_registered_account
         );
         contract.unregister_account();
         assert!(!contract.account_registered(account_id.try_into().unwrap()));
         assert_eq!(
-            contract.total_storage_escrow.balance().value(),
+            contract.total_storage_escrow.amount().value(),
             0,
             "storage fees should have been refunded"
         );
@@ -533,13 +533,13 @@ mod test {
         let mut account = contract.accounts.get(&account_hash).unwrap();
         account.apply_near_credit((10 * YOCTO).into());
         contract.accounts.insert(&account_hash, &account);
-        contract.total_near.credit(account.near.unwrap().balance());
+        contract.total_near.credit(account.near.unwrap().amount());
 
         // When partial funds are withdrawn
         contract.withdraw((5 * YOCTO).into());
         // Assert that the account NEAR balance was debited
         let account = contract.accounts.get(&account_hash).unwrap();
-        assert_eq!(account.near.unwrap().balance(), (5 * YOCTO).into());
+        assert_eq!(account.near.unwrap().amount(), (5 * YOCTO).into());
     }
 
     #[test]
@@ -560,7 +560,7 @@ mod test {
         let mut account = contract.accounts.get(&account_hash).unwrap();
         account.apply_near_credit((10 * YOCTO).into());
         contract.accounts.insert(&account_hash, &account);
-        contract.total_near.credit(account.near.unwrap().balance());
+        contract.total_near.credit(account.near.unwrap().amount());
 
         contract.withdraw_all();
         // Assert that the account NEAR balance was debited

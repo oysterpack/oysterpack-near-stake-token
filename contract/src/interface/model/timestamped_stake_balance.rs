@@ -10,7 +10,7 @@ use near_sdk::{
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct TimestampedStakeBalance {
-    pub balance: YoctoStake,
+    pub amount: YoctoStake,
     pub block_height: BlockHeight,
     pub block_timestamp: BlockTimestamp,
     pub epoch_height: EpochHeight,
@@ -19,7 +19,7 @@ pub struct TimestampedStakeBalance {
 impl From<domain::TimestampedStakeBalance> for TimestampedStakeBalance {
     fn from(balance: domain::TimestampedStakeBalance) -> Self {
         Self {
-            balance: balance.balance().into(),
+            amount: balance.amount().into(),
             block_height: balance.block_height().into(),
             block_timestamp: balance.block_timestamp().into(),
             epoch_height: balance.epoch_height().into(),

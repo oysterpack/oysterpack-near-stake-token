@@ -7,7 +7,7 @@ use std::cmp::Ordering;
 
 #[derive(BorshSerialize, BorshDeserialize, Debug, Clone, Copy)]
 pub struct TimestampedNearBalance {
-    balance: YoctoNear,
+    amount: YoctoNear,
     block_height: BlockHeight,
     block_timestamp: BlockTimestamp,
     epoch_height: EpochHeight,
@@ -15,25 +15,25 @@ pub struct TimestampedNearBalance {
 
 impl PartialEq for TimestampedNearBalance {
     fn eq(&self, other: &Self) -> bool {
-        self.balance == other.balance
+        self.amount == other.amount
     }
 }
 
 impl PartialEq<u128> for TimestampedNearBalance {
     fn eq(&self, other: &u128) -> bool {
-        self.balance.0 == *other
+        self.amount.0 == *other
     }
 }
 
 impl PartialOrd for TimestampedNearBalance {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.balance.cmp(&other.balance))
+        Some(self.amount.cmp(&other.amount))
     }
 }
 
 impl PartialOrd<u128> for TimestampedNearBalance {
     fn partial_cmp(&self, other: &u128) -> Option<Ordering> {
-        Some(self.balance.0.cmp(other))
+        Some(self.amount.0.cmp(other))
     }
 }
 
@@ -45,15 +45,15 @@ impl TimestampedNearBalance {
     /// if NEAR runtime context is not available
     pub fn new(balance: YoctoNear) -> Self {
         Self {
-            balance,
+            amount: balance,
             block_height: env::block_index().into(),
             block_timestamp: env::block_timestamp().into(),
             epoch_height: env::epoch_height().into(),
         }
     }
 
-    pub fn balance(&self) -> YoctoNear {
-        self.balance
+    pub fn amount(&self) -> YoctoNear {
+        self.amount
     }
 
     pub fn block_height(&self) -> BlockHeight {
@@ -74,7 +74,7 @@ impl TimestampedNearBalance {
         if amount.0 == 0 {
             return;
         }
-        self.balance += amount;
+        self.amount += amount;
         self.update_timestamp();
     }
 
@@ -85,10 +85,10 @@ impl TimestampedNearBalance {
             return;
         }
         assert!(
-            self.balance >= amount,
+            self.amount >= amount,
             "balance is too low to fulfill debit request"
         );
-        self.balance -= amount;
+        self.amount -= amount;
         self.update_timestamp();
     }
 
@@ -120,7 +120,7 @@ mod test {
 
         testing_env!(context);
         let balance = TimestampedNearBalance::new(10.into());
-        assert_eq!(balance.balance(), 10.into());
+        assert_eq!(balance.amount(), 10.into());
         assert_eq!(balance.block_height(), 1.into());
         assert_eq!(balance.block_timestamp(), 2.into());
         assert_eq!(balance.epoch_height(), 3.into());
