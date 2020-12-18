@@ -25,7 +25,7 @@ impl StakeTokenContract {
         // - if the callback was called by itself, and the batch is not present, then there is a bug
         let batch = self
             .redeem_stake_batch
-            .expect("redeem stake batch must be present");
+            .expect("illegal state - batch is not present");
 
         assert!(
             self.promise_result_succeeded(),
@@ -57,14 +57,7 @@ impl StakeTokenContract {
             .stake_token_value
             .stake_to_near(batch.balance().amount());
 
-        let unstake = ext_staking_pool::unstake(
-            unstake_amount.value().into(),
-            &self.staking_pool_id,
-            NO_DEPOSIT.value(),
-            self.config.gas_config().staking_pool().unstake().value(),
-        );
-
-        unstake.then(self.invoke_on_unstake())
+        self.unstake(unstake_amount).then(self.invoke_on_unstake())
     }
 
     pub fn on_unstake(&mut self) {
@@ -115,6 +108,15 @@ impl StakeTokenContract {
 }
 
 impl StakeTokenContract {
+    fn unstake(&self, unstake_amount: domain::YoctoNear) -> Promise {
+        ext_staking_pool::unstake(
+            unstake_amount.value().into(),
+            &self.staking_pool_id,
+            NO_DEPOSIT.value(),
+            self.config.gas_config().staking_pool().unstake().value(),
+        )
+    }
+
     fn create_redeem_stake_batch_receipt(&mut self) {
         let batch = self
             .redeem_stake_batch

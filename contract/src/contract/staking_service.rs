@@ -119,7 +119,9 @@ impl StakingService for StakeTokenContract {
                     .then(self.invoke_release_run_redeem_stake_batch_unstaking_lock())
             }
             Some(RedeemLock::PendingWithdrawal) => {
-                let batch = self.redeem_stake_batch.expect("batch does not exist");
+                let batch = self
+                    .redeem_stake_batch
+                    .expect("illegal state - batch does not exist");
                 let batch_id = batch.id();
                 let batch_receipt = self
                     .redeem_stake_batch_receipts
