@@ -1,7 +1,7 @@
 use crate::interface::{StakeTokenValue, YoctoNear};
 use crate::{
     domain,
-    interface::{BatchId, TimestampedNearBalance},
+    interface::{BatchId},
 };
 use near_sdk::serde::{Deserialize, Serialize};
 

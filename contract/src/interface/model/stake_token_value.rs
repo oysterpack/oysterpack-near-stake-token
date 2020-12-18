@@ -1,7 +1,6 @@
 use crate::interface::{BlockTimeHeight, YoctoNear, YoctoStake};
 use crate::{
     domain,
-    interface::{BatchId, TimestampedNearBalance},
 };
 use near_sdk::serde::{Deserialize, Serialize};
 

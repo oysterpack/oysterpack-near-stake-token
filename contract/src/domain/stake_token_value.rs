@@ -1,5 +1,5 @@
 use crate::domain::{
-    BlockTimeHeight, TimestampedNearBalance, TimestampedStakeBalance, YoctoNear, YoctoStake,
+    BlockTimeHeight, YoctoNear, YoctoStake,
 };
 use crate::near::YOCTO;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};

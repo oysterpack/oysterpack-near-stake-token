@@ -20,7 +20,7 @@ use crate::{
     domain::{
         Account, BatchId, BlockHeight, RedeemLock, RedeemStakeBatch, RedeemStakeBatchReceipt,
         StakeBatch, StakeBatchReceipt, StakeTokenValue, StorageUsage, TimestampedNearBalance,
-        TimestampedStakeBalance, YoctoNear, YoctoNearValue, YoctoStake,
+        TimestampedStakeBalance,
     },
     near::storage_keys::{
         ACCOUNTS_KEY_PREFIX, REDEEM_STAKE_BATCH_RECEIPTS_KEY_PREFIX,
@@ -36,10 +36,7 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
     wee_alloc, AccountId, PromiseResult,
 };
-use std::{
-    convert::{TryFrom, TryInto},
-    fmt::{self, Display, Formatter},
-};
+
 
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
@@ -188,7 +185,7 @@ impl StakeTokenContract {
         }
 
         if cfg!(test) {
-            pub fn promise_result(result_index: u64) -> PromiseResult {
+            pub fn promise_result(_result_index: u64) -> PromiseResult {
                 PromiseResult::Successful(vec![])
             }
 
@@ -239,9 +236,9 @@ impl StakeTokenContract {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{interface::AccountManagement, near::YOCTO, test_utils::*};
+    use crate::{interface::AccountManagement, test_utils::*};
     use near_sdk::{serde_json, testing_env, AccountId, MockedBlockchain, VMContext};
-    use std::convert::TryFrom;
+    
 
     #[test]
     fn contract_settings_serde_json() {
@@ -256,7 +253,7 @@ mod test {
         let json = serde_json::to_string_pretty(&contract_settings).unwrap();
         println!("{}", json);
 
-        let contract_settings: ContractSettings = serde_json::from_str(
+        let _contract_settings: ContractSettings = serde_json::from_str(
             r#"{
   "staking_pool_id": "staking-pool.near",
   "operator_id": "operator.stake.oysterpack.near"

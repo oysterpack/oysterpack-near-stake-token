@@ -1,5 +1,5 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use std::ops::{AddAssign, Deref, DerefMut};
+use std::ops::{Deref, DerefMut};
 
 #[derive(
     BorshSerialize,
@@ -56,7 +56,7 @@ mod test {
     fn batch_id_deref() {
         let n = 10u128;
         let batch_id = BatchId::default();
-        let x = n + *batch_id;
+        let _x = n + *batch_id;
 
         fn foo(bar: u128) -> u128 {
             bar

@@ -1,6 +1,6 @@
 use crate::domain::stake_batch::StakeBatch;
 use crate::domain::{
-    RedeemStakeBatch, StorageUsage, TimestampedNearBalance, TimestampedStakeBalance, YoctoNear,
+    RedeemStakeBatch, TimestampedNearBalance, TimestampedStakeBalance, YoctoNear,
     YoctoStake,
 };
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};

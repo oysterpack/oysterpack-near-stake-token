@@ -1,15 +1,14 @@
 use crate::near_env::Env;
 use crate::{
     config::Config,
-    near::{self, *},
+    near::{*},
     ContractSettings, StakeTokenContract,
 };
 use near_sdk::{
-    json_types::ValidAccountId,
     serde::{Deserialize, Serialize},
     AccountId, PromiseResult, VMContext,
 };
-use std::convert::TryFrom;
+
 
 pub const EXPECTED_ACCOUNT_STORAGE_USAGE: u64 = 681;
 
@@ -74,7 +73,7 @@ pub enum Action {
 }
 
 pub fn set_env_with_success_promise_result(contract: &mut StakeTokenContract) {
-    pub fn promise_result(result_index: u64) -> PromiseResult {
+    pub fn promise_result(_result_index: u64) -> PromiseResult {
         PromiseResult::Successful(vec![])
     }
 
@@ -89,7 +88,7 @@ pub fn set_env_with_success_promise_result(contract: &mut StakeTokenContract) {
 }
 
 pub fn set_env_with_failed_promise_result(contract: &mut StakeTokenContract) {
-    pub fn promise_result(result_index: u64) -> PromiseResult {
+    pub fn promise_result(_result_index: u64) -> PromiseResult {
         PromiseResult::Failed
     }
 

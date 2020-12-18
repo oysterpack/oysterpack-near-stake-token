@@ -1,7 +1,7 @@
-use crate::interface::Operator;
+
 use crate::{
     core::Hash,
-    domain::{self, Account, RedeemLock, RedeemStakeBatch, StakeBatch, StakeBatchReceipt},
+    domain::{self, Account, RedeemLock, RedeemStakeBatch, StakeBatch},
     interface::{
         BatchId, RedeemStakeBatchReceipt, StakeTokenValue, StakingService, YoctoNear, YoctoStake,
     },
@@ -15,7 +15,7 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
     AccountId, Gas, Promise, PromiseOrValue,
 };
-use std::convert::TryFrom;
+
 
 #[near_bindgen]
 impl StakingService for StakeTokenContract {
@@ -33,7 +33,7 @@ impl StakingService for StakeTokenContract {
         batch_id
     }
 
-    fn withdraw_funds_from_stake_batch(&mut self, amount: YoctoNear) {
+    fn withdraw_funds_from_stake_batch(&mut self, _amount: YoctoNear) {
         unimplemented!()
     }
 
@@ -570,13 +570,13 @@ pub enum RunStakeBatchFailure {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::config::Config;
-    use crate::domain::{EpochHeight, StakeBatchReceipt};
+    
+    
     use crate::interface::AccountManagement;
     use crate::near::YOCTO;
     use crate::test_utils::*;
     use near_sdk::json_types::ValidAccountId;
-    use near_sdk::{serde_json, testing_env, AccountId, MockedBlockchain, VMContext};
+    use near_sdk::{serde_json, testing_env, AccountId, MockedBlockchain};
     use std::convert::{TryFrom, TryInto};
 
     fn operator_id() -> AccountId {
@@ -1209,7 +1209,7 @@ mod test {
         );
 
         // and a callback - `unlock`
-        let unlock = receipts
+        let _unlock = receipts
             .iter()
             .find(|receipt| {
                 if receipt.receiver_id == context.current_account_id {
@@ -1279,7 +1279,7 @@ mod test {
         assert_eq!(redeem_stake_batch.balance.amount, redeem_amount);
         assert_eq!(redeem_stake_batch.id, batch_id);
 
-        let batch_id_2 = contract.redeem(redeem_amount.clone());
+        let _batch_id_2 = contract.redeem(redeem_amount.clone());
 
         let batch = contract
             .redeem_stake_batch

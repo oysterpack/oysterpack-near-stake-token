@@ -3,7 +3,6 @@ use crate::{
     interface::{BlockHeight, BlockTimestamp, EpochHeight, YoctoStake},
 };
 use near_sdk::{
-    json_types::U128,
     serde::{Deserialize, Serialize},
 };
 

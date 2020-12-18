@@ -81,7 +81,7 @@ impl StakeTokenContract {
     pub fn all_promise_results_succeeded(&self) -> bool {
         let count = self.env.promise_results_count();
         assert!(count > 0, "there are no promise results");
-        for i in 0..count {
+        for _i in 0..count {
             let success = match self.env.promise_result(0) {
                 PromiseResult::Successful(_) => true,
                 _ => false,

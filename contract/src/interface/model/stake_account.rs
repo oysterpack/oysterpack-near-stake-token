@@ -3,7 +3,6 @@ use crate::interface::{
     RedeemStakeBatch, StakeBatch, TimestampedNearBalance, TimestampedStakeBalance,
 };
 use near_sdk::{
-    json_types::U128,
     serde::{Deserialize, Serialize},
 };
 

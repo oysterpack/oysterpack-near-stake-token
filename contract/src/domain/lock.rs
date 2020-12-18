@@ -1,7 +1,6 @@
-use crate::domain::BatchId;
+
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    serde::{Deserialize, Serialize},
 };
 
 /// Lock lifecycle transitions: [Unstaking] -> [PendingWithdrawal] -> [WithdrawalComplete]

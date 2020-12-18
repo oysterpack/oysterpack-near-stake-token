@@ -1,7 +1,7 @@
 pub mod storage_keys;
 
 use crate::domain::{EpochHeight, YoctoNear};
-use near_sdk::{env, PromiseResult};
+use near_sdk::{env};
 
 /// YOCTO = 10^24
 pub const YOCTO: u128 = 1_000_000_000_000_000_000_000_000;

@@ -7,7 +7,7 @@ use crate::{
     near::{assert_predecessor_is_self, NO_DEPOSIT},
     RunStakeBatchFailure, StakeTokenContract, StakingPoolAccount,
 };
-use near_sdk::json_types::{U128, U64};
+use near_sdk::json_types::{U128};
 use near_sdk::{env, ext_contract, near_bindgen, AccountId, Promise, PromiseOrValue};
 
 type Balance = U128;
@@ -57,7 +57,7 @@ mod test {
     use near_sdk::{
         json_types::ValidAccountId, serde_json, testing_env, AccountId, MockedBlockchain, VMContext,
     };
-    use std::convert::TryFrom;
+    
 
     #[test]
     fn on_get_account_staked_balance_success() {
@@ -203,7 +203,7 @@ mod test {
                         Action::FunctionCall {
                             method_name,
                             deposit,
-                            gas,
+                            gas: _,
                             ..
                         } => method_name == "on_deposit_and_stake" && *deposit == 0,
                         _ => false,
@@ -280,7 +280,7 @@ mod test {
                         testing_env!(context.clone());
                         contract.on_deposit_and_stake(); // callback
 
-                        let receipt = contract.stake_batch_receipts.get(&batch_id).expect(
+                        let _receipt = contract.stake_batch_receipts.get(&batch_id).expect(
                             "receipt should have been created by `on_deposit_and_stake` callback",
                         );
 

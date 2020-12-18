@@ -1,4 +1,4 @@
-use near_sdk::json_types::ValidAccountId;
+
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env,
