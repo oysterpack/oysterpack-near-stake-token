@@ -3,7 +3,7 @@ use crate::{
     StakeTokenContract,
 };
 
-use near_sdk::{env, near_bindgen, Promise};
+use near_sdk::{near_bindgen, Promise};
 
 #[near_bindgen]
 impl Operator for StakeTokenContract {

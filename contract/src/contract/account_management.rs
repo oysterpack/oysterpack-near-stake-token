@@ -1,12 +1,8 @@
-use crate::domain::{
-    BatchId, RedeemStakeBatch, RedeemStakeBatchReceipt, StakeBatch, StakeBatchReceipt,
-};
-use crate::interface::StakeAccount;
-use crate::near::YOCTO;
 use crate::{
     core::Hash,
-    domain::{Account, StorageUsage, YoctoNear, YoctoNearValue},
-    interface::{self, AccountManagement},
+    domain::{Account, YoctoNear},
+    interface::{self, AccountManagement, StakeAccount},
+    near::YOCTO,
     StakeTokenContract,
 };
 use near_sdk::{
@@ -165,11 +161,10 @@ impl StakeTokenContract {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::config::Config;
     use crate::near::YOCTO;
     use crate::test_utils::*;
-    use near_sdk::{serde_json, testing_env, AccountId, MockedBlockchain, VMContext};
-    use std::convert::{TryFrom, TryInto};
+    use near_sdk::{serde_json, testing_env, AccountId, MockedBlockchain};
+    use std::convert::TryInto;
 
     fn operator_id() -> AccountId {
         "operator.stake.oysterpack.near".to_string()
