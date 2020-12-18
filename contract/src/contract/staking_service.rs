@@ -126,13 +126,10 @@ impl StakingService for StakeTokenContract {
                 let batch_receipt = self
                     .redeem_stake_batch_receipts
                     .get(&batch_id)
-                    .expect("batch receipt does not exist");
+                    .expect("illegal state - batch receipt does not exist");
                 assert!(
                     batch_receipt.unstaked_funds_available_for_withdrawal(),
-                    "batch processing is blocked on pending withdrawal available at epoch: {}",
-                    batch_receipt
-                        .unstaked_near_withdrawal_availability()
-                        .value()
+                    "unstaked funds are not yet available for withdrawal"
                 );
 
                 self.get_account_from_staking_pool()

@@ -80,7 +80,7 @@ impl StakeTokenContract {
 
         assert!(
             self.promise_result_succeeded(),
-            "failed to withdraw unstaked balance from staking pool"
+            "failed to get account info from staking pool"
         );
 
         if staking_pool_account.unstaked_balance.0 > 0 {
