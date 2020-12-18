@@ -1,5 +1,6 @@
 pub mod account_management;
 pub mod operator;
+pub mod redeeming_workflow_callbacks;
 pub mod settings;
 pub mod staking_service;
 pub mod staking_service_callbacks;

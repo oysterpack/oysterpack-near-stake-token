@@ -21,6 +21,8 @@ impl Operator for StakeTokenContract {
     }
 
     fn withdraw_all_funds_from_staking_pool(&self) -> Promise {
+        self.assert_predecessor_is_self_or_operator();
+
         ext_staking_pool::withdraw_all(
             &self.staking_pool_id,
             NO_DEPOSIT.into(),

@@ -205,52 +205,6 @@ impl StakeTokenContract {
     }
 }
 
-/// redeeming STAKE workflow callback invocations
-impl StakeTokenContract {
-    pub(crate) fn invoke_on_run_redeem_stake_batch(&self) -> Promise {
-        ext_redeeming_workflow_callbacks::on_run_redeem_stake_batch(
-            &env::current_account_id(),
-            NO_DEPOSIT.into(),
-            self.config
-                .gas_config()
-                .callbacks()
-                .on_run_stake_batch()
-                .value(),
-        )
-    }
-
-    fn invoke_release_run_redeem_stake_batch_unstaking_lock(&self) -> Promise {
-        ext_redeeming_workflow_callbacks::release_run_redeem_stake_batch_unstaking_lock(
-            &env::current_account_id(),
-            NO_DEPOSIT.into(),
-            self.config.gas_config().callbacks().unlock().value(),
-        )
-    }
-
-    pub(crate) fn invoke_on_redeeming_stake_pending_withdrawal(&mut self) -> Promise {
-        ext_redeeming_workflow_callbacks::on_redeeming_stake_pending_withdrawal(
-            &env::current_account_id(),
-            NO_DEPOSIT.into(),
-            self.config
-                .gas_config()
-                .callbacks()
-                .on_redeeming_stake_pending_withdrawal()
-                .value(),
-        )
-    }
-
-    pub(crate) fn invoke_on_unstake(&self) -> Promise {
-        ext_redeeming_workflow_callbacks::on_unstake(
-            &env::current_account_id(),
-            NO_DEPOSIT.into(),
-            self.config.gas_config().callbacks().on_unstake().value(),
-        )
-    }
-}
-
-/// redeeming STAKE workflow callbacks
-impl StakeTokenContract {}
-
 impl StakeTokenContract {
     /// batches the NEAR to stake at the contract level and account level
     ///
