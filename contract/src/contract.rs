@@ -3,6 +3,7 @@ pub mod operator;
 pub mod settings;
 pub mod staking_service;
 pub mod staking_service_callbacks;
+pub mod staking_workflow_callbacks;
 
 pub use staking_service::*;
 

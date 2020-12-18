@@ -103,7 +103,7 @@ pub trait StakingService {
     /// In summary, the STAKE token value can be cached for the epoch time period.
     fn stake_token_value(&self) -> PromiseOrValue<StakeTokenValue>;
 
-    /// always refreshes the staked balance and updates the cached STAKE token value
+    /// refreshes the staked balance and updates the cached STAKE token value
     ///
     /// Promise returns: [StakeTokenValue]
     fn refresh_stake_token_value(&self) -> Promise;

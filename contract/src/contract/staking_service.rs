@@ -163,7 +163,7 @@ impl StakingService for StakeTokenContract {
 
     fn refresh_stake_token_value(&self) -> Promise {
         self.get_account_staked_balance_from_staking_pool().then(
-            ext_staking_pool_callbacks::on_get_account_staked_balance(
+            ext_staking_pool_callbacks::on_refresh_account_staked_balance(
                 &env::current_account_id(),
                 NO_DEPOSIT.into(),
                 self.config
@@ -176,7 +176,7 @@ impl StakingService for StakeTokenContract {
     }
 }
 
-// promises
+// staking pool func calls
 impl StakeTokenContract {
     pub(crate) fn get_account_from_staking_pool(&self) -> Promise {
         ext_staking_pool::get_account(
@@ -203,21 +203,12 @@ impl StakeTokenContract {
                 .value(),
         )
     }
+}
 
-    fn invoke_on_run_stake_batch(&self) -> Promise {
-        ext_staking_pool_callbacks::on_run_stake_batch(
-            &env::current_account_id(),
-            NO_DEPOSIT.into(),
-            self.config
-                .gas_config()
-                .callbacks()
-                .on_run_stake_batch()
-                .value(),
-        )
-    }
-
+/// redeeming STAKE workflow callback invocations
+impl StakeTokenContract {
     pub(crate) fn invoke_on_run_redeem_stake_batch(&self) -> Promise {
-        ext_staking_pool_callbacks::on_run_redeem_stake_batch(
+        ext_redeeming_workflow_callbacks::on_run_redeem_stake_batch(
             &env::current_account_id(),
             NO_DEPOSIT.into(),
             self.config
@@ -225,19 +216,11 @@ impl StakeTokenContract {
                 .callbacks()
                 .on_run_stake_batch()
                 .value(),
-        )
-    }
-
-    fn invoke_release_run_stake_batch_lock(&self) -> Promise {
-        ext_staking_pool_callbacks::release_run_stake_batch_lock(
-            &env::current_account_id(),
-            NO_DEPOSIT.into(),
-            self.config.gas_config().callbacks().unlock().value(),
         )
     }
 
     fn invoke_release_run_redeem_stake_batch_unstaking_lock(&self) -> Promise {
-        ext_staking_pool_callbacks::release_run_redeem_stake_batch_unstaking_lock(
+        ext_redeeming_workflow_callbacks::release_run_redeem_stake_batch_unstaking_lock(
             &env::current_account_id(),
             NO_DEPOSIT.into(),
             self.config.gas_config().callbacks().unlock().value(),
@@ -245,7 +228,7 @@ impl StakeTokenContract {
     }
 
     pub(crate) fn invoke_on_redeeming_stake_pending_withdrawal(&mut self) -> Promise {
-        ext_staking_pool_callbacks::on_redeeming_stake_pending_withdrawal(
+        ext_redeeming_workflow_callbacks::on_redeeming_stake_pending_withdrawal(
             &env::current_account_id(),
             NO_DEPOSIT.into(),
             self.config
@@ -255,7 +238,18 @@ impl StakeTokenContract {
                 .value(),
         )
     }
+
+    pub(crate) fn invoke_on_unstake(&self) -> Promise {
+        ext_redeeming_workflow_callbacks::on_unstake(
+            &env::current_account_id(),
+            NO_DEPOSIT.into(),
+            self.config.gas_config().callbacks().on_unstake().value(),
+        )
+    }
 }
+
+/// redeeming STAKE workflow callbacks
+impl StakeTokenContract {}
 
 impl StakeTokenContract {
     /// batches the NEAR to stake at the contract level and account level
@@ -558,39 +552,23 @@ pub trait ExtStakingPool {
 
 #[ext_contract(ext_staking_pool_callbacks)]
 pub trait ExtStakingPoolCallbacks {
-    fn on_get_account_staked_balance(&self, #[callback] staked_balance: Balance)
-        -> StakeTokenValue;
-
     fn on_refresh_account_staked_balance(
         &mut self,
         #[callback] staked_balance: Balance,
     ) -> StakeTokenValue;
+}
 
-    /// callback for getting staked balance from staking pool as part of stake batch processing workflow
-    ///
-    /// ## Success Workflow
-    /// 1. update the stake token value
-    /// 2. deposit and stake funds with staking pool
-    /// 3. register [on_deposit_and_stake] callback on the deposit and stake action
-    fn on_run_stake_batch(&mut self, #[callback] staked_balance: Balance) -> Promise;
-
+#[ext_contract(ext_redeeming_workflow_callbacks)]
+pub trait ExtRedeemingWokflowCallbacks {
     fn on_run_redeem_stake_batch(
         &mut self,
         #[callback] staking_pool_account: StakingPoolAccount,
     ) -> Promise;
 
     /// ## Success Workflow
-    /// 1. store the stake batch receipt
-    /// 2. update the STAKE token supply with the new STAKE tokens that were issued
-    fn on_deposit_and_stake(&mut self);
-
-    /// ## Success Workflow
     /// 1. store the redeem stake batch receipt
     /// 2. set the redeem stake batch lock state to pending withdrawal
     fn on_unstake(&mut self);
-
-    /// defined on [Operator] interface
-    fn release_run_stake_batch_lock(&mut self);
 
     fn release_run_redeem_stake_batch_unstaking_lock(&mut self);
 
@@ -599,6 +577,25 @@ pub trait ExtStakingPoolCallbacks {
         &mut self,
         #[callback] staking_pool_account: StakingPoolAccount,
     ) -> PromiseOrValue<BatchId>;
+}
+
+#[ext_contract(ext_staking_workflow_callbacks)]
+pub trait ExtStakingWokflowCallbacks {
+    /// callback for getting staked balance from staking pool as part of stake batch processing workflow
+    ///
+    /// ## Success Workflow
+    /// 1. update the stake token value
+    /// 2. deposit and stake funds with staking pool
+    /// 3. register [on_deposit_and_stake] callback on the deposit and stake action
+    fn on_run_stake_batch(&mut self, #[callback] staked_balance: Balance) -> Promise;
+
+    /// ## Success Workflow
+    /// 1. store the stake batch receipt
+    /// 2. update the STAKE token supply with the new STAKE tokens that were issued
+    fn on_deposit_and_stake(&mut self);
+
+    /// defined on [Operator] interface
+    fn release_run_stake_batch_lock(&mut self);
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
