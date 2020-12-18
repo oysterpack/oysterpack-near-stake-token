@@ -3,7 +3,7 @@ use crate::{
     near::assert_predecessor_is_self, StakeTokenContract,
 };
 use near_sdk::json_types::U128;
-use near_sdk::{env, near_bindgen, PromiseOrValue};
+use near_sdk::{env, near_bindgen};
 
 type Balance = U128;
 
@@ -107,10 +107,7 @@ mod test {
         let mut contract = StakeTokenContract::new(contract_settings);
         contract.register_account();
 
-        let initial_stake_token_value = match contract.stake_token_value() {
-            PromiseOrValue::Value(value) => value,
-            _ => panic!("expected cached StakeTokenValue to be returned"),
-        };
+        let initial_stake_token_value = contract.stake_token_value();
 
         context.attached_deposit = 100 * YOCTO;
         testing_env!(context.clone());
@@ -125,10 +122,7 @@ mod test {
         context.epoch_height += 1;
         testing_env!(context.clone());
         contract.on_run_stake_batch(0.into());
-        let stake_token_value_after_callback = match contract.stake_token_value() {
-            PromiseOrValue::Value(value) => value,
-            _ => panic!("expected cached StakeTokenValue to be returned"),
-        };
+        let stake_token_value_after_callback = contract.stake_token_value();
         assert!(
             stake_token_value_after_callback
                 .block_time_height

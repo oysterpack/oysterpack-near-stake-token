@@ -2,8 +2,9 @@ use crate::near_env::Env;
 use crate::{config::Config, near::*, ContractSettings, StakeTokenContract};
 use near_sdk::{
     serde::{Deserialize, Serialize},
-    AccountId, PromiseResult, VMContext,
+    serde_json, AccountId, PromiseResult, VMContext,
 };
+use near_vm_logic::mocks::mock_external as near_mocks;
 
 pub const EXPECTED_ACCOUNT_STORAGE_USAGE: u64 = 681;
 
@@ -65,6 +66,17 @@ pub enum Action {
         gas: u64,
         deposit: u128,
     },
+}
+
+pub fn deserialize_receipts(receipts: &[near_mocks::Receipt]) -> Vec<Receipt> {
+    receipts
+        .iter()
+        .map(|receipt| {
+            let json = serde_json::to_string_pretty(receipt).unwrap();
+            let receipt: Receipt = serde_json::from_str(&json).unwrap();
+            receipt
+        })
+        .collect()
 }
 
 #[allow(dead_code)]

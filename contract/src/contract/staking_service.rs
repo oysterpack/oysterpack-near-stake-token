@@ -12,7 +12,7 @@ use near_sdk::{
     json_types::U128,
     near_bindgen,
     serde::{Deserialize, Serialize},
-    AccountId, Promise, PromiseOrValue,
+    AccountId, Promise,
 };
 
 #[near_bindgen]
@@ -88,15 +88,6 @@ impl StakingService for StakeTokenContract {
         unimplemented!()
     }
 
-    /// logical workflow:
-    /// 1. If pending withdrawal, then check if funds can be withdrawn
-    ///    - if not then fail
-    /// 2. lock the contract
-    /// 3. get account stake balance
-    /// 4. unstake NEAR funds
-    /// 5. create redeem stake batch receipt
-    /// 6. update STAKE token supply
-    /// 7. unlock contract
     fn run_redeem_stake_batch(&mut self) -> Promise {
         assert!(
             !self.run_stake_batch_locked,
@@ -152,12 +143,8 @@ impl StakingService for StakeTokenContract {
         unimplemented!()
     }
 
-    fn stake_token_value(&self) -> PromiseOrValue<StakeTokenValue> {
-        if self.stake_token_value.is_current() {
-            return PromiseOrValue::Value(self.stake_token_value.into());
-        }
-
-        self.refresh_stake_token_value().into()
+    fn stake_token_value(&self) -> StakeTokenValue {
+        self.stake_token_value.into()
     }
 
     fn refresh_stake_token_value(&self) -> Promise {
@@ -536,7 +523,7 @@ pub trait ExtRedeemingWokflowCallbacks {
     fn on_redeeming_stake_pending_withdrawal(
         &mut self,
         #[callback] staking_pool_account: StakingPoolAccount,
-    ) -> PromiseOrValue<BatchId>;
+    ) -> near_sdk::PromiseOrValue<BatchId>;
 }
 
 #[ext_contract(ext_staking_workflow_callbacks)]
@@ -563,10 +550,10 @@ mod test {
     use super::*;
 
     use crate::interface::AccountManagement;
-    use crate::near::YOCTO;
+    use crate::near::{UNSTAKED_NEAR_FUNDS_NUM_EPOCHS_TO_UNLOCK, YOCTO};
     use crate::test_utils::*;
     use near_sdk::json_types::ValidAccountId;
-    use near_sdk::{serde_json, testing_env, MockedBlockchain};
+    use near_sdk::{testing_env, MockedBlockchain};
     use std::convert::{TryFrom, TryInto};
 
     /// Given the contract is not locked
@@ -1092,15 +1079,14 @@ mod test {
         contract.total_stake.credit(YOCTO.into());
         contract.stake_token_value = domain::StakeTokenValue::new(YOCTO.into(), YOCTO.into());
 
-        if let PromiseOrValue::Value(stake_token_value) = contract.stake_token_value() {
-            assert_eq!(
-                stake_token_value.total_stake_supply,
-                contract.total_stake.amount().into()
-            );
-            assert_eq!(stake_token_value.total_staked_near_balance, YOCTO.into());
-        } else {
-            panic!("cached StakeTokenValue should have been returned")
-        }
+        assert_eq!(
+            contract.stake_token_value().total_stake_supply,
+            contract.total_stake.amount().into()
+        );
+        assert_eq!(
+            contract.stake_token_value().total_staked_near_balance,
+            YOCTO.into()
+        );
     }
 
     /// Given the contract has a stake batch
@@ -1137,17 +1123,8 @@ mod test {
             context.prepaid_gas - env::used_gas()
         );
 
-        let txn_receipts = env::created_receipts();
-        let receipts: Vec<Receipt> = txn_receipts
-            .iter()
-            .map(|receipt| {
-                let json = serde_json::to_string_pretty(receipt).unwrap();
-                println!("{}", json);
-                let receipt: Receipt = serde_json::from_str(&json).unwrap();
-                receipt
-            })
-            .collect();
-        assert_eq!(txn_receipts.len(), 3);
+        let receipts: Vec<Receipt> = deserialize_receipts(&env::created_receipts());
+        assert_eq!(receipts.len(), 3);
 
         // there should be a `get_account_staked_balance` func call on the staking pool
         let _get_staked_balance_func_call = receipts
@@ -1440,5 +1417,328 @@ mod test {
             initial_account_stake.into()
         );
         assert_eq!(redeem_stake_batch.id, batch_id);
+    }
+
+    /// Given the contract is unlocked and has no batch runs in progress
+    /// And there is a redeem stake batch
+    /// When the redeem batch is run
+    /// Then it creates the following receipts
+    ///   - func call to get account from staking pool
+    ///   - func call for callback to clear the release lock if the state is `Unstaking`
+    #[test]
+    fn run_redeem_batch_no_locks() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.account_balance = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings.clone());
+
+        *contract.batch_id_sequence += 1;
+        contract.redeem_stake_batch = Some(RedeemStakeBatch::new(
+            contract.batch_id_sequence,
+            (10 * YOCTO).into(),
+        ));
+
+        contract.run_redeem_stake_batch();
+        assert_eq!(
+            contract.run_redeem_stake_batch_lock,
+            Some(RedeemLock::Unstaking)
+        );
+        let receipts = deserialize_receipts(&env::created_receipts());
+        println!("receipt count = {}\n{:#?}", receipts.len(), receipts);
+        assert_eq!(receipts.len(), 3);
+        let receipts = receipts.as_slice();
+        {
+            let receipt = receipts.first().unwrap();
+            assert_eq!(receipt.receiver_id, contract.staking_pool_id);
+
+            let actions = receipt.actions.as_slice();
+            let func_call_action = actions.first().unwrap();
+            match func_call_action {
+                Action::FunctionCall {
+                    method_name, args, ..
+                } => {
+                    assert_eq!(method_name, "get_account");
+                    assert_eq!(args, "{\"account_id\":\"stake.oysterpack.near\"}");
+                }
+                _ => panic!("expected func call action"),
+            }
+        }
+        {
+            let receipt = &receipts[1];
+            assert_eq!(receipt.receiver_id, env::current_account_id());
+
+            let actions = receipt.actions.as_slice();
+            let func_call_action = actions.first().unwrap();
+            match func_call_action {
+                Action::FunctionCall {
+                    method_name, args, ..
+                } => {
+                    assert_eq!(method_name, "on_run_redeem_stake_batch");
+                    assert!(args.is_empty());
+                }
+                _ => panic!("expected func call action"),
+            }
+        }
+        {
+            let receipt = &receipts[2];
+            assert_eq!(receipt.receiver_id, env::current_account_id());
+
+            let actions = receipt.actions.as_slice();
+            let func_call_action = actions.first().unwrap();
+            match func_call_action {
+                Action::FunctionCall {
+                    method_name, args, ..
+                } => {
+                    assert_eq!(method_name, "release_run_redeem_stake_batch_unstaking_lock");
+                    assert!(args.is_empty());
+                }
+                _ => panic!("expected func call action"),
+            }
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "batch cannot be run while NEAR is being staked")]
+    fn run_redeem_stake_batch_locked_for_staking() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.account_balance = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings.clone());
+
+        contract.run_stake_batch_locked = true;
+        contract.run_redeem_stake_batch();
+    }
+
+    #[test]
+    #[should_panic(expected = "batch is already in progress")]
+    fn run_redeem_stake_batch_locked_for_unstaking() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.account_balance = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings.clone());
+
+        contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
+        contract.run_redeem_stake_batch();
+    }
+
+    #[test]
+    #[should_panic(expected = "there is no redeem stake batch")]
+    fn run_redeem_stake_batch_no_batch() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.account_balance = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings.clone());
+
+        contract.run_redeem_stake_batch();
+    }
+
+    /// Given the contract is unlocked and has no batch runs in progress
+    /// And there is a redeem stake batch
+    /// When the redeem batch is run
+    /// Then it creates the following receipts
+    ///   - func call to get account from staking pool
+    ///   - func call for callback to clear the release lock if the state is `Unstaking`
+    #[test]
+    fn run_redeem_batch_pending_withdrawal() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.account_balance = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings.clone());
+
+        *contract.batch_id_sequence += 1;
+        contract.redeem_stake_batch = Some(RedeemStakeBatch::new(
+            contract.batch_id_sequence,
+            (10 * YOCTO).into(),
+        ));
+        contract.redeem_stake_batch_receipts.insert(
+            &contract.batch_id_sequence,
+            &domain::RedeemStakeBatchReceipt::new((10 * YOCTO).into(), contract.stake_token_value),
+        );
+        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+        context.epoch_height += UNSTAKED_NEAR_FUNDS_NUM_EPOCHS_TO_UNLOCK.value();
+        testing_env!(context.clone());
+        contract.run_redeem_stake_batch();
+        assert_eq!(
+            contract.run_redeem_stake_batch_lock,
+            Some(RedeemLock::PendingWithdrawal)
+        );
+        let receipts = deserialize_receipts(&env::created_receipts());
+        println!("receipt count = {}\n{:#?}", receipts.len(), receipts);
+        assert_eq!(receipts.len(), 2);
+        let receipts = receipts.as_slice();
+        {
+            let receipt = receipts.first().unwrap();
+            assert_eq!(receipt.receiver_id, contract.staking_pool_id);
+
+            let actions = receipt.actions.as_slice();
+            let func_call_action = actions.first().unwrap();
+            match func_call_action {
+                Action::FunctionCall {
+                    method_name, args, ..
+                } => {
+                    assert_eq!(method_name, "get_account");
+                    assert_eq!(args, "{\"account_id\":\"stake.oysterpack.near\"}");
+                }
+                _ => panic!("expected func call action"),
+            }
+        }
+        {
+            let receipt = &receipts[1];
+            assert_eq!(receipt.receiver_id, env::current_account_id());
+
+            let actions = receipt.actions.as_slice();
+            let func_call_action = actions.first().unwrap();
+            match func_call_action {
+                Action::FunctionCall {
+                    method_name, args, ..
+                } => {
+                    assert_eq!(method_name, "on_redeeming_stake_pending_withdrawal");
+                    assert!(args.is_empty());
+                }
+                _ => panic!("expected func call action"),
+            }
+        }
+    }
+
+    //     Some(RedeemLock::PendingWithdrawal) => {
+    // let batch = self
+    // .redeem_stake_batch
+    // .expect("illegal state - batch does not exist");
+    // let batch_id = batch.id();
+    // let batch_receipt = self
+    // .redeem_stake_batch_receipts
+    // .get(&batch_id)
+    // .expect("illegal state - batch receipt does not exist");
+
+    #[test]
+    #[should_panic(expected = "illegal state - batch does not exist")]
+    fn run_redeem_batch_pending_withdrawal_with_batch_not_exists() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.account_balance = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings.clone());
+
+        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+        contract.run_redeem_stake_batch();
+    }
+
+    #[test]
+    #[should_panic(expected = "illegal state - batch receipt does not exist")]
+    fn run_redeem_batch_pending_withdrawal_with_batch_receipt_not_exists() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.account_balance = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings.clone());
+
+        *contract.batch_id_sequence += 1;
+        contract.redeem_stake_batch = Some(RedeemStakeBatch::new(
+            contract.batch_id_sequence,
+            (10 * YOCTO).into(),
+        ));
+        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+        contract.run_redeem_stake_batch();
+    }
+
+    #[test]
+    #[should_panic(expected = "unstaked funds are not yet available for withdrawal")]
+    fn run_redeem_batch_pending_withdrawal_cannot_withdraw() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.account_balance = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings.clone());
+
+        *contract.batch_id_sequence += 1;
+        contract.redeem_stake_batch = Some(RedeemStakeBatch::new(
+            contract.batch_id_sequence,
+            (10 * YOCTO).into(),
+        ));
+        contract.redeem_stake_batch_receipts.insert(
+            &contract.batch_id_sequence,
+            &domain::RedeemStakeBatchReceipt::new((10 * YOCTO).into(), contract.stake_token_value),
+        );
+        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+        contract.run_redeem_stake_batch();
+    }
+
+    #[test]
+    fn refresh_stake_token_value() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.account_balance = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let contract = StakeTokenContract::new(contract_settings.clone());
+        contract.refresh_stake_token_value();
+
+        let receipts = deserialize_receipts(&env::created_receipts());
+        println!("receipt count = {}\n{:#?}", receipts.len(), receipts);
+        assert_eq!(receipts.len(), 2);
+        let receipts = receipts.as_slice();
+        {
+            let receipt = receipts.first().unwrap();
+            assert_eq!(receipt.receiver_id, contract.staking_pool_id);
+
+            let actions = receipt.actions.as_slice();
+            let func_call_action = actions.first().unwrap();
+            match func_call_action {
+                Action::FunctionCall {
+                    method_name, args, ..
+                } => {
+                    assert_eq!(method_name, "get_account_staked_balance");
+                    assert_eq!(args, "{\"account_id\":\"stake.oysterpack.near\"}");
+                }
+                _ => panic!("expected func call action"),
+            }
+        }
+        {
+            let receipt = &receipts[1];
+            assert_eq!(receipt.receiver_id, env::current_account_id());
+
+            let actions = receipt.actions.as_slice();
+            let func_call_action = actions.first().unwrap();
+            match func_call_action {
+                Action::FunctionCall {
+                    method_name, args, ..
+                } => {
+                    assert_eq!(method_name, "on_refresh_account_staked_balance");
+                    assert!(args.is_empty());
+                }
+                _ => panic!("expected func call action"),
+            }
+        }
     }
 }
