@@ -43,18 +43,20 @@ pub trait StakingService {
     /// - if the contract is locked
     fn withdraw_all_funds_from_stake_batch(&mut self);
 
+    /// locks the contract to stake the batched NEAR funds and then kicks off the workflow
+    /// 1. gets the account stake balance from the staking pool
+    /// 2. updates STAKE token value
+    /// 3. deposits and stakes the NEAR funds with the staking pool
+    /// 4. creates the batch receipt
+    /// 5. releases the lock
+    ///
+    /// NOTE: takes 5 blocks to complete
     ///
     /// ## Panics
-    /// - if contract is locked, which means a batch run is in progress
+    /// - if contract is locked for
+    ///   - staking batch is in progress
+    ///   - unstaking is in progress
     /// - if there is no stake batch to run
-    ///
-    /// ## Notes
-    /// - takes 5 blocks to complete:
-    ///     1. StakeTokenContract::run_stake_batch
-    ///     2. StakingPool::get_account_staked_balance
-    ///     3. StakeTokenContract::on_get_account_staked_balance_to_run_stake_batch
-    ///     4. StakingPool:deposit_and_stake
-    ///     5. StakeTokenContract::on_deposit_and_stake
     fn run_stake_batch(&mut self) -> Promise;
 
     /// Redeem the specified amount of STAKE.
@@ -77,7 +79,28 @@ pub trait StakingService {
     /// Returns false if there was no pending request.
     fn cancel_pending_redeem_stake_request(&mut self) -> bool;
 
-    /// returns None if there was no batch to run
+    /// STAKE tokens are redeemed in 2 steps: first the corresponding NEAR is unstaked with the staking
+    /// pool. Second, the NEAR funds need to be withdrawn from the staking pool. The unstaked NEAR
+    /// funds are not immediately available. They are locked in the staking pool for 4 epochs. Further
+    /// STAKE funds cannot be redeemed until the unstaked NEAR funds are withdrawn from the staking
+    /// pool. Otherwise, the lock period's clock resets to another 4 epochs.
+    ///
+    /// ## unstaking workflow
+    /// 1. sets the redeem lock to Unstaking
+    /// 2. get account info from staking pool
+    /// 3. if unstaked balance > 0
+    ///    3.1 if unstaked NEAR can be withdrawn, the withdraw all funds from the staking pool
+    ///    3.2 then go back to step #2
+    /// 4. if unstaked balance == 0, then unstake the NEAR with the saking pool
+    /// 5. create batch receipt
+    /// 6. set redeem lock to `PendingWithdrawal`
+    /// 7. clear redeem lock if lock state is `Unstaking` - which means a workflow step failed
+    ///
+    /// ## pending withdrawal workflow
+    ///
+    /// ## Panics
+    /// - if staking is in progress
+    /// - if the redeem stake batch is already in progress
     fn run_redeem_stake_batch(&mut self) -> Promise;
 
     /// Explicitly claims any available funds for batch receipts:
