@@ -51,14 +51,16 @@ impl StakingService for StakeTokenContract {
     fn run_stake_batch(&mut self) -> Promise {
         assert!(
             !self.run_stake_batch_locked,
-            "stake batch run is in progress"
+            "staking batch is already in progress"
         );
-        assert_ne!(
-            self.run_redeem_stake_batch_lock,
-            Some(RedeemLock::Unstaking),
-            "redeem stake batch run is in progress"
+        assert!(
+            !self.is_unstaking(),
+            "staking is blocked while unstaking is in progress"
         );
-        assert!(self.stake_batch.is_some(), "there is no stake batch");
+        assert!(
+            self.stake_batch.is_some(),
+            "there is no staking batch to run"
+        );
 
         self.run_stake_batch_locked = true;
 
@@ -176,7 +178,7 @@ impl StakingService for StakeTokenContract {
     }
 }
 
-// staking pool func calls
+// staking pool func call invocations
 impl StakeTokenContract {
     pub(crate) fn get_account_from_staking_pool(&self) -> Promise {
         ext_staking_pool::get_account(
@@ -470,6 +472,13 @@ impl StakeTokenContract {
         }
 
         claimed_funds
+    }
+
+    fn is_unstaking(&self) -> bool {
+        match self.run_redeem_stake_batch_lock {
+            Some(RedeemLock::Unstaking) => true,
+            _ => false,
+        }
     }
 }
 
@@ -993,7 +1002,7 @@ mod test {
     /// Given there is no stake batch to run
     /// Then the call fails
     #[test]
-    #[should_panic(expected = "there is no stake batch")]
+    #[should_panic(expected = "there is no staking batch to run")]
     fn run_stake_batch_no_stake_batch() {
         let account_id = "alfio-zappala.near";
         let context = new_context(account_id);
@@ -1011,7 +1020,7 @@ mod test {
     /// When the stake batch is run again while the contract is locked
     /// Then the func call panics
     #[test]
-    #[should_panic(expected = "stake batch run is in progress")]
+    #[should_panic(expected = "staking batch is already in progress")]
     fn run_stake_batch_contract_when_stake_batch_in_progress() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
@@ -1041,7 +1050,7 @@ mod test {
     /// When the stake batch is run
     /// Then the func call panics
     #[test]
-    #[should_panic(expected = "redeem stake batch run is in progress")]
+    #[should_panic(expected = "staking is blocked while unstaking is in progress")]
     fn run_stake_batch_contract_when_redeem_stake_batch_in_progress_unstaking() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);

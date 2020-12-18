@@ -21,7 +21,9 @@ impl StakeTokenContract {
         // the batch should always be present because the purpose of this callback is a step
         // in the batch processing workflow
         // - if the callback was called by itself, and the batch is not present, then there is a bug
-        let batch = self.stake_batch.expect("stake batch must be present");
+        let batch = self
+            .stake_batch
+            .expect("illegal state - stake batch should exist");
 
         assert!(
             self.promise_result_succeeded(),
@@ -56,10 +58,19 @@ impl StakeTokenContract {
         let batch = self
             .stake_batch
             .take()
-            .expect("callback should only be invoked when there is a StakeBatch being processed");
-        assert!(self.promise_result_succeeded(),"ERR: failed to process stake batch #{} - `deposit_and_stake` func call on staking pool failed", batch.id().value());
+            .expect("illegal state - stake batch should be present");
+        assert!(
+            self.promise_result_succeeded(),
+            "failed to deposit and stake into staking pool"
+        );
 
-        // create batch receipt
+        self.create_stake_batch_receipt(batch);
+        self.pop_stake_batch();
+    }
+}
+
+impl StakeTokenContract {
+    fn create_stake_batch_receipt(&mut self, batch: domain::StakeBatch) {
         let stake_batch_receipt =
             domain::StakeBatchReceipt::new(batch.balance().amount(), self.stake_token_value);
         self.stake_batch_receipts
@@ -70,12 +81,8 @@ impl StakeTokenContract {
             self.stake_token_value
                 .near_to_stake(batch.balance().amount()),
         );
-
-        self.pop_stake_batch();
     }
-}
 
-impl StakeTokenContract {
     /// moves the next batch into the current batch
     fn pop_stake_batch(&mut self) {
         self.stake_batch = self.next_stake_batch.take();
