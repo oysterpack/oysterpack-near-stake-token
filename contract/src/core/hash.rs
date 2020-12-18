@@ -1,4 +1,3 @@
-
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env,
@@ -18,14 +17,14 @@ use std::convert::TryInto;
     PartialOrd,
     Default,
 )]
-pub struct Hash([u8; 32]);
+pub struct Hash([u8; Hash::LENGTH]);
 
 impl Hash {
     const LENGTH: usize = 32;
 }
 
-impl From<[u8; 32]> for Hash {
-    fn from(value: [u8; 32]) -> Self {
+impl From<[u8; Hash::LENGTH]> for Hash {
+    fn from(value: [u8; Hash::LENGTH]) -> Self {
         Self(value)
     }
 }

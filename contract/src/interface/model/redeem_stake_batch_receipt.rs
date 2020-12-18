@@ -1,8 +1,4 @@
-use crate::interface::{EpochHeight, StakeTokenValue, YoctoNear, YoctoStake};
-use crate::{
-    domain,
-    interface::{BatchId, TimestampedStakeBalance},
-};
+use crate::interface::{BatchId, EpochHeight, StakeTokenValue, YoctoNear, YoctoStake};
 use near_sdk::serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

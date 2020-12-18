@@ -1,4 +1,3 @@
-
 use crate::{
     core::Hash,
     domain::{self, Account, RedeemLock, RedeemStakeBatch, StakeBatch},
@@ -10,12 +9,11 @@ use crate::{
 };
 use near_sdk::{
     env, ext_contract,
-    json_types::{U128, U64},
+    json_types::U128,
     near_bindgen,
     serde::{Deserialize, Serialize},
-    AccountId, Gas, Promise, PromiseOrValue,
+    AccountId, Promise, PromiseOrValue,
 };
-
 
 #[near_bindgen]
 impl StakingService for StakeTokenContract {
@@ -560,28 +558,16 @@ pub trait ExtStakingWokflowCallbacks {
     fn release_run_stake_batch_lock(&mut self);
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[serde(crate = "near_sdk::serde")]
-pub enum RunStakeBatchFailure {
-    GetStakedBalanceFailure(BatchId),
-    DepositAndStakeFailure(BatchId),
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
-    
-    
+
     use crate::interface::AccountManagement;
     use crate::near::YOCTO;
     use crate::test_utils::*;
     use near_sdk::json_types::ValidAccountId;
-    use near_sdk::{serde_json, testing_env, AccountId, MockedBlockchain};
+    use near_sdk::{serde_json, testing_env, MockedBlockchain};
     use std::convert::{TryFrom, TryInto};
-
-    fn operator_id() -> AccountId {
-        "operator.stake.oysterpack.near".to_string()
-    }
 
     /// Given the contract is not locked
     /// When an account deposits funds to be staked

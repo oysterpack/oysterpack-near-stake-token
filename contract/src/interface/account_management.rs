@@ -1,9 +1,7 @@
-
 use crate::interface::{StakeAccount, YoctoNear};
 use near_sdk::{
     json_types::{ValidAccountId, U128},
-    serde::{Deserialize, Serialize},
-    Promise, PromiseOrValue,
+    Promise,
 };
 
 pub trait AccountManagement {

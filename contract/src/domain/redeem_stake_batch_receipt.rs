@@ -1,8 +1,5 @@
 use crate::{
-    domain::{
-        BlockTimeHeight, EpochHeight, StakeTokenValue, TimestampedNearBalance,
-        TimestampedStakeBalance, YoctoNear, YoctoStake,
-    },
+    domain::{EpochHeight, StakeTokenValue, YoctoStake},
     near::UNSTAKED_NEAR_FUNDS_NUM_EPOCHS_TO_UNLOCK,
 };
 use near_sdk::{

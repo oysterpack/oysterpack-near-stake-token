@@ -7,7 +7,7 @@
 //! on a scheduled basis. The contract is locked while STAKE tokens are being issued because the
 //! STAKE token value needs to be computed.
 
-use crate::domain::{Account, BatchId, StakeTokenValue, TimestampedNearBalance, YoctoNear};
+use crate::domain::{StakeTokenValue, YoctoNear};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 
 #[derive(BorshSerialize, BorshDeserialize, Copy, Clone)]

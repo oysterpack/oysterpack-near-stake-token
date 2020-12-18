@@ -1,16 +1,11 @@
 use crate::{
-    core::Hash,
-    domain::{self, Account, RedeemLock, StakeBatch},
-    ext_redeeming_workflow_callbacks, ext_staking_pool, ext_staking_pool_callbacks,
-    interface::{BatchId, Operator, RedeemStakeBatchReceipt, StakingService, YoctoStake},
-    interface::{StakeBatchReceipt, StakeTokenValue, YoctoNear},
+    domain::{self, RedeemLock},
+    ext_redeeming_workflow_callbacks, ext_staking_pool,
+    interface::{BatchId, Operator, StakingService},
     near::{assert_predecessor_is_self, NO_DEPOSIT},
-    RunStakeBatchFailure, StakeTokenContract, StakingPoolAccount,
+    StakeTokenContract, StakingPoolAccount,
 };
-use near_sdk::json_types::{U128};
-use near_sdk::{env, ext_contract, near_bindgen, AccountId, Promise, PromiseOrValue};
-
-type Balance = U128;
+use near_sdk::{env, near_bindgen, Promise, PromiseOrValue};
 
 #[near_bindgen]
 impl StakeTokenContract {
@@ -187,17 +182,8 @@ mod test {
 
     use super::*;
     use crate::interface::Operator;
-    use crate::{
-        config::Config,
-        domain::StakeBatchReceipt,
-        interface::AccountManagement,
-        near::{self, YOCTO},
-        test_utils::*,
-    };
-    use near_sdk::{
-        json_types::ValidAccountId, serde_json, testing_env, AccountId, MockedBlockchain, VMContext,
-    };
-    
+    use crate::{interface::AccountManagement, near::YOCTO, test_utils::*};
+    use near_sdk::{serde_json, testing_env, MockedBlockchain};
 
     #[test]
     fn on_get_account_staked_balance_success() {

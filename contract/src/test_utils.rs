@@ -1,14 +1,9 @@
 use crate::near_env::Env;
-use crate::{
-    config::Config,
-    near::{*},
-    ContractSettings, StakeTokenContract,
-};
+use crate::{config::Config, near::*, ContractSettings, StakeTokenContract};
 use near_sdk::{
     serde::{Deserialize, Serialize},
     AccountId, PromiseResult, VMContext,
 };
-
 
 pub const EXPECTED_ACCOUNT_STORAGE_USAGE: u64 = 681;
 
@@ -72,6 +67,7 @@ pub enum Action {
     },
 }
 
+#[allow(dead_code)]
 pub fn set_env_with_success_promise_result(contract: &mut StakeTokenContract) {
     pub fn promise_result(_result_index: u64) -> PromiseResult {
         PromiseResult::Successful(vec![])

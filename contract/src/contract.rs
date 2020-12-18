@@ -12,15 +12,6 @@ use crate::StakeTokenContract;
 use near_sdk::{env, PromiseResult};
 
 impl StakeTokenContract {
-    /// asserts that the predecessor account ID must be the operator
-    fn assert_is_operator(&self) {
-        assert_eq!(
-            env::predecessor_account_id(),
-            self.operator_id,
-            "function can only be invoked by the operator"
-        );
-    }
-
     pub fn assert_predecessor_is_self_or_operator(&self) {
         let predecessor_account_id = env::predecessor_account_id();
         assert!(

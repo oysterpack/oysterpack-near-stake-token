@@ -1,6 +1,4 @@
-use crate::domain::{
-    BlockTimeHeight, YoctoNear, YoctoStake,
-};
+use crate::domain::{BlockTimeHeight, YoctoNear, YoctoStake};
 use crate::near::YOCTO;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use primitive_types::U256;
@@ -98,7 +96,7 @@ mod test {
 
     use super::*;
     use crate::test_utils::*;
-    use near_sdk::{serde_json, testing_env, AccountId, MockedBlockchain, VMContext};
+    use near_sdk::{testing_env, MockedBlockchain};
 
     #[test]
     fn when_total_stake_supply_is_zero() {

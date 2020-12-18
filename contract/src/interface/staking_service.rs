@@ -1,7 +1,4 @@
-use crate::interface::{
-    BatchId, BlockTimestamp, RedeemStakeBatchReceipt, StakeBatchReceipt, StakeTokenValue,
-    YoctoNear, YoctoStake,
-};
+use crate::interface::{BatchId, RedeemStakeBatchReceipt, StakeTokenValue, YoctoNear, YoctoStake};
 use near_sdk::{AccountId, Promise, PromiseOrValue};
 
 pub trait StakingService {

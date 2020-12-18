@@ -1,5 +1,5 @@
 // TODO: remove
-// #![allow(unused_imports, dead_code, unused_variables)]
+#![allow(dead_code, unused_variables)]
 
 pub mod config;
 pub mod contract;
@@ -29,14 +29,9 @@ use crate::{
 };
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    collections::{LookupMap, UnorderedMap},
-    env,
-    json_types::ValidAccountId,
-    near_bindgen,
-    serde::{Deserialize, Serialize},
-    wee_alloc, AccountId, PromiseResult,
+    collections::LookupMap,
+    env, near_bindgen, wee_alloc, AccountId, PromiseResult,
 };
-
 
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
@@ -237,8 +232,7 @@ impl StakeTokenContract {
 mod test {
     use super::*;
     use crate::{interface::AccountManagement, test_utils::*};
-    use near_sdk::{serde_json, testing_env, AccountId, MockedBlockchain, VMContext};
-    
+    use near_sdk::{serde_json, testing_env, MockedBlockchain};
 
     #[test]
     fn contract_settings_serde_json() {

@@ -163,12 +163,8 @@ mod test {
     use super::*;
     use crate::near::YOCTO;
     use crate::test_utils::*;
-    use near_sdk::{serde_json, testing_env, AccountId, MockedBlockchain};
+    use near_sdk::{serde_json, testing_env, MockedBlockchain};
     use std::convert::TryInto;
-
-    fn operator_id() -> AccountId {
-        "operator.stake.oysterpack.near".to_string()
-    }
 
     #[test]
     fn account_registered_is_view_func() {
