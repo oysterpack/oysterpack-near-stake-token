@@ -1,3 +1,4 @@
+use crate::domain::YoctoNear;
 use crate::{
     domain, ext_staking_pool, ext_staking_workflow_callbacks,
     interface::StakingService,
@@ -31,17 +32,8 @@ impl StakeTokenContract {
         self.stake_token_value =
             domain::StakeTokenValue::new(staked_balance.0.into(), self.total_stake.amount());
 
-        let deposit_and_stake = ext_staking_pool::deposit_and_stake(
-            &self.staking_pool_id,
-            batch.balance().amount().value(),
-            self.config
-                .gas_config()
-                .staking_pool()
-                .deposit_and_stake()
-                .value(),
-        );
-
-        deposit_and_stake.then(self.invoke_on_deposit_and_stake())
+        self.invoke_deposit_and_stake(batch.balance().amount())
+            .then(self.invoke_on_deposit_and_stake())
     }
 
     /// ## Success Workflow
@@ -88,6 +80,18 @@ impl StakeTokenContract {
 
 /// staking NEAR workflow callback invocations
 impl StakeTokenContract {
+    fn invoke_deposit_and_stake(&self, amount: YoctoNear) -> Promise {
+        ext_staking_pool::deposit_and_stake(
+            &self.staking_pool_id,
+            amount.value(),
+            self.config
+                .gas_config()
+                .staking_pool()
+                .deposit_and_stake()
+                .value(),
+        )
+    }
+
     pub(crate) fn invoke_on_run_stake_batch(&self) -> Promise {
         ext_staking_workflow_callbacks::on_run_stake_batch(
             &env::current_account_id(),
