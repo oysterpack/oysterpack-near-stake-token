@@ -373,6 +373,10 @@ impl StakeTokenContract {
             }
         }
 
+        if account.stake_batch.is_none() {
+            account.stake_batch = account.next_stake_batch.take();
+        }
+
         claimed_funds
     }
 
@@ -453,6 +457,10 @@ impl StakeTokenContract {
                 // while unstaking STAKE balances need to be locked, which means no receipts should be claimed
                 return false;
             }
+        }
+
+        if account.redeem_stake_batch.is_none() {
+            account.redeem_stake_batch = account.next_redeem_stake_batch.take();
         }
 
         claimed_funds
@@ -1740,5 +1748,148 @@ mod test {
                 _ => panic!("expected func call action"),
             }
         }
+    }
+
+    /// Given an account has redeemed STAKE
+    /// And the batch has completed
+    /// Then the account can claim the NEAR funds
+    #[test]
+    fn claim_redeem_stake_batch_receipts_for_current_batch() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.account_balance = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings.clone());
+
+        contract.register_account();
+
+        let account_id_hash = Hash::from(account_id);
+        let mut account = contract.accounts.get(&account_id_hash).unwrap();
+        account.redeem_stake_batch = Some(domain::RedeemStakeBatch::new(
+            contract.batch_id_sequence,
+            (10 * YOCTO).into(),
+        ));
+        contract.save_account(&account_id_hash, &account);
+
+        contract.redeem_stake_batch_receipts.insert(
+            &contract.batch_id_sequence,
+            &domain::RedeemStakeBatchReceipt::new((20 * YOCTO).into(), contract.stake_token_value),
+        );
+
+        contract.claim_all_batch_receipt_funds();
+        let account = contract.accounts.get(&account_id_hash).unwrap();
+        assert_eq!(account.near.unwrap().amount(), (10 * YOCTO).into());
+        assert!(account.redeem_stake_batch.is_none());
+
+        let receipt = contract
+            .redeem_stake_batch_receipts
+            .get(&contract.batch_id_sequence)
+            .unwrap();
+    }
+
+    #[test]
+    fn claim_redeem_stake_batch_receipts_for_current_and_next_batch() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.account_balance = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings.clone());
+
+        contract.register_account();
+
+        let account_id_hash = Hash::from(account_id);
+        let mut account = contract.accounts.get(&account_id_hash).unwrap();
+        account.redeem_stake_batch = Some(domain::RedeemStakeBatch::new(
+            contract.batch_id_sequence,
+            (10 * YOCTO).into(),
+        ));
+        *contract.batch_id_sequence += 1;
+        account.next_redeem_stake_batch = Some(domain::RedeemStakeBatch::new(
+            contract.batch_id_sequence,
+            (15 * YOCTO).into(),
+        ));
+        contract.save_account(&account_id_hash, &account);
+
+        contract.redeem_stake_batch_receipts.insert(
+            &(contract.batch_id_sequence.value() - 1).into(),
+            &domain::RedeemStakeBatchReceipt::new((10 * YOCTO).into(), contract.stake_token_value),
+        );
+        contract.redeem_stake_batch_receipts.insert(
+            &contract.batch_id_sequence,
+            &domain::RedeemStakeBatchReceipt::new((20 * YOCTO).into(), contract.stake_token_value),
+        );
+
+        contract.claim_all_batch_receipt_funds();
+        let account = contract.accounts.get(&account_id_hash).unwrap();
+        assert_eq!(account.near.unwrap().amount(), (25 * YOCTO).into());
+        assert!(account.redeem_stake_batch.is_none());
+        assert!(account.next_redeem_stake_batch.is_none());
+        assert!(contract
+            .redeem_stake_batch_receipts
+            .get(&(contract.batch_id_sequence.value() - 1).into())
+            .is_none());
+        assert_eq!(
+            contract
+                .redeem_stake_batch_receipts
+                .get(&contract.batch_id_sequence)
+                .unwrap()
+                .redeemed_stake(),
+            (5 * YOCTO).into()
+        );
+    }
+
+    /// Given an account has redeemed STAKE into the current and next batches
+    /// And there is a receipt for the current batch
+    /// When the account claims funds, the current batch funds will be claimed
+    /// And the next batch gets moved into the current batch slot
+    #[test]
+    fn claim_redeem_stake_batch_receipts_for_current_and_next_batch_with_receipt_for_current() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.account_balance = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings.clone());
+
+        contract.register_account();
+
+        let account_id_hash = Hash::from(account_id);
+        let mut account = contract.accounts.get(&account_id_hash).unwrap();
+        account.redeem_stake_batch = Some(domain::RedeemStakeBatch::new(
+            contract.batch_id_sequence,
+            (10 * YOCTO).into(),
+        ));
+        *contract.batch_id_sequence += 1;
+        account.next_redeem_stake_batch = Some(domain::RedeemStakeBatch::new(
+            contract.batch_id_sequence,
+            (15 * YOCTO).into(),
+        ));
+        contract.save_account(&account_id_hash, &account);
+
+        contract.redeem_stake_batch_receipts.insert(
+            &(contract.batch_id_sequence.value() - 1).into(),
+            &domain::RedeemStakeBatchReceipt::new((10 * YOCTO).into(), contract.stake_token_value),
+        );
+
+        contract.claim_all_batch_receipt_funds();
+        let account = contract.accounts.get(&account_id_hash).unwrap();
+        assert_eq!(account.near.unwrap().amount(), (10 * YOCTO).into());
+        assert_eq!(
+            account.redeem_stake_batch.unwrap().balance().amount(),
+            (15 * YOCTO).into()
+        );
+        assert!(account.next_redeem_stake_batch.is_none());
+        assert!(contract
+            .redeem_stake_batch_receipts
+            .get(&(contract.batch_id_sequence.value() - 1).into())
+            .is_none());
     }
 }

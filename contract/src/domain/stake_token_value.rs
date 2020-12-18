@@ -67,7 +67,7 @@ impl StakeTokenValue {
 
     pub fn stake_to_near(&self, stake: YoctoStake) -> YoctoNear {
         if self.total_staked_near_balance.value() == 0 || self.total_stake_supply.value() == 0 {
-            return YOCTO.into();
+            return stake.value().into();
         }
         let value = U256::from(stake) * U256::from(self.total_staked_near_balance)
             / U256::from(self.total_stake_supply);
