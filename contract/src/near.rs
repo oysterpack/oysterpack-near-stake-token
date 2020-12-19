@@ -1,7 +1,10 @@
 pub mod storage_keys;
 
-use crate::domain::{EpochHeight, YoctoNear};
-use near_sdk::{env};
+use crate::{
+    asserts,
+    domain::{EpochHeight, YoctoNear},
+};
+use near_sdk::env;
 
 /// YOCTO = 10^24
 pub const YOCTO: u128 = 1_000_000_000_000_000_000_000_000;
@@ -25,5 +28,7 @@ pub const UNSTAKED_NEAR_FUNDS_NUM_EPOCHS_TO_UNLOCK: EpochHeight = EpochHeight(4)
 /// asserts that predecessor account is the contract itself - used to enforce that callbacks
 /// should only be called internally - even though they are exposed on the public contract interface
 pub fn assert_predecessor_is_self() {
-    assert_eq!(env::predecessor_account_id(), env::current_account_id());
+    if env::predecessor_account_id() != env::current_account_id() {
+        panic!(asserts::PREDECESSOR_IS_SELF)
+    }
 }
