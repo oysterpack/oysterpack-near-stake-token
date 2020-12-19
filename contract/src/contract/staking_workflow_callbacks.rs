@@ -129,7 +129,6 @@ impl StakeTokenContract {
 mod test {
 
     use super::*;
-    use crate::interface::Operator;
     use crate::{interface::AccountManagement, near::YOCTO, test_utils::*};
     use near_sdk::{serde_json, testing_env, MockedBlockchain};
 

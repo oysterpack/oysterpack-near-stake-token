@@ -557,7 +557,7 @@ pub trait ExtStakingWokflowCallbacks {
 mod test {
     use super::*;
 
-    use crate::interface::AccountManagement;
+    use crate::interface::{AccountManagement, Operator};
     use crate::near::{UNSTAKED_NEAR_FUNDS_NUM_EPOCHS_TO_UNLOCK, YOCTO};
     use crate::test_utils::*;
     use near_sdk::json_types::ValidAccountId;
@@ -1195,6 +1195,68 @@ mod test {
                 }
             })
             .unwrap();
+    }
+
+    /// Given the funds were successfully deposited and staked into the staking pool
+    /// Then the stake batch receipts is saved
+    /// And the total STAKE supply is updated
+    /// And if there are funds in the next stake batch, then move it into the current batch
+    #[test]
+    fn run_stake_batch_workflow_success() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+
+        contract.register_account();
+
+        {
+            let staked_near_amount = 100 * YOCTO;
+            context.attached_deposit = staked_near_amount;
+            testing_env!(context.clone());
+            contract.deposit();
+
+            {
+                context.attached_deposit = 0;
+                testing_env!(context.clone());
+                // capture the batch ID to lookup the batch receipt after the workflow is done
+                let batch_id = contract.stake_batch.unwrap().id();
+                contract.run_stake_batch();
+                assert!(contract.run_stake_batch_locked);
+                {
+                    context.predecessor_account_id = context.current_account_id.clone();
+                    testing_env!(context.clone());
+                    contract.on_run_stake_batch(0.into()); // callback
+
+                    {
+                        context.predecessor_account_id = context.current_account_id.clone();
+                        testing_env!(context.clone());
+                        contract.on_deposit_and_stake(); // callback
+
+                        let _receipt = contract.stake_batch_receipts.get(&batch_id).expect(
+                            "receipt should have been created by `on_deposit_and_stake` callback",
+                        );
+
+                        assert_eq!(
+                            contract.total_stake.amount(),
+                            contract
+                                .stake_token_value
+                                .near_to_stake(staked_near_amount.into())
+                        );
+
+                        {
+                            context.predecessor_account_id = context.current_account_id.clone();
+                            testing_env!(context.clone());
+                            contract.release_run_stake_batch_lock();
+                            assert!(!contract.run_stake_batch_locked);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Given a registered account has STAKE
