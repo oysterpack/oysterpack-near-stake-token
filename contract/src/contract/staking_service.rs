@@ -559,11 +559,12 @@ pub trait ExtStakingWokflowCallbacks {
 mod test {
     use super::*;
 
-    use crate::interface::{AccountManagement, Operator};
-    use crate::near::{UNSTAKED_NEAR_FUNDS_NUM_EPOCHS_TO_UNLOCK, YOCTO};
-    use crate::test_utils::*;
-    use near_sdk::json_types::ValidAccountId;
-    use near_sdk::{testing_env, MockedBlockchain};
+    use crate::{
+        interface::{AccountManagement, Operator},
+        near::{UNSTAKED_NEAR_FUNDS_NUM_EPOCHS_TO_UNLOCK, YOCTO},
+        test_utils::*,
+    };
+    use near_sdk::{json_types::ValidAccountId, testing_env, MockedBlockchain};
     use std::convert::{TryFrom, TryInto};
 
     /// Given the contract is not locked

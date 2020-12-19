@@ -8,6 +8,7 @@ pub mod staking_workflow_callbacks;
 
 pub use staking_service::*;
 
+use crate::errors::asserts::PREDECESSOR_IS_SELF_OR_OPERATOR;
 use crate::StakeTokenContract;
 use near_sdk::{env, PromiseResult};
 
@@ -17,7 +18,7 @@ impl StakeTokenContract {
         assert!(
             predecessor_account_id == env::current_account_id()
                 || predecessor_account_id == self.operator_id,
-            "func can only be called by contract or operator accounts"
+            PREDECESSOR_IS_SELF_OR_OPERATOR
         );
     }
 }

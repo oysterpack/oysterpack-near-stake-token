@@ -1,5 +1,9 @@
 pub mod asserts {
     pub const PREDECESSOR_IS_SELF: &str = "func call is only allowed internally";
+    pub const PREDECESSOR_IS_SELF_OR_OPERATOR: &str =
+        "func call is pnly allowed internally or by an operator account";
+    pub const OPERATOR_ID_MUST_NOT_BE_CONTRACT_ID: &str =
+        "operator account ID must not be the contract account ID";
 }
 
 pub mod staking_pool_failures {

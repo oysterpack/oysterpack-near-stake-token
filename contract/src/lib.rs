@@ -136,9 +136,7 @@ impl StakeTokenContract {
     pub fn new(settings: ContractSettings) -> Self {
         assert!(!env::state_exists(), "contract is already initialized");
 
-        if let Some(err) = settings.validate() {
-            panic!(err.to_string());
-        }
+        settings.validate();
 
         let mut contract = Self {
             operator_id: settings.operator_id.into(),
@@ -244,8 +242,7 @@ mod test {
             "staking-pool.near".into(),
             "operator.stake.oysterpack.near".into(),
             Some(Config::default()),
-        )
-        .unwrap();
+        );
         let json = serde_json::to_string_pretty(&contract_settings).unwrap();
         println!("{}", json);
 

@@ -18,7 +18,6 @@ pub fn default_contract_settings() -> ContractSettings {
         "operator.stake.oysterpack.near".into(),
         None,
     )
-    .unwrap()
 }
 
 pub fn stake_contract_account_id() -> AccountId {

@@ -121,6 +121,7 @@ pub struct CallBacksGasConfig {
     unlock: Gas,
 
     // used by redeem stake workflow
+    on_run_redeem_stake_batch: Gas,
     on_redeeming_stake_pending_withdrawal: Gas,
 }
 
@@ -148,6 +149,10 @@ impl CallBacksGasConfig {
     pub fn on_unstake(&self) -> Gas {
         self.on_unstake
     }
+
+    pub fn on_run_redeem_stake_batch(&self) -> Gas {
+        self.on_run_redeem_stake_batch
+    }
 }
 
 impl Default for CallBacksGasConfig {
@@ -159,6 +164,7 @@ impl Default for CallBacksGasConfig {
             on_get_account_staked_balance: (BASE_GAS.value() * 3).into(),
             unlock: (BASE_GAS.value() * 3).into(),
             on_redeeming_stake_pending_withdrawal: (BASE_GAS.value() * 3).into(),
+            on_run_redeem_stake_batch: (BASE_GAS.value() * 3).into(),
         }
     }
 }
