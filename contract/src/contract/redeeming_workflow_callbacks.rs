@@ -1,3 +1,10 @@
+use crate::errors::illegal_state::REDEEM_STAKE_BATCH_SHOULD_EXIST;
+use crate::errors::redeeming_stake_errors::{
+    UNSTAKED_FUNDS_NOT_AVAILABLE_FOR_WITHDRAWAL, UNSTAKING_BLOCKED_BY_PENDING_WITHDRAWAL,
+};
+use crate::errors::staking_pool_failures::{
+    GET_ACCOUNT_FAILURE, GET_STAKED_BALANCE_FAILURE, UNSTAKE_FAILURE,
+};
 use crate::{
     domain::{self, RedeemLock},
     ext_redeeming_workflow_callbacks, ext_staking_pool,
@@ -20,12 +27,9 @@ impl StakeTokenContract {
         // - if the callback was called by itself, and the batch is not present, then there is a bug
         let batch = self
             .redeem_stake_batch
-            .expect("illegal state - batch is not present");
+            .expect(REDEEM_STAKE_BATCH_SHOULD_EXIST);
 
-        assert!(
-            self.promise_result_succeeded(),
-            "failed to get staked balance from staking pool"
-        );
+        assert!(self.promise_result_succeeded(), GET_STAKED_BALANCE_FAILURE);
 
         // all unstaked NEAR must be withdrawn before we are allowed to unstake more NEAR
         // - per the staking pool contract, unstaked NEAR funds are locked for 4 epoch periods and
@@ -33,7 +37,7 @@ impl StakeTokenContract {
         if staking_pool_account.unstaked_balance.0 > 0 {
             assert!(
                 staking_pool_account.can_withdraw,
-                "unstaking is blocked until all unstaked NEAR can be withdrawn"
+                UNSTAKING_BLOCKED_BY_PENDING_WITHDRAWAL
             );
 
             return self
@@ -58,10 +62,7 @@ impl StakeTokenContract {
     pub fn on_unstake(&mut self) {
         assert_predecessor_is_self();
 
-        assert!(
-            self.promise_result_succeeded(),
-            "failed to unstake NEAR with staking pool"
-        );
+        assert!(self.promise_result_succeeded(), UNSTAKE_FAILURE);
 
         self.create_redeem_stake_batch_receipt();
         self.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal)
@@ -73,15 +74,12 @@ impl StakeTokenContract {
     ) -> PromiseOrValue<BatchId> {
         assert_predecessor_is_self();
 
-        assert!(
-            self.promise_result_succeeded(),
-            "failed to get account info from staking pool"
-        );
+        assert!(self.promise_result_succeeded(), GET_ACCOUNT_FAILURE);
 
         if staking_pool_account.unstaked_balance.0 > 0 {
             assert!(
                 staking_pool_account.can_withdraw,
-                "unstaked NEAR funds are not yet available for withdrawal"
+                UNSTAKED_FUNDS_NOT_AVAILABLE_FOR_WITHDRAWAL
             );
 
             return self

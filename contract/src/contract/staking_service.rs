@@ -1,3 +1,13 @@
+use crate::errors::redeeming_stake_errors::{
+    NO_REDEEM_STAKE_BATCH_TO_RUN, REDEEM_STAKE_BATCH_BLOCKED_BY_STAKE_BATCH_RUN,
+    UNSTAKED_FUNDS_PENDING_WITHDRAWAL,
+};
+use crate::errors::staking_errors::{
+    NO_STAKE_BATCH_TO_RUN, STAKE_BATCH_ALREADY_IN_PROGRESS, STAKING_BLOCKED_BY_UNSTAKING,
+};
+use crate::errors::staking_service::{
+    DEPOSIT_REQUIRED_FOR_STAKE, INSUFFICIENT_STAKE_FOR_REDEEM_REQUEST, ZERO_REDEEM_AMOUNT,
+};
 use crate::{
     core::Hash,
     domain::{self, Account, RedeemLock, RedeemStakeBatch, StakeBatch},
@@ -49,16 +59,10 @@ impl StakingService for StakeTokenContract {
     fn run_stake_batch(&mut self) -> Promise {
         assert!(
             !self.run_stake_batch_locked,
-            "staking batch is already in progress"
+            STAKE_BATCH_ALREADY_IN_PROGRESS
         );
-        assert!(
-            !self.is_unstaking(),
-            "staking is blocked while unstaking is in progress"
-        );
-        assert!(
-            self.stake_batch.is_some(),
-            "there is no staking batch to run"
-        );
+        assert!(!self.is_unstaking(), STAKING_BLOCKED_BY_UNSTAKING);
+        assert!(self.stake_batch.is_some(), NO_STAKE_BATCH_TO_RUN);
 
         self.run_stake_batch_locked = true;
 
@@ -91,7 +95,7 @@ impl StakingService for StakeTokenContract {
     fn run_redeem_stake_batch(&mut self) -> Promise {
         assert!(
             !self.run_stake_batch_locked,
-            "batch cannot be run while NEAR is being staked"
+            REDEEM_STAKE_BATCH_BLOCKED_BY_STAKE_BATCH_RUN
         );
 
         match self.run_redeem_stake_batch_lock {
@@ -99,7 +103,7 @@ impl StakingService for StakeTokenContract {
             None => {
                 assert!(
                     self.redeem_stake_batch.is_some(),
-                    "there is no redeem stake batch"
+                    NO_REDEEM_STAKE_BATCH_TO_RUN
                 );
                 self.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
 
@@ -118,7 +122,7 @@ impl StakingService for StakeTokenContract {
                     .expect("illegal state - batch receipt does not exist");
                 assert!(
                     batch_receipt.unstaked_funds_available_for_withdrawal(),
-                    "unstaked funds are not yet available for withdrawal"
+                    UNSTAKED_FUNDS_PENDING_WITHDRAWAL
                 );
 
                 self.get_account_from_staking_pool()
@@ -204,7 +208,7 @@ impl StakeTokenContract {
         account: &mut Account,
         amount: domain::YoctoNear,
     ) -> BatchId {
-        assert!(amount.value() > 0, "deposit is required in order to stake");
+        assert!(amount.value() > 0, DEPOSIT_REQUIRED_FOR_STAKE);
 
         self.claim_receipt_funds(account);
 
@@ -261,13 +265,11 @@ impl StakeTokenContract {
         account: &mut Account,
         amount: domain::YoctoStake,
     ) -> BatchId {
-        assert_ne!(amount.value(), 0, "redeem amount must not be zero");
+        assert!(amount.value() > 0, ZERO_REDEEM_AMOUNT);
 
         assert!(
-            account
-                .stake
-                .map_or(false, |stake| stake.amount() >= amount),
-            "account STAKE balance is insufficient to fulfill request"
+            account.can_redeem(amount),
+            INSUFFICIENT_STAKE_FOR_REDEEM_REQUEST
         );
 
         // debit the amount of STAKE to redeem from the account
@@ -982,7 +984,7 @@ mod test {
     /// Given there is no stake batch to run
     /// Then the call fails
     #[test]
-    #[should_panic(expected = "there is no staking batch to run")]
+    #[should_panic(expected = "there is no stake batch to run")]
     fn run_stake_batch_no_stake_batch() {
         let account_id = "alfio-zappala.near";
         let context = new_context(account_id);
@@ -1572,7 +1574,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "batch cannot be run while NEAR is being staked")]
+    #[should_panic(expected = "RedeemStakeBatch is blocked by StakeBatch run")]
     fn run_redeem_stake_batch_locked_for_staking() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);

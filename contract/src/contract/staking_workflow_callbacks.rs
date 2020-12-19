@@ -1,4 +1,6 @@
 use crate::domain::YoctoNear;
+use crate::errors::illegal_state::STAKE_BATCH_SHOULD_EXIST;
+use crate::errors::staking_pool_failures::{DEPOSIT_AND_STAKE_FAILURE, GET_STAKED_BALANCE_FAILURE};
 use crate::{
     domain, ext_staking_pool, ext_staking_workflow_callbacks,
     interface::StakingService,
@@ -19,14 +21,9 @@ impl StakeTokenContract {
         // the batch should always be present because the purpose of this callback is a step
         // in the batch processing workflow
         // - if the callback was called by itself, and the batch is not present, then there is a bug
-        let batch = self
-            .stake_batch
-            .expect("illegal state - stake batch should exist");
+        let batch = self.stake_batch.expect(STAKE_BATCH_SHOULD_EXIST);
 
-        assert!(
-            self.promise_result_succeeded(),
-            "failed to get staked balance from staking pool"
-        );
+        assert!(self.promise_result_succeeded(), GET_STAKED_BALANCE_FAILURE);
 
         // update the cached STAKE token value
         self.stake_token_value =
@@ -44,14 +41,8 @@ impl StakeTokenContract {
     pub fn on_deposit_and_stake(&mut self) {
         assert_predecessor_is_self();
 
-        let batch = self
-            .stake_batch
-            .take()
-            .expect("illegal state - stake batch should be present");
-        assert!(
-            self.promise_result_succeeded(),
-            "failed to deposit and stake into staking pool"
-        );
+        let batch = self.stake_batch.take().expect(STAKE_BATCH_SHOULD_EXIST);
+        assert!(self.promise_result_succeeded(), DEPOSIT_AND_STAKE_FAILURE);
 
         self.create_stake_batch_receipt(batch);
         self.pop_stake_batch();

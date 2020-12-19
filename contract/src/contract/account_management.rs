@@ -1,8 +1,10 @@
 use crate::{
     core::Hash,
     domain::{Account, YoctoNear},
+    errors::account_management::{
+        ACCOUNT_ALREADY_REGISTERED, INSUFFICIENT_STORAGE_FEE, UNREGISTER_REQUIRES_ZERO_BALANCES,
+    },
     interface::{self, AccountManagement, StakeAccount},
-    near::YOCTO,
     StakeTokenContract,
 };
 use near_sdk::{
@@ -28,15 +30,14 @@ impl AccountManagement for StakeTokenContract {
         let attached_deposit = YoctoNear(env::attached_deposit());
         assert!(
             attached_deposit.value() >= account_storage_fee.value(),
-            "deposit is required to pay for account storage fees : {} NEAR",
-            account_storage_fee.value() as f64 / YOCTO as f64,
+            INSUFFICIENT_STORAGE_FEE,
         );
 
         let account = Account::new(account_storage_fee);
         assert!(
             self.save_account(&Hash::from(&env::predecessor_account_id()), &account)
                 .is_none(),
-            "account is already registered"
+            ACCOUNT_ALREADY_REGISTERED
         );
 
         // refund over payment of storage fees
@@ -53,10 +54,7 @@ impl AccountManagement for StakeTokenContract {
         match self.delete_account(&account_id_hash) {
             None => panic!("account is not registered"),
             Some(account) => {
-                assert!(
-                    !account.has_funds(),
-                    "all funds must be withdrawn from the account in order to unregister"
-                );
+                assert!(!account.has_funds(), UNREGISTER_REQUIRES_ZERO_BALANCES);
                 // refund the escrowed storage fee
                 Promise::new(account_id).transfer(account.storage_escrow.amount().value());
             }
@@ -333,7 +331,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "deposit is required to pay for account storage fees")]
+    #[should_panic(expected = "sufficient deposit is required to pay for account storage fees")]
     fn register_account_with_no_attached_deposit() {
         let account_id = "alfio-zappala.near";
         let context = new_context(account_id);
@@ -346,7 +344,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "deposit is required to pay for account storage fees")]
+    #[should_panic(expected = "sufficient deposit is required to pay for account storage fees")]
     fn register_account_with_insufficient_deposit_for_storage_fees() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);

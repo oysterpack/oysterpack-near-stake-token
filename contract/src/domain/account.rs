@@ -1,7 +1,6 @@
 use crate::domain::stake_batch::StakeBatch;
 use crate::domain::{
-    RedeemStakeBatch, TimestampedNearBalance, TimestampedStakeBalance, YoctoNear,
-    YoctoStake,
+    RedeemStakeBatch, TimestampedNearBalance, TimestampedStakeBalance, YoctoNear, YoctoStake,
 };
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 
@@ -67,6 +66,11 @@ impl Account {
             redeem_stake_batch: Some(RedeemStakeBatch::new(0.into(), 0.into())),
             next_redeem_stake_batch: Some(RedeemStakeBatch::new(0.into(), 0.into())),
         }
+    }
+
+    /// returns false if the account does not have sufficient STAKE funds to fullfill the redeem request
+    pub fn can_redeem(&self, amount: YoctoStake) -> bool {
+        self.stake.map_or(false, |stake| stake.amount() >= amount)
     }
 
     pub fn has_funds(&self) -> bool {
