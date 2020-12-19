@@ -1,4 +1,6 @@
-use crate::errors::illegal_state::REDEEM_STAKE_BATCH_SHOULD_EXIST;
+use crate::errors::illegal_state::{
+    REDEEM_STAKE_BATCH_RECEIPT_SHOULD_EXIST, REDEEM_STAKE_BATCH_SHOULD_EXIST,
+};
 use crate::errors::redeeming_stake_errors::{
     UNSTAKED_FUNDS_NOT_AVAILABLE_FOR_WITHDRAWAL, UNSTAKING_BLOCKED_BY_PENDING_WITHDRAWAL,
 };
@@ -91,8 +93,14 @@ impl StakeTokenContract {
 
         let batch_id = self
             .redeem_stake_batch
-            .expect("illegal state - batch should exist while pending withdrawal")
+            .expect(REDEEM_STAKE_BATCH_SHOULD_EXIST)
             .id();
+
+        let receipt = self
+            .redeem_stake_batch_receipts
+            .get(&batch_id)
+            .expect(REDEEM_STAKE_BATCH_RECEIPT_SHOULD_EXIST);
+        self.total_near.credit(receipt.stake_near_value());
 
         self.run_redeem_stake_batch_lock = None;
         self.pop_redeem_stake_batch();
@@ -178,6 +186,7 @@ impl StakeTokenContract {
 mod test {
     use super::*;
 
+    use crate::domain::RedeemStakeBatchReceipt;
     use crate::{
         domain::{RedeemStakeBatch, TimestampedStakeBalance},
         near::YOCTO,
@@ -552,10 +561,16 @@ mod test {
         *contract.batch_id_sequence += 1;
         contract.total_stake = TimestampedStakeBalance::new((1000 * YOCTO).into());
 
-        let redeem_stake_batch =
-            RedeemStakeBatch::new(contract.batch_id_sequence, (100 * YOCTO).into());
-        contract.redeem_stake_batch = Some(redeem_stake_batch);
+        let batch = RedeemStakeBatch::new(contract.batch_id_sequence, (100 * YOCTO).into());
+        contract.redeem_stake_batch = Some(batch);
         contract.total_stake = TimestampedStakeBalance::new((1000 * YOCTO).into());
+
+        let batch_receipt =
+            RedeemStakeBatchReceipt::new(batch.balance().amount(), contract.stake_token_value);
+        contract
+            .redeem_stake_batch_receipts
+            .insert(&batch.id(), &batch_receipt);
+        let stake_near_value = batch_receipt.stake_near_value();
 
         context.predecessor_account_id = context.current_account_id.clone();
         testing_env!(context.clone());
@@ -567,10 +582,12 @@ mod test {
             can_withdraw: true,
         };
         match contract.on_redeeming_stake_pending_withdrawal(staking_pool_account) {
-            PromiseOrValue::Value(batch_id) => assert_eq!(batch_id, redeem_stake_batch.id().into()),
+            PromiseOrValue::Value(batch_id) => assert_eq!(batch_id, batch.id().into()),
             _ => panic!("redeem stake batch should have completed"),
         }
         assert!(contract.redeem_stake_batch.is_none());
+        println!("contract NEAR balance = {:?}", contract.total_near.amount());
+        assert_eq!(contract.total_near.amount(), stake_near_value);
     }
 
     /// Given the unstaked balance with the staking pool is > 0

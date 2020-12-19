@@ -1,3 +1,4 @@
+use crate::domain::YoctoNear;
 use crate::{
     domain::{EpochHeight, StakeTokenValue, YoctoStake},
     near::UNSTAKED_NEAR_FUNDS_NUM_EPOCHS_TO_UNLOCK,
@@ -47,5 +48,9 @@ impl RedeemStakeBatchReceipt {
 
     pub fn all_claimed(&self) -> bool {
         self.redeemed_stake.value() == 0
+    }
+
+    pub fn stake_near_value(&self) -> YoctoNear {
+        self.stake_token_value.stake_to_near(self.redeemed_stake)
     }
 }

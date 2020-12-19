@@ -56,6 +56,9 @@ pub mod illegal_state {
 
     pub const REDEEM_STAKE_BATCH_SHOULD_EXIST: &str =
         "ILLEGAL STATE : redeem stake batch should exist";
+
+    pub const REDEEM_STAKE_BATCH_RECEIPT_SHOULD_EXIST: &str =
+        "ILLEGAL STATE : redeem stake batch receipt should exist";
 }
 
 pub mod account_management {
