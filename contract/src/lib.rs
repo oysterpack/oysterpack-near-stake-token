@@ -111,8 +111,8 @@ pub struct StakeTokenContract {
     run_stake_batch_locked: bool,
     run_redeem_stake_batch_lock: Option<RedeemLock>,
 
+    /// for NEP-122 - vault-based fungible token
     vaults: LookupMap<VaultId, Vault>,
-
     vault_id_sequence: VaultId,
 
     #[cfg(test)]

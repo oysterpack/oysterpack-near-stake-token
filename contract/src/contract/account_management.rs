@@ -573,7 +573,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "account NEAR balance is insufficient to fulfill the debit request")]
+    #[should_panic(expected = "account NEAR balance is too low to fulfill request")]
     fn withdraw_with_insufficient_funds() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);

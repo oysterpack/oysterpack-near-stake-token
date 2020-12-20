@@ -77,8 +77,15 @@ pub mod vault_fungible_token {
     pub const RECEIVER_MUST_NOT_BE_SENDER: &str = "receiver account must not be the sender";
 
     pub const ACCOUNT_INSUFFICIENT_STAKE_FUNDS: &str =
-        "account STAKE balance is insufficient to fulfill the debit request";
+        "account STAKE balance is to low to fulfill request";
 
     pub const ACCOUNT_INSUFFICIENT_NEAR_FUNDS: &str =
-        "account NEAR balance is insufficient to fulfill the debit request";
+        "account NEAR balance is too low to fulfill request";
+
+    pub const VAULT_DOES_NOT_EXIST: &str = "vault does not exist";
+
+    pub const VAULT_ACCESS_DENIED: &str = "vault access is denied";
+
+    pub const VAULT_INSUFFICIENT_FUNDS: &str =
+        "vault balance is too low to fulfill withdrawal request";
 }

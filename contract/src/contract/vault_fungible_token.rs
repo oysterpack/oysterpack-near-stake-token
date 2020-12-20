@@ -2,7 +2,8 @@
 
 use crate::domain::Vault;
 use crate::errors::vault_fungible_token::{
-    ACCOUNT_INSUFFICIENT_STAKE_FUNDS, RECEIVER_MUST_NOT_BE_SENDER,
+    ACCOUNT_INSUFFICIENT_STAKE_FUNDS, RECEIVER_MUST_NOT_BE_SENDER, VAULT_ACCESS_DENIED,
+    VAULT_DOES_NOT_EXIST, VAULT_INSUFFICIENT_FUNDS,
 };
 use crate::{
     core::Hash,
@@ -124,15 +125,36 @@ impl VaultFungibleToken for StakeTokenContract {
         receiver_id: ValidAccountId,
         amount: YoctoStake,
     ) {
-        unimplemented!()
+        let vault_id = vault_id.into();
+        let mut vault = self.vaults.get(&vault_id).expect(VAULT_DOES_NOT_EXIST);
+
+        let (_vault_owner, vault_owner_id) =
+            self.registered_account(&env::predecessor_account_id());
+        if vault_owner_id != vault.owner_id_hash() {
+            panic!(VAULT_ACCESS_DENIED);
+        }
+
+        let (mut receiver_account, receiver_account_id) =
+            self.registered_account(receiver_id.as_ref());
+
+        let transfer_amount = amount.into();
+        assert!(vault.balance() >= transfer_amount, VAULT_INSUFFICIENT_FUNDS);
+        vault.debit(transfer_amount);
+        self.vaults.insert(&vault_id, &vault);
+
+        receiver_account.apply_stake_credit(transfer_amount);
+        self.save_account(&receiver_account_id, &receiver_account);
     }
 
     fn get_total_supply(&self) -> YoctoStake {
-        unimplemented!()
+        self.total_stake.amount().into()
     }
 
     fn get_balance(&self, account_id: ValidAccountId) -> YoctoStake {
-        unimplemented!()
+        let (account, _) = self.registered_account(account_id.as_ref());
+        account
+            .stake
+            .map_or(0.into(), |balance| balance.amount().into())
     }
 }
 

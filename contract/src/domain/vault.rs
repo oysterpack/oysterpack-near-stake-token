@@ -1,4 +1,4 @@
-use crate::{core::Hash, domain::YoctoStake};
+use crate::{core::Hash, domain::YoctoStake, interface};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use std::ops::{Deref, DerefMut};
 
@@ -7,13 +7,17 @@ pub struct Vault(pub Hash, pub YoctoStake);
 
 impl Vault {
     /// This information is only needed to validate safe ownership during withdrawal.
-    pub fn receiver_id_hash(&self) -> Hash {
+    pub fn owner_id_hash(&self) -> Hash {
         self.0
     }
 
     /// The remaining amount of tokens in the safe.
     pub fn balance(&self) -> YoctoStake {
         self.1
+    }
+
+    pub fn debit(&mut self, amount: YoctoStake) {
+        *self.1 -= *amount
     }
 }
 
@@ -29,6 +33,12 @@ impl VaultId {
 impl From<u128> for VaultId {
     fn from(value: u128) -> Self {
         Self(value.into())
+    }
+}
+
+impl From<interface::VaultId> for VaultId {
+    fn from(id: interface::VaultId) -> Self {
+        id.0 .0.into()
     }
 }
 
@@ -49,5 +59,25 @@ impl Deref for VaultId {
 impl DerefMut for VaultId {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+#[cfg(test)]
+mod test {
+
+    use super::*;
+
+    #[test]
+    fn debit() {
+        let mut vault = Vault(Hash::default(), YoctoStake(100));
+        vault.debit(YoctoStake(10));
+        assert_eq!(vault.balance(), YoctoStake(90));
+    }
+
+    #[test]
+    fn inc_vault_sequence_id() {
+        let mut vault_id = VaultId::default();
+        *vault_id += 1;
+        assert_eq!(vault_id.value(), 1);
     }
 }
