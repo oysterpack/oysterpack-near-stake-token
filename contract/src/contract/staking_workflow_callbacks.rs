@@ -1,13 +1,15 @@
-use crate::domain::YoctoNear;
-use crate::errors::illegal_state::STAKE_BATCH_SHOULD_EXIST;
-use crate::errors::staking_pool_failures::{DEPOSIT_AND_STAKE_FAILURE, GET_STAKED_BALANCE_FAILURE};
+use crate::*;
 use crate::{
-    domain, ext_staking_pool, ext_staking_workflow_callbacks,
+    domain::{self, YoctoNear},
+    errors::{
+        illegal_state::STAKE_BATCH_SHOULD_EXIST,
+        staking_pool_failures::{DEPOSIT_AND_STAKE_FAILURE, GET_STAKED_BALANCE_FAILURE},
+    },
+    ext_staking_pool, ext_staking_workflow_callbacks,
     near::{assert_predecessor_is_self, NO_DEPOSIT},
     StakeTokenContract,
 };
-use near_sdk::json_types::U128;
-use near_sdk::{env, near_bindgen, Promise};
+use near_sdk::{env, json_types::U128, near_bindgen, Promise};
 
 type Balance = U128;
 

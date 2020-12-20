@@ -23,3 +23,10 @@ Exploring The Code
    - contains NEAR utilities
 - `test-utils` module
    - contains code to support unit testing
+  
+
+## NOTES
+- when `near_bindgen` macro is used outside of lib.rs, the following import is necessary in order to compile:
+```rust
+use crate::*;
+```

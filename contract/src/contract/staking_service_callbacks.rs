@@ -1,9 +1,9 @@
+use crate::*;
 use crate::{
     domain, interface::StakeTokenValue, near::assert_predecessor_is_self,
     staking_pool_failures::GET_STAKED_BALANCE_FAILURE, StakeTokenContract,
 };
-use near_sdk::json_types::U128;
-use near_sdk::near_bindgen;
+use near_sdk::{json_types::U128, near_bindgen};
 
 type Balance = U128;
 
