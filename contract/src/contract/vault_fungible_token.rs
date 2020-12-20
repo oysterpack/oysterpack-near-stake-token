@@ -1,5 +1,3 @@
-#![allow(unused_imports)]
-
 use crate::domain::Vault;
 use crate::errors::vault_fungible_token::{
     ACCOUNT_INSUFFICIENT_STAKE_FUNDS, RECEIVER_MUST_NOT_BE_SENDER, VAULT_ACCESS_DENIED,
@@ -8,21 +6,16 @@ use crate::errors::vault_fungible_token::{
 use crate::near::assert_predecessor_is_self;
 use crate::{
     core::Hash,
-    domain::{self, Account, RedeemLock, RedeemStakeBatch, StakeBatch},
     interface::{
-        ext_self, ext_token_receiver, BatchId, RedeemStakeBatchReceipt, ResolveVaultCallback,
-        StakeTokenValue, StakingService, VaultFungibleToken, VaultId, YoctoNear, YoctoStake,
+        ext_self, ext_token_receiver, ResolveVaultCallback, VaultFungibleToken, VaultId, YoctoStake,
     },
     near::NO_DEPOSIT,
     StakeTokenContract,
 };
-use near_sdk::json_types::ValidAccountId;
+
 use near_sdk::{
-    env, ext_contract,
-    json_types::U128,
-    near_bindgen,
-    serde::{Deserialize, Serialize},
-    AccountId, Promise,
+    env, json_types::ValidAccountId, json_types::U128, near_bindgen, serde::Deserialize, AccountId,
+    Promise,
 };
 
 #[near_bindgen]
@@ -540,6 +533,47 @@ mod test {
     }
 
     #[test]
+    #[should_panic(expected = "Not enough gas attached. Attach at least")]
+    fn withdraw_from_vault_insufficient_gas() {
+        let sender_account_id = "sender.near";
+        let receiver_account_id = "receiver.near";
+
+        let mut context = new_context(receiver_account_id);
+        context.attached_deposit = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+        contract.register_account();
+
+        context.predecessor_account_id = sender_account_id.to_string();
+        testing_env!(context.clone());
+        contract.register_account();
+
+        let (mut account, account_id_hash) = contract.registered_account(sender_account_id);
+        account.apply_stake_credit((100 * YOCTO).into());
+        contract.save_account(&account_id_hash, &account);
+        contract.total_stake.credit(account.stake.unwrap().amount());
+
+        let transfer_amount = YoctoStake::from(10 * YOCTO);
+        let payload = "payload";
+
+        context.prepaid_gas = contract
+            .config
+            .gas_config()
+            .vault_fungible_token()
+            .min_gas_for_receiver()
+            .value()
+            - 1;
+        testing_env!(context.clone());
+        contract.transfer_with_vault(
+            ValidAccountId::try_from(receiver_account_id).unwrap(),
+            transfer_amount.clone(),
+            payload.to_string(),
+        );
+    }
+
+    #[test]
     #[should_panic(expected = "account is not registered: unknown.near")]
     fn withdraw_from_vault_receiver_account_not_registered() {
         let sender_account_id = "sender.near";
@@ -577,6 +611,48 @@ mod test {
         contract.withdraw_from_vault(
             contract.vault_id_sequence.into(),
             ValidAccountId::try_from("unknown.near").unwrap(),
+            transfer_amount.clone(),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "vault access is denied")]
+    fn withdraw_from_vault_access_denied() {
+        let sender_account_id = "sender.near";
+        let receiver_account_id = "receiver.near";
+
+        let mut context = new_context(receiver_account_id);
+        context.attached_deposit = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+        contract.register_account();
+
+        context.predecessor_account_id = sender_account_id.to_string();
+        testing_env!(context.clone());
+        contract.register_account();
+
+        let (mut account, account_id_hash) = contract.registered_account(sender_account_id);
+        account.apply_stake_credit((100 * YOCTO).into());
+        contract.save_account(&account_id_hash, &account);
+        contract.total_stake.credit(account.stake.unwrap().amount());
+
+        let transfer_amount = YoctoStake::from(10 * YOCTO);
+        let payload = "payload";
+
+        testing_env!(context.clone());
+        contract.transfer_with_vault(
+            ValidAccountId::try_from(receiver_account_id).unwrap(),
+            transfer_amount.clone(),
+            payload.to_string(),
+        );
+
+        context.predecessor_account_id = sender_account_id.to_string();
+        testing_env!(context.clone());
+        contract.withdraw_from_vault(
+            contract.vault_id_sequence.into(),
+            ValidAccountId::try_from(receiver_account_id).unwrap(),
             transfer_amount.clone(),
         );
     }
@@ -620,6 +696,107 @@ mod test {
             contract.vault_id_sequence.into(),
             ValidAccountId::try_from(receiver_account_id).unwrap(),
             (transfer_amount.value() + 1).into(),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "vault does not exist")]
+    fn withdraw_from_vault_vault_does_not_exist() {
+        let sender_account_id = "sender.near";
+        let receiver_account_id = "receiver.near";
+
+        let mut context = new_context(receiver_account_id);
+        context.attached_deposit = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+        contract.register_account();
+
+        context.predecessor_account_id = sender_account_id.to_string();
+        testing_env!(context.clone());
+        contract.register_account();
+
+        let (mut account, account_id_hash) = contract.registered_account(sender_account_id);
+        account.apply_stake_credit((100 * YOCTO).into());
+        contract.save_account(&account_id_hash, &account);
+        contract.total_stake.credit(account.stake.unwrap().amount());
+
+        let transfer_amount = YoctoStake::from(10 * YOCTO);
+        let payload = "payload";
+
+        testing_env!(context.clone());
+        contract.transfer_with_vault(
+            ValidAccountId::try_from(receiver_account_id).unwrap(),
+            transfer_amount.clone(),
+            payload.to_string(),
+        );
+
+        context.predecessor_account_id = receiver_account_id.to_string();
+        testing_env!(context.clone());
+        contract.withdraw_from_vault(
+            10.into(),
+            ValidAccountId::try_from(receiver_account_id).unwrap(),
+            (transfer_amount.value() + 1).into(),
+        );
+    }
+
+    #[test]
+    fn resolve_vault_success() {
+        let sender_account_id = "sender.near";
+        let receiver_account_id = "receiver.near";
+
+        let mut context = new_context(receiver_account_id);
+        context.attached_deposit = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+        contract.register_account();
+
+        context.predecessor_account_id = sender_account_id.to_string();
+        testing_env!(context.clone());
+        contract.register_account();
+
+        let (mut account, account_id_hash) = contract.registered_account(sender_account_id);
+        account.apply_stake_credit((100 * YOCTO).into());
+        contract.save_account(&account_id_hash, &account);
+        contract.total_stake.credit(account.stake.unwrap().amount());
+
+        let transfer_amount = YoctoStake::from(10 * YOCTO);
+        let payload = "payload";
+
+        testing_env!(context.clone());
+        contract.transfer_with_vault(
+            ValidAccountId::try_from(receiver_account_id).unwrap(),
+            transfer_amount.clone(),
+            payload.to_string(),
+        );
+
+        let withdrawal_amount = YoctoStake::from(4 * YOCTO);
+        context.predecessor_account_id = receiver_account_id.to_string();
+        testing_env!(context.clone());
+        contract.withdraw_from_vault(
+            contract.vault_id_sequence.into(),
+            ValidAccountId::try_from(receiver_account_id).unwrap(),
+            withdrawal_amount.clone(),
+        );
+
+        context.predecessor_account_id = context.current_account_id.clone();
+        testing_env!(context.clone());
+        contract.resolve_vault(
+            contract.vault_id_sequence.into(),
+            sender_account_id.to_string(),
+        );
+
+        assert!(contract.vaults.get(&contract.vault_id_sequence).is_none());
+        assert_eq!(
+            contract.get_balance(ValidAccountId::try_from(sender_account_id).unwrap()),
+            (96 * YOCTO).into()
+        );
+        assert_eq!(
+            contract.get_balance(ValidAccountId::try_from(receiver_account_id).unwrap()),
+            withdrawal_amount
         );
     }
 
