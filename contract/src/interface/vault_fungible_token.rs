@@ -77,6 +77,21 @@ pub trait VaultFungibleToken {
     fn get_balance(&self, account_id: ValidAccountId) -> YoctoStake;
 }
 
+pub trait ResolveVaultCallback {
+    /// Resolves a given vault
+    /// Gas requirement: 5 TGas or 5000000000000 Gas
+    /// A callback. Should be called by this fungible token contract (`current_account_id`)
+    /// Returns the remaining balance.
+    ///
+    /// Actions:
+    /// - Reads safe with `safe_id`
+    /// - Deposits remaining `safe.amount` to `sender_id`
+    /// - Deletes the safe
+    /// - Returns the total withdrawn amount from the safe `original_amount - safe.amount`.
+    /// #[private]
+    fn resolve_vault(&mut self, vault_id: VaultId, sender_id: AccountId) -> YoctoStake;
+}
+
 #[ext_contract(ext_token_receiver)]
 pub trait ExtTokenReceiver {
     /// Called when a given amount of tokens is locked in a safe by a given sender with payload.

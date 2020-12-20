@@ -1,6 +1,6 @@
 #![allow(unused_imports)]
 
-use crate::interface::VaultId;
+use crate::interface::{ResolveVaultCallback, VaultId};
 use crate::{
     core::Hash,
     domain::{self, Account, RedeemLock, RedeemStakeBatch, StakeBatch},
@@ -54,8 +54,8 @@ impl VaultFungibleToken for StakeTokenContract {
 }
 
 #[near_bindgen]
-impl StakeTokenContract {
-    pub fn resolve_vault(&mut self, vault_id: VaultId, sender_id: AccountId) -> YoctoStake {
+impl ResolveVaultCallback for StakeTokenContract {
+    fn resolve_vault(&mut self, vault_id: VaultId, sender_id: AccountId) -> YoctoStake {
         unimplemented!()
     }
 }
