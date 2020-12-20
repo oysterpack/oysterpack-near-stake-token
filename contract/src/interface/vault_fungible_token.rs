@@ -131,7 +131,9 @@ pub trait ExtTokenReceiver {
 
 #[ext_contract(ext_self)]
 pub trait ExtSelf {
-    /// Resolves a given vault
+    /// Resolves a given vault - transfers vault remoining balance back to sender account and deletes
+    /// the vault.
+    ///
     /// Gas requirement: 5 TGas or 5000000000000 Gas
     /// A callback. Should be called by this fungible token contract (`current_account_id`)
     /// Returns the remaining balance.
