@@ -124,7 +124,7 @@ pub trait ExtSelf {
     /// - Deletes the safe
     /// - Returns the total withdrawn amount from the safe `original_amount - safe.amount`.
     /// #[private]
-    fn resolve_vault(&mut self, vault_id: VaultId, sender_id: AccountId);
+    fn resolve_vault(&mut self, vault_id: VaultId, sender_id: AccountId) -> YoctoStake;
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, PartialEq)]
