@@ -185,3 +185,129 @@ fn assert_receiver_is_not_sender(receiver_id: &str) {
         RECEIVER_MUST_NOT_BE_SENDER
     );
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{interface::AccountManagement, near::YOCTO, test_utils::*};
+    use near_sdk::{serde_json, testing_env, MockedBlockchain};
+    use std::convert::TryFrom;
+
+    /// Given the sender and receiver accounts are registered
+    /// And the sender has STAKE funds to transfer
+    /// When the sender transfers STAKE to the receiver
+    /// Then the sender account will be debited, and the receiver account will be credited
+    #[test]
+    fn transfer_success() {
+        let sender_account_id = "sender.near";
+        let receiver_account_id = "receiver.near";
+
+        let mut context = new_context(receiver_account_id);
+        context.attached_deposit = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+        contract.register_account();
+
+        context.predecessor_account_id = sender_account_id.to_string();
+        testing_env!(context.clone());
+        contract.register_account();
+
+        let (mut account, account_id_hash) = contract.registered_account(sender_account_id);
+        account.apply_stake_credit((100 * YOCTO).into());
+        contract.save_account(&account_id_hash, &account);
+        contract.total_stake.credit(account.stake.unwrap().amount());
+
+        contract.transfer(
+            ValidAccountId::try_from(receiver_account_id).unwrap(),
+            (10 * YOCTO).into(),
+        );
+
+        assert_eq!(
+            contract.get_balance(ValidAccountId::try_from(sender_account_id).unwrap()),
+            (90 * YOCTO).into()
+        );
+        assert_eq!(
+            contract.get_balance(ValidAccountId::try_from(receiver_account_id).unwrap()),
+            (10 * YOCTO).into()
+        );
+    }
+
+    ///
+    #[test]
+    #[should_panic(expected = "account STAKE balance is to low to fulfill request")]
+    fn transfer_sender_balance_too_low() {
+        let sender_account_id = "sender.near";
+        let receiver_account_id = "receiver.near";
+
+        let mut context = new_context(receiver_account_id);
+        context.attached_deposit = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+        contract.register_account();
+
+        context.predecessor_account_id = sender_account_id.to_string();
+        testing_env!(context.clone());
+        contract.register_account();
+
+        let (mut account, account_id_hash) = contract.registered_account(sender_account_id);
+        account.apply_stake_credit((100 * YOCTO).into());
+        contract.save_account(&account_id_hash, &account);
+        contract.total_stake.credit(account.stake.unwrap().amount());
+
+        contract.transfer(
+            ValidAccountId::try_from(receiver_account_id).unwrap(),
+            (110 * YOCTO).into(),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "receiver account must not be the sender")]
+    fn transfer_receiver_is_sender() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+        contract.register_account();
+
+        contract.transfer(ValidAccountId::try_from(account_id).unwrap(), YOCTO.into());
+    }
+
+    #[test]
+    #[should_panic(expected = "account is not registered: joe.near")]
+    fn transfer_sender_not_registered() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+        contract.register_account();
+
+        context.predecessor_account_id = "joe.near".to_string();
+        testing_env!(context.clone());
+        contract.transfer(ValidAccountId::try_from(account_id).unwrap(), YOCTO.into());
+    }
+
+    #[test]
+    #[should_panic(expected = "account is not registered: joe.near")]
+    fn transfer_receiver_not_registered() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+        contract.register_account();
+
+        contract.transfer(ValidAccountId::try_from("joe.near").unwrap(), YOCTO.into());
+    }
+}
