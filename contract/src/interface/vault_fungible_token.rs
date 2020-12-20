@@ -77,6 +77,7 @@ pub trait VaultFungibleToken {
     fn get_balance(&self, account_id: ValidAccountId) -> YoctoStake;
 }
 
+/// implements required callbacks defined in [ExtSelf]
 pub trait ResolveVaultCallback {
     /// Resolves a given vault
     /// Gas requirement: 5 TGas or 5000000000000 Gas
