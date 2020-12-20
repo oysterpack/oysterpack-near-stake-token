@@ -32,7 +32,7 @@ use crate::{
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     collections::LookupMap,
-    env, near_bindgen, wee_alloc, AccountId, PromiseResult,
+    env, near_bindgen, wee_alloc, AccountId,
 };
 
 #[global_allocator]
@@ -185,9 +185,10 @@ impl StakeTokenContract {
             assert_eq!(initial_storage_usage, env::storage_usage());
         }
 
-        if cfg!(test) {
-            pub fn promise_result(_result_index: u64) -> PromiseResult {
-                PromiseResult::Successful(vec![])
+        #[cfg(test)]
+        {
+            pub fn promise_result(_result_index: u64) -> near_sdk::PromiseResult {
+                near_sdk::PromiseResult::Successful(vec![])
             }
 
             pub fn promise_results_count() -> u64 {

@@ -5,10 +5,8 @@ use near_sdk::{
     ext_contract,
     json_types::ValidAccountId,
     serde::{Deserialize, Serialize},
-    Promise,
+    AccountId, Promise,
 };
-#[allow(unused_imports)]
-use near_vm_logic::types::AccountId;
 
 pub trait VaultFungibleToken {
     /// Simple transfers

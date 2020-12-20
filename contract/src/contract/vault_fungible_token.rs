@@ -1,22 +1,17 @@
-use crate::domain::Vault;
-use crate::errors::vault_fungible_token::{
-    ACCOUNT_INSUFFICIENT_STAKE_FUNDS, RECEIVER_MUST_NOT_BE_SENDER, VAULT_ACCESS_DENIED,
-    VAULT_DOES_NOT_EXIST, VAULT_INSUFFICIENT_FUNDS,
-};
-use crate::near::assert_predecessor_is_self;
 use crate::{
-    core::Hash,
+    domain::Vault,
+    errors::vault_fungible_token::{
+        ACCOUNT_INSUFFICIENT_STAKE_FUNDS, RECEIVER_MUST_NOT_BE_SENDER, VAULT_ACCESS_DENIED,
+        VAULT_DOES_NOT_EXIST, VAULT_INSUFFICIENT_FUNDS,
+    },
     interface::{
         ext_self, ext_token_receiver, ResolveVaultCallback, VaultFungibleToken, VaultId, YoctoStake,
     },
-    near::NO_DEPOSIT,
+    near::{assert_predecessor_is_self, NO_DEPOSIT},
     StakeTokenContract,
 };
 
-use near_sdk::{
-    env, json_types::ValidAccountId, json_types::U128, near_bindgen, serde::Deserialize, AccountId,
-    Promise,
-};
+use near_sdk::{env, json_types::ValidAccountId, near_bindgen, AccountId, Promise};
 
 #[near_bindgen]
 impl VaultFungibleToken for StakeTokenContract {
@@ -182,8 +177,10 @@ fn assert_receiver_is_not_sender(receiver_id: &str) {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{interface::AccountManagement, near::YOCTO, test_utils::*};
-    use near_sdk::{serde_json, testing_env, MockedBlockchain};
+    use crate::{interface::AccountManagement, near::YOCTO, test_utils::*, Hash};
+    use near_sdk::{
+        json_types::U128, serde::Deserialize, serde_json, testing_env, MockedBlockchain,
+    };
     use std::convert::TryFrom;
 
     /// Given the sender and receiver accounts are registered

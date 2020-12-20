@@ -16,13 +16,10 @@ pub const NO_DEPOSIT: YoctoNear = YoctoNear(0);
 /// per the NEAR protocol
 /// - https://docs.near.org/docs/validator/delegation#b-withdraw-the-tokens
 /// - https://github.com/near/core-contracts/blob/master/staking-pool/src/internal.rs
-/// ```rust
-/// account.unstaked_available_epoch_height = env::epoch_height() + NUM_EPOCHS_TO_UNLOCK;
-/// ```
+///  - `account.unstaked_available_epoch_height = env::epoch_height() + NUM_EPOCHS_TO_UNLOCK;`
+///
 /// - https://github.com/near/core-contracts/blob/master/staking-pool/src/lib.rs
-/// ```rust
-/// const NUM_EPOCHS_TO_UNLOCK: EpochHeight = 4;
-/// ```
+///  - `const NUM_EPOCHS_TO_UNLOCK: EpochHeight = 4;`
 pub const UNSTAKED_NEAR_FUNDS_NUM_EPOCHS_TO_UNLOCK: EpochHeight = EpochHeight(4);
 
 /// asserts that predecessor account is the contract itself - used to enforce that callbacks

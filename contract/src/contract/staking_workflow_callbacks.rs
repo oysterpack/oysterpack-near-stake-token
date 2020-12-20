@@ -3,7 +3,6 @@ use crate::errors::illegal_state::STAKE_BATCH_SHOULD_EXIST;
 use crate::errors::staking_pool_failures::{DEPOSIT_AND_STAKE_FAILURE, GET_STAKED_BALANCE_FAILURE};
 use crate::{
     domain, ext_staking_pool, ext_staking_workflow_callbacks,
-    interface::StakingService,
     near::{assert_predecessor_is_self, NO_DEPOSIT},
     StakeTokenContract,
 };
@@ -120,7 +119,11 @@ impl StakeTokenContract {
 mod test {
 
     use super::*;
-    use crate::{interface::AccountManagement, near::YOCTO, test_utils::*};
+    use crate::{
+        interface::{AccountManagement, StakingService},
+        near::YOCTO,
+        test_utils::*,
+    };
     use near_sdk::{serde_json, testing_env, MockedBlockchain};
 
     /// Given the promise ro get the staked balance completes successfully
