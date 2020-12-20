@@ -5,6 +5,7 @@ use crate::errors::vault_fungible_token::{
     ACCOUNT_INSUFFICIENT_STAKE_FUNDS, RECEIVER_MUST_NOT_BE_SENDER, VAULT_ACCESS_DENIED,
     VAULT_DOES_NOT_EXIST, VAULT_INSUFFICIENT_FUNDS,
 };
+use crate::near::assert_predecessor_is_self;
 use crate::{
     core::Hash,
     domain::{self, Account, RedeemLock, RedeemStakeBatch, StakeBatch},
@@ -161,7 +162,18 @@ impl VaultFungibleToken for StakeTokenContract {
 #[near_bindgen]
 impl ResolveVaultCallback for StakeTokenContract {
     fn resolve_vault(&mut self, vault_id: VaultId, sender_id: AccountId) -> YoctoStake {
-        unimplemented!()
+        assert_predecessor_is_self();
+
+        let vault = self
+            .vaults
+            .remove(&vault_id.into())
+            .expect(VAULT_DOES_NOT_EXIST);
+        if vault.balance().value() > 0 {
+            let (mut account, account_hash_id) = self.registered_account(&sender_id);
+            account.apply_stake_credit(vault.balance());
+            self.save_account(&account_hash_id, &account);
+        }
+        vault.balance().into()
     }
 }
 
