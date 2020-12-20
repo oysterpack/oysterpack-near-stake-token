@@ -14,6 +14,7 @@ mod stake_token_value;
 mod storage_usage;
 mod timestamped_near_balance;
 mod timestamped_stake_balance;
+mod vault;
 mod yocto_near;
 mod yocto_stake;
 
@@ -33,5 +34,6 @@ pub use stake_token_value::StakeTokenValue;
 pub use storage_usage::StorageUsage;
 pub use timestamped_near_balance::TimestampedNearBalance;
 pub use timestamped_stake_balance::TimestampedStakeBalance;
+pub use vault::{Vault, VaultId};
 pub use yocto_near::{YoctoNear, YoctoNearValue};
 pub use yocto_stake::YoctoStake;

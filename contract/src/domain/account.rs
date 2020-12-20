@@ -2,6 +2,9 @@ use crate::domain::stake_batch::StakeBatch;
 use crate::domain::{
     RedeemStakeBatch, TimestampedNearBalance, TimestampedStakeBalance, YoctoNear, YoctoStake,
 };
+use crate::errors::vault_fungible_token::{
+    ACCOUNT_INSUFFICIENT_NEAR_FUNDS, ACCOUNT_INSUFFICIENT_STAKE_FUNDS,
+};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -95,13 +98,13 @@ impl Account {
     }
 
     pub fn apply_near_debit(&mut self, debit: YoctoNear) {
-        self.near
-            .get_or_insert_with(|| TimestampedNearBalance::new(YoctoNear(0)))
-            .debit(debit);
-        if let Some(balance) = self.near {
-            if balance.amount().value() == 0 {
-                self.near = None
-            }
+        let balance = self
+            .near
+            .get_or_insert_with(|| TimestampedNearBalance::new(YoctoNear(0)));
+        assert!(balance.amount() >= debit, ACCOUNT_INSUFFICIENT_NEAR_FUNDS);
+        balance.debit(debit);
+        if balance.amount() == 0.into() {
+            self.near = None
         }
     }
 
@@ -112,14 +115,14 @@ impl Account {
     }
 
     pub fn apply_stake_debit(&mut self, debit: YoctoStake) {
-        self.stake
-            .get_or_insert_with(|| TimestampedStakeBalance::new(YoctoStake(0)))
-            .debit(debit);
+        let balance = self
+            .stake
+            .get_or_insert_with(|| TimestampedStakeBalance::new(YoctoStake(0)));
 
-        if let Some(balance) = self.stake {
-            if balance.amount().value() == 0 {
-                self.stake = None
-            }
+        assert!(balance.amount() >= debit, ACCOUNT_INSUFFICIENT_STAKE_FUNDS);
+        balance.debit(debit);
+        if balance.amount() == 0.into() {
+            self.stake = None
         }
     }
 }

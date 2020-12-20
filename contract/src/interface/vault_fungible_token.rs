@@ -1,4 +1,4 @@
-use crate::interface::YoctoStake;
+use crate::{domain, interface::YoctoStake};
 use near_sdk::json_types::U128;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
@@ -20,8 +20,9 @@ pub trait VaultFungibleToken {
     /// - Transfers `amount` of tokens from `predecessor_id` to `receiver_id`.
     ///
     /// ## Panics
-    /// - if predecessor account is not registered
+    /// - if predecessor account is not registered - sender account
     /// - if [receiver_id] account is not registered
+    /// - if sender account is same as receiver account
     /// - if account balance has insufficient funds for transfer
     /// - if there is no attached deposit
     fn transfer(&mut self, receiver_id: ValidAccountId, amount: YoctoStake);
@@ -43,6 +44,7 @@ pub trait VaultFungibleToken {
     /// ## Panics
     /// - if predecessor account is not registered
     /// - if [receiver_id] account is not registered
+    /// - if sender account is same as receiver account
     /// - if account balance has insufficient funds for transfer
     /// - if there is no attached deposit
     fn transfer_with_vault(
@@ -147,20 +149,14 @@ pub trait ExtSelf {
 #[serde(crate = "near_sdk::serde")]
 pub struct VaultId(pub U128);
 
-impl VaultId {
-    pub fn next(&self) -> Self {
-        (self.value() + 1).into()
-    }
-}
-
 impl From<u128> for VaultId {
     fn from(value: u128) -> Self {
         Self(value.into())
     }
 }
 
-impl VaultId {
-    pub fn value(&self) -> u128 {
-        self.0 .0
+impl From<domain::VaultId> for VaultId {
+    fn from(id: domain::VaultId) -> Self {
+        Self(id.0.into())
     }
 }

@@ -22,11 +22,11 @@ use crate::{
     domain::{
         Account, BatchId, BlockHeight, RedeemLock, RedeemStakeBatch, RedeemStakeBatchReceipt,
         StakeBatch, StakeBatchReceipt, StakeTokenValue, StorageUsage, TimestampedNearBalance,
-        TimestampedStakeBalance,
+        TimestampedStakeBalance, Vault, VaultId,
     },
     near::storage_keys::{
         ACCOUNTS_KEY_PREFIX, REDEEM_STAKE_BATCH_RECEIPTS_KEY_PREFIX,
-        STAKE_BATCH_RECEIPTS_KEY_PREFIX,
+        STAKE_BATCH_RECEIPTS_KEY_PREFIX, VAULTS_KEY_PREFIX,
     },
 };
 use near_sdk::{
@@ -111,6 +111,10 @@ pub struct StakeTokenContract {
     run_stake_batch_locked: bool,
     run_redeem_stake_batch_lock: Option<RedeemLock>,
 
+    vaults: LookupMap<VaultId, Vault>,
+
+    vault_id_sequence: VaultId,
+
     #[cfg(test)]
     #[borsh_skip]
     env: near_env::Env,
@@ -165,6 +169,8 @@ impl StakeTokenContract {
             run_stake_batch_locked: false,
             run_redeem_stake_batch_lock: None,
 
+            vaults: LookupMap::new(VAULTS_KEY_PREFIX.to_vec()),
+            vault_id_sequence: VaultId::default(),
             #[cfg(test)]
             env: near_env::Env::default(),
         };

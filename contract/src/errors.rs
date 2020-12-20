@@ -69,4 +69,16 @@ pub mod account_management {
 
     pub const UNREGISTER_REQUIRES_ZERO_BALANCES: &str =
         "all funds must be withdrawn from the account in order to unregister";
+
+    pub const ACCOUNT_NOT_REGISTERED: &str = "account is not registered";
+}
+
+pub mod vault_fungible_token {
+    pub const RECEIVER_MUST_NOT_BE_SENDER: &str = "receiver account must not be the sender";
+
+    pub const ACCOUNT_INSUFFICIENT_STAKE_FUNDS: &str =
+        "account STAKE balance is insufficient to fulfill the debit request";
+
+    pub const ACCOUNT_INSUFFICIENT_NEAR_FUNDS: &str =
+        "account NEAR balance is insufficient to fulfill the debit request";
 }

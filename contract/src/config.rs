@@ -53,6 +53,7 @@ pub const GAS_FOR_DATA_DEPENDENCY: Gas = Gas(10_000_000_000_000);
 pub struct GasConfig {
     staking_pool: StakingPoolGasConfig,
     callbacks: CallBacksGasConfig,
+    vault_ft: VaultFungibleTokenGasConfig,
 }
 
 impl GasConfig {
@@ -63,6 +64,10 @@ impl GasConfig {
     pub fn callbacks(&self) -> &CallBacksGasConfig {
         &self.callbacks
     }
+
+    pub fn vault_fungible_token(&self) -> &VaultFungibleTokenGasConfig {
+        &self.vault_ft
+    }
 }
 
 impl Default for GasConfig {
@@ -70,6 +75,7 @@ impl Default for GasConfig {
         Self {
             staking_pool: Default::default(),
             callbacks: Default::default(),
+            vault_ft: Default::default(),
         }
     }
 }
@@ -130,9 +136,6 @@ pub struct CallBacksGasConfig {
     // used by redeem stake workflow
     on_run_redeem_stake_batch: Gas,
     on_redeeming_stake_pending_withdrawal: Gas,
-
-    // used by VaultFungibleToken
-    min_gas_for_receiver: Gas,
 }
 
 impl CallBacksGasConfig {
@@ -163,10 +166,6 @@ impl CallBacksGasConfig {
     pub fn on_run_redeem_stake_batch(&self) -> Gas {
         self.on_run_redeem_stake_batch
     }
-
-    pub fn min_gas_for_receiver(&self) -> Gas {
-        self.min_gas_for_receiver
-    }
 }
 
 impl Default for CallBacksGasConfig {
@@ -179,7 +178,40 @@ impl Default for CallBacksGasConfig {
             unlock: BASE_GAS * 3,
             on_redeeming_stake_pending_withdrawal: BASE_GAS * 3,
             on_run_redeem_stake_batch: BASE_GAS * 3,
+        }
+    }
+}
+
+#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct VaultFungibleTokenGasConfig {
+    min_gas_for_receiver: Gas,
+
+    /// We need to create 2 promises with dependencies and with some basic compute to write to the state.
+    transfer_with_vault: Gas,
+    resolve_vault: Gas,
+}
+
+impl VaultFungibleTokenGasConfig {
+    pub fn min_gas_for_receiver(&self) -> Gas {
+        self.min_gas_for_receiver
+    }
+
+    pub fn resolve_vault(&self) -> Gas {
+        self.resolve_vault
+    }
+
+    pub fn transfer_with_vault(&self) -> Gas {
+        self.transfer_with_vault
+    }
+}
+
+impl Default for VaultFungibleTokenGasConfig {
+    fn default() -> Self {
+        Self {
             min_gas_for_receiver: GAS_FOR_PROMISE + GAS_BASE_COMPUTE,
+            transfer_with_vault: (GAS_FOR_PROMISE * 2) + GAS_FOR_DATA_DEPENDENCY + GAS_BASE_COMPUTE,
+            resolve_vault: GAS_BASE_COMPUTE,
         }
     }
 }

@@ -84,8 +84,7 @@ impl AccountManagement for StakeTokenContract {
     }
 
     fn withdraw(&mut self, amount: interface::YoctoNear) -> Promise {
-        let account_hash = Hash::from(&env::predecessor_account_id());
-        let mut account = self.registered_account(&account_hash);
+        let (mut account, account_hash) = self.registered_account(&env::predecessor_account_id());
         match account.near {
             None => panic!("there are no available NEAR funds to withdraw"),
             Some(_) => self.withdraw_near_funds(&mut account, &account_hash, amount.into()),
@@ -93,8 +92,7 @@ impl AccountManagement for StakeTokenContract {
     }
 
     fn withdraw_all(&mut self) -> Promise {
-        let account_hash = Hash::from(&env::predecessor_account_id());
-        let mut account = self.registered_account(&account_hash);
+        let (mut account, account_hash) = self.registered_account(&env::predecessor_account_id());
         match account.near {
             None => panic!("there are no available NEAR funds to withdraw"),
             Some(balance) => {
@@ -119,10 +117,12 @@ impl StakeTokenContract {
 
     /// ## Panics
     /// if account is not registered
-    pub(crate) fn registered_account(&self, account_hash: &Hash) -> Account {
-        self.accounts
-            .get(&account_hash)
-            .expect("account is not registered")
+    pub(crate) fn registered_account(&self, account_id: &str) -> (Account, Hash) {
+        let hash = Hash::from(account_id);
+        match self.accounts.get(&hash) {
+            Some(account) => (account, hash),
+            None => panic!("account is not registered: {}", account_id),
+        }
     }
 
     /// when a new account is registered the following is tracked:
@@ -573,7 +573,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "balance is too low to fulfill debit request")]
+    #[should_panic(expected = "account NEAR balance is insufficient to fulfill the debit request")]
     fn withdraw_with_insufficient_funds() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);

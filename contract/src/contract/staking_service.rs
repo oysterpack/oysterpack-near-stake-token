@@ -32,8 +32,7 @@ impl StakingService for StakeTokenContract {
     }
 
     fn deposit(&mut self) -> BatchId {
-        let account_hash = Hash::from(&env::predecessor_account_id());
-        let mut account = self.registered_account(&account_hash);
+        let (mut account, account_hash) = self.registered_account(&env::predecessor_account_id());
 
         let batch_id =
             self.deposit_near_for_account_to_stake(&mut account, env::attached_deposit().into());
@@ -72,16 +71,14 @@ impl StakingService for StakeTokenContract {
     }
 
     fn redeem(&mut self, amount: YoctoStake) -> BatchId {
-        let account_hash = Hash::from(&env::predecessor_account_id());
-        let mut account = self.registered_account(&account_hash);
+        let (mut account, account_hash) = self.registered_account(&env::predecessor_account_id());
         let batch_id = self.redeem_stake_for_account(&mut account, amount.into());
         self.save_account(&account_hash, &account);
         batch_id
     }
 
     fn redeem_all(&mut self) -> BatchId {
-        let account_hash = Hash::from(&env::predecessor_account_id());
-        let mut account = self.registered_account(&account_hash);
+        let (mut account, account_hash) = self.registered_account(&env::predecessor_account_id());
         let amount = account.stake.expect("account has no stake").amount();
         let batch_id = self.redeem_stake_for_account(&mut account, amount);
         self.save_account(&account_hash, &account);
