@@ -41,6 +41,13 @@ impl Config {
 
 pub const BASE_GAS: Gas = Gas(25_000_000_000_000);
 
+/// Basic compute.
+pub const GAS_BASE_COMPUTE: Gas = Gas(5_000_000_000_000);
+/// Fee for function call promise.
+pub const GAS_FOR_PROMISE: Gas = Gas(5_000_000_000_000);
+/// Fee for the `.then` call.
+pub const GAS_FOR_DATA_DEPENDENCY: Gas = Gas(10_000_000_000_000);
+
 #[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct GasConfig {
@@ -123,6 +130,9 @@ pub struct CallBacksGasConfig {
     // used by redeem stake workflow
     on_run_redeem_stake_batch: Gas,
     on_redeeming_stake_pending_withdrawal: Gas,
+
+    // used by VaultFungibleToken
+    min_gas_for_receiver: Gas,
 }
 
 impl CallBacksGasConfig {
@@ -153,18 +163,23 @@ impl CallBacksGasConfig {
     pub fn on_run_redeem_stake_batch(&self) -> Gas {
         self.on_run_redeem_stake_batch
     }
+
+    pub fn min_gas_for_receiver(&self) -> Gas {
+        self.min_gas_for_receiver
+    }
 }
 
 impl Default for CallBacksGasConfig {
     fn default() -> Self {
         Self {
-            on_run_stake_batch: (BASE_GAS.value() * 3).into(),
-            on_deposit_and_stake: (BASE_GAS.value() * 3).into(),
-            on_unstake: (BASE_GAS.value() * 3).into(),
-            on_get_account_staked_balance: (BASE_GAS.value() * 3).into(),
-            unlock: (BASE_GAS.value() * 3).into(),
-            on_redeeming_stake_pending_withdrawal: (BASE_GAS.value() * 3).into(),
-            on_run_redeem_stake_batch: (BASE_GAS.value() * 3).into(),
+            on_run_stake_batch: BASE_GAS * 3,
+            on_deposit_and_stake: BASE_GAS * 3,
+            on_unstake: BASE_GAS * 3,
+            on_get_account_staked_balance: BASE_GAS * 3,
+            unlock: BASE_GAS * 3,
+            on_redeeming_stake_pending_withdrawal: BASE_GAS * 3,
+            on_run_redeem_stake_batch: BASE_GAS * 3,
+            min_gas_for_receiver: GAS_FOR_PROMISE + GAS_BASE_COMPUTE,
         }
     }
 }

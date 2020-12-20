@@ -2,7 +2,7 @@ use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
 };
-
+use std::ops::{Add, Mul};
 
 #[derive(
     BorshSerialize,
@@ -30,5 +30,21 @@ impl From<u64> for Gas {
 impl Gas {
     pub fn value(&self) -> u64 {
         self.0
+    }
+}
+
+impl Add for Gas {
+    type Output = Gas;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(self.0 + rhs.0)
+    }
+}
+
+impl Mul<u64> for Gas {
+    type Output = Gas;
+
+    fn mul(self, rhs: u64) -> Self::Output {
+        Self(self.0 * rhs)
     }
 }

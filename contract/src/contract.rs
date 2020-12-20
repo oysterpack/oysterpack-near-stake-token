@@ -5,6 +5,7 @@ pub mod settings;
 pub mod staking_service;
 pub mod staking_service_callbacks;
 pub mod staking_workflow_callbacks;
+pub mod vault_fungible_token;
 
 pub use staking_service::*;
 
