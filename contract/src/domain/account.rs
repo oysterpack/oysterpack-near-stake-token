@@ -7,7 +7,7 @@ use crate::errors::vault_fungible_token::{
 };
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 
-#[derive(BorshSerialize, BorshDeserialize)]
+#[derive(BorshSerialize, BorshDeserialize, Clone)]
 pub struct Account {
     /// account is responsible for paying for its own storage fees
     /// the funds are escrowed and refunded when the account is unregistered

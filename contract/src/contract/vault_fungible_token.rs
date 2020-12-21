@@ -142,6 +142,7 @@ impl VaultFungibleToken for StakeTokenContract {
 
     fn get_balance(&self, account_id: ValidAccountId) -> YoctoStake {
         let (account, _) = self.registered_account(account_id.as_ref());
+        let account = self.apply_receipt_funds_for_view(&account);
         account
             .stake
             .map_or(0.into(), |balance| balance.amount().into())

@@ -81,7 +81,9 @@ impl AccountManagement for StakeTokenContract {
 
     fn lookup_account(&self, account_id: ValidAccountId) -> Option<StakeAccount> {
         let hash = Hash::from(account_id.as_ref());
-        self.accounts.get(&hash).map(Into::into)
+        self.accounts
+            .get(&hash)
+            .map(|account| self.apply_receipt_funds_for_view(&account).into())
     }
 
     fn withdraw(&mut self, amount: interface::YoctoNear) -> Promise {

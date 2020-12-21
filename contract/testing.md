@@ -15,7 +15,7 @@ near deploy --accountId stake.oysterpack.testnet \
   --initFunction new \
   --initArgs '{"settings":{"staking_pool_id":"stakin.pool.f863973.m0", "operator_id":"oysterpack.testnet"}}'
   
-# redeploy
+# redeploy - with no breaking state schema changes
 near deploy --accountId stake.oysterpack.testnet --wasmFile res/oysterpack_near_stake_token.wasm 
 ```
 

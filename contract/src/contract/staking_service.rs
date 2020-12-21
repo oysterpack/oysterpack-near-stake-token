@@ -334,6 +334,52 @@ impl StakeTokenContract {
         claimed_stake_tokens || claimed_neat_tokens
     }
 
+    /// the purpose of this method is to to compute the account's STAKE balance taking into consideration
+    /// that there may be unclaimed receipts on the account
+    /// - this enables the latest account info to be returned within the context of a contract 'view'
+    ///   call
+    pub(crate) fn apply_receipt_funds_for_view(&self, account: &Account) -> Account {
+        let mut account = account.clone();
+
+        if let Some(batch) = account.stake_batch {
+            if let Some(receipt) = self.stake_batch_receipts.get(&batch.id()) {
+                let staked_near = batch.balance().amount();
+                let stake = receipt.stake_token_value().near_to_stake(staked_near);
+                account.apply_stake_credit(stake);
+                account.stake_batch = None;
+            }
+        }
+
+        if let Some(batch) = account.next_stake_batch {
+            if let Some(receipt) = self.stake_batch_receipts.get(&batch.id()) {
+                let staked_near = batch.balance().amount();
+                let stake = receipt.stake_token_value().near_to_stake(staked_near);
+                account.apply_stake_credit(stake);
+                account.next_stake_batch = None;
+            }
+        }
+
+        if let Some(batch) = account.redeem_stake_batch {
+            if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
+                let redeemed_stake = batch.balance().amount();
+                let near = receipt.stake_token_value().stake_to_near(redeemed_stake);
+                account.apply_near_credit(near);
+                account.redeem_stake_batch = None
+            }
+        }
+
+        if let Some(batch) = account.next_redeem_stake_batch {
+            if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
+                let redeemed_stake = batch.balance().amount();
+                let near = receipt.stake_token_value().stake_to_near(redeemed_stake);
+                account.apply_near_credit(near);
+                account.next_redeem_stake_batch = None
+            }
+        }
+
+        account
+    }
+
     fn claim_stake_batch_receipts(&mut self, account: &mut Account) -> bool {
         fn claim_stake_tokens_for_batch(
             contract: &mut StakeTokenContract,
