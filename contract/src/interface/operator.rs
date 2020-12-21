@@ -1,3 +1,4 @@
+use crate::interface::model::contract_state::ContractState;
 use near_sdk::Promise;
 
 pub trait Operator {
@@ -10,4 +11,6 @@ pub trait Operator {
 
     /// submits a request to the staking pool to try to withdraw all available unstaked NEAR
     fn withdraw_all_funds_from_staking_pool(&self) -> Promise;
+
+    fn contract_state(&self) -> ContractState;
 }

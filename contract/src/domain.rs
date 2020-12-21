@@ -18,6 +18,7 @@ mod vault;
 mod yocto_near;
 mod yocto_stake;
 
+pub use crate::interface::contract_state::ContractState;
 pub use account::Account;
 pub use batch_id::BatchId;
 pub use block_height::BlockHeight;

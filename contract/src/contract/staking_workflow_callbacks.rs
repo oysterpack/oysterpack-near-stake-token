@@ -58,10 +58,10 @@ impl StakeTokenContract {
             .insert(&batch.id(), &stake_batch_receipt);
 
         // update the total STAKE supply
-        self.total_stake.credit(
-            self.stake_token_value
-                .near_to_stake(batch.balance().amount()),
-        );
+        let stake_amount = self
+            .stake_token_value
+            .near_to_stake(batch.balance().amount());
+        self.total_stake.credit(stake_amount);
     }
 
     /// moves the next batch into the current batch

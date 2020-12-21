@@ -1,3 +1,4 @@
+pub mod contract_state;
 mod redeem_stake_batch;
 mod redeem_stake_batch_receipt;
 mod stake_account;

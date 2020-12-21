@@ -128,13 +128,10 @@ impl StakeTokenContract {
 
     /// when a new account is registered the following is tracked:
     /// - total account count is inc
-    /// - total storage escrow is updated
     pub(crate) fn save_account(&mut self, account_id: &Hash, account: &Account) -> Option<Account> {
         match self.accounts.insert(account_id, account) {
             None => {
                 self.accounts_len += 1;
-                self.total_storage_escrow
-                    .credit(account.storage_escrow.amount());
                 None
             }
             Some(previous) => Some(previous),
@@ -143,14 +140,11 @@ impl StakeTokenContract {
 
     /// when a new account is registered the following is tracked:
     /// - total account count is dev
-    /// - total storage escrow is updated
     fn delete_account(&mut self, account_id: &Hash) -> Option<Account> {
         match self.accounts.remove(account_id) {
             None => None,
             Some(account) => {
                 self.accounts_len -= 1;
-                self.total_storage_escrow
-                    .debit(account.storage_escrow.amount());
                 Some(account)
             }
         }
@@ -290,13 +284,9 @@ mod test {
             "account storage usage changed !!! If the change is expected, then update the assert"
         );
 
-        // And the storage fee credit is applied on the account and on the contract
+        // And the storage fee credit is applied on the account
         assert_eq!(
             account.storage_escrow.amount(),
-            contract.account_storage_fee().into()
-        );
-        assert_eq!(
-            contract.total_storage_escrow.amount(),
             contract.account_storage_fee().into()
         );
     }
@@ -402,18 +392,8 @@ mod test {
         assert!(stake_account.near.is_none());
         assert!(stake_account.stake.is_none());
 
-        let contract_balance_with_registered_account = env::account_balance();
-        assert_eq!(
-            contract.total_storage_escrow.amount().value() + context.account_balance,
-            contract_balance_with_registered_account
-        );
         contract.unregister_account();
         assert!(!contract.account_registered(account_id.try_into().unwrap()));
-        assert_eq!(
-            contract.total_storage_escrow.amount().value(),
-            0,
-            "storage fees should have been refunded"
-        );
         assert_eq!(
             env::account_balance(),
             context.account_balance,

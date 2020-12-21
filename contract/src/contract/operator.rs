@@ -1,9 +1,12 @@
 //required in order for near_bindgen macro to work outside of lib.rs
 use crate::*;
 use crate::{
-    contract::ext_staking_pool, domain::RedeemLock, interface::Operator, near::NO_DEPOSIT,
+    contract::ext_staking_pool,
+    domain::RedeemLock,
+    interface::Operator,
+    interface::{contract_state::ContractState, AccountManagement},
+    near::NO_DEPOSIT,
 };
-
 use near_sdk::{near_bindgen, Promise};
 
 #[near_bindgen]
@@ -30,6 +33,30 @@ impl Operator for StakeTokenContract {
             self.config.gas_config().staking_pool().withdraw().value(),
         )
     }
+
+    fn contract_state(&self) -> ContractState {
+        ContractState {
+            staking_pool_id: self.staking_pool_id.clone(),
+            registered_accounts_count: self.total_registered_accounts().clone(),
+            total_unstaked_near: self.total_near.into(),
+            total_stake_supply: self.total_stake.into(),
+            stake_token_value: self.stake_token_value.into(),
+            batch_id_sequence: self.batch_id_sequence.into(),
+            stake_batch: self.stake_batch.map(interface::StakeBatch::from),
+            next_stake_batch: self.next_stake_batch.map(interface::StakeBatch::from),
+            redeem_stake_batch: self
+                .redeem_stake_batch
+                .map(interface::RedeemStakeBatch::from),
+            next_redeem_stake_batch: self
+                .next_redeem_stake_batch
+                .map(interface::RedeemStakeBatch::from),
+            pending_withdrawal: self
+                .pending_withdrawal
+                .map(interface::RedeemStakeBatchReceipt::from),
+            run_stake_batch_locked: self.run_stake_batch_locked,
+            run_redeem_stake_batch_lock: self.run_redeem_stake_batch_lock,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -37,7 +64,7 @@ mod test {
     use super::*;
     use crate::near::YOCTO;
     use crate::test_utils::*;
-    use near_sdk::{testing_env, MockedBlockchain};
+    use near_sdk::{serde_json, testing_env, MockedBlockchain};
 
     #[test]
     fn release_run_redeem_stake_batch_unstaking_lock_with_unstaking_lock() {
@@ -108,5 +135,21 @@ mod test {
         let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.release_run_redeem_stake_batch_unstaking_lock();
+    }
+
+    #[test]
+    fn contract_state_invoked_by_operator() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let contract = StakeTokenContract::new(contract_settings);
+
+        context.predecessor_account_id = contract.operator_id.clone();
+        testing_env!(context.clone());
+        let state = contract.contract_state();
+        println!("{}", serde_json::to_string_pretty(&state).unwrap());
     }
 }

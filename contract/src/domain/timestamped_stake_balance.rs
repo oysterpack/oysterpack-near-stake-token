@@ -88,7 +88,7 @@ impl TimestampedStakeBalance {
             self.amount >= amount,
             "balance is too low to fulfill debit request"
         );
-        self.amount.0 -= amount.0;
+        self.amount -= amount;
         self.update_timestamp();
     }
 

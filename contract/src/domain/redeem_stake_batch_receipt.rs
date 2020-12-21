@@ -8,7 +8,7 @@ use near_sdk::{
     env,
 };
 
-#[derive(BorshSerialize, BorshDeserialize)]
+#[derive(BorshSerialize, BorshDeserialize, Clone, Copy)]
 pub struct RedeemStakeBatchReceipt {
     redeemed_stake: YoctoStake,
     stake_token_value: StakeTokenValue,

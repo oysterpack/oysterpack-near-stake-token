@@ -34,6 +34,11 @@ impl StakingService for StakeTokenContract {
         self.staking_pool_id.clone()
     }
 
+    fn stake_token_value(&self) -> StakeTokenValue {
+        self.stake_token_value.into()
+    }
+
+    #[payable]
     fn deposit(&mut self) -> BatchId {
         let (mut account, account_hash) = self.registered_account(&env::predecessor_account_id());
 
@@ -145,10 +150,6 @@ impl StakingService for StakeTokenContract {
 
     fn pending_redeem_stake_batch_receipt(&self) -> Option<RedeemStakeBatchReceipt> {
         unimplemented!()
-    }
-
-    fn stake_token_value(&self) -> StakeTokenValue {
-        self.stake_token_value.into()
     }
 
     fn refresh_stake_token_value(&self) -> Promise {
@@ -602,6 +603,30 @@ mod test {
         assert_eq!(
             contract.stake_batch.unwrap().balance().amount(),
             context.attached_deposit.into()
+        );
+        assert!(contract.next_stake_batch.is_none());
+
+        // add another deposit to the batch
+        context.attached_deposit = 100 * YOCTO;
+        testing_env!(context.clone());
+        let batch_id_2 = contract.deposit();
+        assert_eq!(batch_id, batch_id_2);
+
+        let account = contract
+            .lookup_account(account_id.try_into().unwrap())
+            .unwrap();
+        let stake_batch = account.stake_batch.unwrap();
+        assert_eq!(
+            stake_batch.balance.amount.value(),
+            context.attached_deposit * 2
+        );
+        assert_eq!(stake_batch.id, batch_id);
+        assert!(account.next_stake_batch.is_none());
+
+        // And the funds are deposited into the current stake batch on the contract
+        assert_eq!(
+            contract.stake_batch.unwrap().balance().amount().value(),
+            context.attached_deposit * 2
         );
         assert!(contract.next_stake_batch.is_none());
     }

@@ -56,10 +56,6 @@ pub struct StakeTokenContract {
     accounts: LookupMap<Hash, Account>,
     accounts_len: u128,
 
-    /// the total amount of account storage fees that have been deposited and escrowed
-    /// - when an account unregisters, it is refunded its storage fee deposit
-    total_storage_escrow: TimestampedNearBalance,
-
     /// total NEAR balance across all accounts that is available for withdrawal
     /// - credits are applied when [RedeemStakeBatchReceipt] is created
     /// - debits are applied when account withdraws funds
@@ -150,7 +146,6 @@ impl StakeTokenContract {
 
             accounts: LookupMap::new(ACCOUNTS_KEY_PREFIX.to_vec()),
             accounts_len: 0,
-            total_storage_escrow: TimestampedNearBalance::new(0.into()),
             total_near: TimestampedNearBalance::new(0.into()),
             total_stake: TimestampedStakeBalance::new(0.into()),
             stake_token_value: StakeTokenValue::new(0.into(), 0.into()),
@@ -325,11 +320,6 @@ mod test {
         assert!(
             !contract.run_stake_batch_locked,
             "contract should not be locked"
-        );
-        assert_eq!(
-            contract.total_storage_escrow.amount().value(),
-            0,
-            "the total storage escrow should be zero"
         );
         assert_eq!(
             contract.total_near.amount().value(),

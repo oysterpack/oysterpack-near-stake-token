@@ -22,20 +22,6 @@ impl StakeTokenValue {
     /// - if NEAR runtime env is not available
     /// - if only 1 of the balances is zero
     pub fn new(total_staked_near_balance: YoctoNear, total_stake_supply: YoctoStake) -> Self {
-        if total_staked_near_balance.value() == 0 {
-            assert_eq!(
-                total_stake_supply.value(),
-                0,
-                "if NEAR balance is zero, then STAKE supply must be zero"
-            )
-        }
-        if total_stake_supply.value() == 0 {
-            assert_eq!(
-                total_staked_near_balance.value(),
-                0,
-                "if STAKE supply is zero, then NEAR balance  must be zero"
-            )
-        }
         Self {
             block_time_height: BlockTimeHeight::from_env(),
             total_stake_supply,
@@ -58,7 +44,7 @@ impl StakeTokenValue {
     /// converts NEAR to STAKE rounded down
     pub fn near_to_stake(&self, near: YoctoNear) -> YoctoStake {
         if self.total_staked_near_balance.value() == 0 || self.total_stake_supply.value() == 0 {
-            return YOCTO.into();
+            return near.value().into();
         }
         let value = U256::from(near) * U256::from(self.total_stake_supply)
             / U256::from(self.total_staked_near_balance);
@@ -66,7 +52,12 @@ impl StakeTokenValue {
     }
 
     pub fn stake_to_near(&self, stake: YoctoStake) -> YoctoNear {
-        if self.total_staked_near_balance.value() == 0 || self.total_stake_supply.value() == 0 {
+        if self.total_staked_near_balance.value() == 0
+            || self.total_stake_supply.value() == 0
+            // TODO: when deposit and staked with staking pool, there is a small amount remaining as unstaked
+            //       however, STAKE token value can never be less than 1:1 in terms of NEAR
+            || self.total_staked_near_balance.value() < self.total_stake_supply.value()
+        {
             return stake.value().into();
         }
         let value = U256::from(stake) * U256::from(self.total_staked_near_balance)
@@ -105,6 +96,15 @@ mod test {
         testing_env!(context);
 
         let stake_token_value = StakeTokenValue::new(YoctoNear(0), YoctoStake(0));
-        assert_eq!(stake_token_value.value(), YoctoNear(YOCTO))
+        assert_eq!(stake_token_value.value(), YoctoNear(YOCTO));
+
+        assert_eq!(
+            stake_token_value.stake_to_near((10 * YOCTO).into()),
+            YoctoNear(10 * YOCTO)
+        );
+        assert_eq!(
+            stake_token_value.near_to_stake((10 * YOCTO).into()),
+            YoctoStake(10 * YOCTO)
+        );
     }
 }

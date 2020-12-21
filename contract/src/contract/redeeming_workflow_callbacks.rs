@@ -685,7 +685,7 @@ mod test {
                                 .config
                                 .gas_config()
                                 .callbacks()
-                                .on_run_redeem_stake_batch()
+                                .on_redeeming_stake_pending_withdrawal()
                                 .value(),
                             *gas
                         );
