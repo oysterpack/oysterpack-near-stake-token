@@ -1,3 +1,4 @@
+//required in order for near_bindgen macro to work outside of lib.rs
 use crate::*;
 use crate::{
     core::Hash,
@@ -18,7 +19,6 @@ use crate::{
         BatchId, RedeemStakeBatchReceipt, StakeTokenValue, StakingService, YoctoNear, YoctoStake,
     },
     near::NO_DEPOSIT,
-    StakeTokenContract,
 };
 use near_sdk::{
     env, ext_contract,

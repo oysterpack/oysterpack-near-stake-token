@@ -1,3 +1,4 @@
+//required in order for near_bindgen macro to work outside of lib.rs
 use crate::*;
 use crate::{
     core::Hash,
@@ -6,7 +7,6 @@ use crate::{
         ACCOUNT_ALREADY_REGISTERED, INSUFFICIENT_STORAGE_FEE, UNREGISTER_REQUIRES_ZERO_BALANCES,
     },
     interface::{self, AccountManagement, StakeAccount},
-    StakeTokenContract,
 };
 use near_sdk::{
     env,

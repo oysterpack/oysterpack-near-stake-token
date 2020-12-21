@@ -1,3 +1,4 @@
+//required in order for near_bindgen macro to work outside of lib.rs
 use crate::*;
 use crate::{
     domain::Vault,
@@ -9,7 +10,6 @@ use crate::{
         ext_self, ext_token_receiver, ResolveVaultCallback, VaultFungibleToken, VaultId, YoctoStake,
     },
     near::{assert_predecessor_is_self, NO_DEPOSIT},
-    StakeTokenContract,
 };
 
 use near_sdk::{env, json_types::ValidAccountId, near_bindgen, AccountId, Promise};

@@ -1,3 +1,4 @@
+//required in order for near_bindgen macro to work outside of lib.rs
 use crate::*;
 use crate::{
     domain::{self, RedeemLock},
@@ -11,7 +12,6 @@ use crate::{
     ext_redeeming_workflow_callbacks, ext_staking_pool,
     interface::{BatchId, Operator},
     near::{assert_predecessor_is_self, NO_DEPOSIT},
-    StakeTokenContract, StakingPoolAccount,
 };
 use near_sdk::{env, near_bindgen, Promise, PromiseOrValue};
 

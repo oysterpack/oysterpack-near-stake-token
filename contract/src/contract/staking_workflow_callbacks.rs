@@ -1,3 +1,4 @@
+//required in order for near_bindgen macro to work outside of lib.rs
 use crate::*;
 use crate::{
     domain::{self, YoctoNear},
@@ -7,7 +8,6 @@ use crate::{
     },
     ext_staking_pool, ext_staking_workflow_callbacks,
     near::{assert_predecessor_is_self, NO_DEPOSIT},
-    StakeTokenContract,
 };
 use near_sdk::{env, json_types::U128, near_bindgen, Promise};
 

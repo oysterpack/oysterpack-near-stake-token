@@ -1,3 +1,5 @@
+//required in order for near_bindgen macro to work outside of lib.rs
+#[allow(unused_imports)]
 use crate::*;
 use crate::{
     domain, interface::StakeTokenValue, near::assert_predecessor_is_self,
