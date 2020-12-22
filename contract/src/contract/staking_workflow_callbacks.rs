@@ -161,11 +161,11 @@ mod test {
         let stake_token_value_after_callback = contract.stake_token_value;
         assert!(
             stake_token_value_after_callback
-                .block_time_height
+                .block_time_height()
                 .epoch_height()
                 .value()
                 > initial_stake_token_value
-                    .block_time_height
+                    .block_time_height()
                     .epoch_height()
                     .value(),
             "stake token value should have been updated"

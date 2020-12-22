@@ -532,11 +532,11 @@ impl StakeTokenContract {
         &self,
         total_staked_near_balance: domain::YoctoNear,
     ) -> domain::StakeTokenValue {
-        domain::StakeTokenValue {
-            block_time_height: domain::BlockTimeHeight::from_env(),
-            total_stake_supply: self.total_stake_supply(),
-            total_staked_near_balance: total_staked_near_balance,
-        }
+        domain::StakeTokenValue::new(
+            domain::BlockTimeHeight::from_env(),
+            total_staked_near_balance,
+            self.total_stake_supply(),
+        )
     }
 
     pub(crate) fn stake_to_near(
@@ -889,11 +889,8 @@ mod test {
         // Given there is a receipt for the batch
         // And the receipt exists for the stake batch
         // And STAKE token value = 1 NEAR
-        let stake_token_value = domain::StakeTokenValue {
-            block_time_height: Default::default(),
-            total_staked_near_balance: YOCTO.into(),
-            total_stake_supply: YOCTO.into(),
-        };
+        let stake_token_value =
+            domain::StakeTokenValue::new(Default::default(), YOCTO.into(), YOCTO.into());
         let receipt = domain::StakeBatchReceipt::new((2 * YOCTO).into(), stake_token_value);
         let batch_id = domain::BatchId(batch_id.into());
         contract.stake_batch_receipts.insert(&batch_id, &receipt);
@@ -975,11 +972,8 @@ mod test {
         // Given there is a receipt for the batch
         // And the receipt exists for the stake batch
         // And STAKE token value = 1 NEAR
-        let stake_token_value = domain::StakeTokenValue {
-            block_time_height: Default::default(),
-            total_staked_near_balance: YOCTO.into(),
-            total_stake_supply: YOCTO.into(),
-        };
+        let stake_token_value =
+            domain::StakeTokenValue::new(Default::default(), YOCTO.into(), YOCTO.into());
         let receipt = domain::StakeBatchReceipt::new((2 * YOCTO).into(), stake_token_value);
         let batch_id = domain::BatchId(batch_id.into());
         contract.stake_batch_receipts.insert(&batch_id, &receipt);
@@ -1062,11 +1056,8 @@ mod test {
 
         // Given that the batches have receipts
         // And STAKE token value = 1 NEAR
-        let stake_token_value = domain::StakeTokenValue {
-            block_time_height: Default::default(),
-            total_staked_near_balance: YOCTO.into(),
-            total_stake_supply: YOCTO.into(),
-        };
+        let stake_token_value =
+            domain::StakeTokenValue::new(Default::default(), YOCTO.into(), YOCTO.into());
         let receipt = domain::StakeBatchReceipt::new((2 * YOCTO).into(), stake_token_value);
         contract
             .stake_batch_receipts
@@ -1199,18 +1190,15 @@ mod test {
         let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.total_stake.credit(YOCTO.into());
-        contract.stake_token_value = domain::StakeTokenValue {
-            block_time_height: Default::default(),
-            total_staked_near_balance: YOCTO.into(),
-            total_stake_supply: YOCTO.into(),
-        };
+        contract.stake_token_value =
+            domain::StakeTokenValue::new(Default::default(), YOCTO.into(), YOCTO.into());
 
         assert_eq!(
-            contract.stake_token_value.total_stake_supply,
+            contract.stake_token_value.total_stake_supply(),
             contract.total_stake.amount().into()
         );
         assert_eq!(
-            contract.stake_token_value.total_staked_near_balance,
+            contract.stake_token_value.total_staked_near_balance(),
             YOCTO.into()
         );
     }

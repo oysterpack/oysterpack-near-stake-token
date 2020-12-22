@@ -10,12 +10,24 @@ use primitive_types::U256;
 /// NOTE: The STAKE token value is gathered while the contract is locked.
 #[derive(BorshSerialize, BorshDeserialize, Copy, Clone, Default)]
 pub struct StakeTokenValue {
-    pub block_time_height: BlockTimeHeight,
-    pub total_staked_near_balance: YoctoNear,
-    pub total_stake_supply: YoctoStake,
+    block_time_height: BlockTimeHeight,
+    total_staked_near_balance: YoctoNear,
+    total_stake_supply: YoctoStake,
 }
 
 impl StakeTokenValue {
+    pub fn new(
+        block_time_height: BlockTimeHeight,
+        total_staked_near_balance: YoctoNear,
+        total_stake_supply: YoctoStake,
+    ) -> Self {
+        Self {
+            block_time_height,
+            total_staked_near_balance,
+            total_stake_supply,
+        }
+    }
+
     pub fn block_time_height(&self) -> BlockTimeHeight {
         self.block_time_height
     }
