@@ -41,6 +41,8 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct StakeTokenContract {
+    /// contract owner
+    owner_id: AccountId,
     /// Operator is allowed to perform operator actions on the contract
     /// TODO: support multiple operator and role management
     operator_id: AccountId,
@@ -127,9 +129,9 @@ impl StakeTokenContract {
     /// ## Notes
     /// - when the contract is deployed it will measure account storage usage
     ///
-    /// TODO: verify the staking pool - contract is disable until staking pool is verified via transation
-    /// If the staking pool contract fails verification, then the operator can delete the this contract.
-    /// NOTE: verification may fail if the contract mis-configured
+    /// TODO: verify the staking pool - contract is disabled until staking pool is verified via transation
+    ///       If the staking pool contract fails verification, then the operator can delete the this contract.
+    ///       NOTE: verification may fail if the contract mis-configured
     ///
     #[payable]
     #[init]
@@ -139,6 +141,7 @@ impl StakeTokenContract {
         settings.validate();
 
         let mut contract = Self {
+            owner_id: env::signer_account_id(),
             operator_id: settings.operator_id.into(),
 
             config: settings.config.unwrap_or_else(Config::default),

@@ -21,6 +21,7 @@ pub struct ContractState {
     pub total_unstaked_near: TimestampedNearBalance,
     pub total_stake_supply: TimestampedStakeBalance,
 
+    /// STAKE token value snapshot that was last taken when processing a batch
     pub stake_token_value: StakeTokenValue,
 
     pub batch_id_sequence: BatchId,

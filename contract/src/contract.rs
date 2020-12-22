@@ -1,4 +1,5 @@
 pub mod account_management;
+pub mod contract_owner;
 pub mod operator;
 pub mod redeeming_workflow_callbacks;
 pub mod settings;
@@ -23,9 +24,18 @@ impl StakeTokenContract {
     }
 
     pub fn assert_predecessor_is_operator(&self) {
-        let predecessor_account_id = env::predecessor_account_id();
         assert_eq!(
-            predecessor_account_id, self.operator_id,
+            env::predecessor_account_id(),
+            self.operator_id,
+            "{}",
+            PREDECESSOR_IS_OPERATOR
+        );
+    }
+
+    pub fn assert_predecessor_is_owner(&self) {
+        assert_eq!(
+            env::predecessor_account_id(),
+            self.owner_id,
             "{}",
             PREDECESSOR_IS_OPERATOR
         );
