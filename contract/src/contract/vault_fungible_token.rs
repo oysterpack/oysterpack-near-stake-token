@@ -179,6 +179,7 @@ fn assert_receiver_is_not_sender(receiver_id: &str) {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::interface::StakingService;
     use crate::{interface::AccountManagement, near::YOCTO, test_utils::*, Hash};
     use near_sdk::{
         json_types::U128, serde::Deserialize, serde_json, testing_env, MockedBlockchain,
@@ -796,6 +797,52 @@ mod test {
         assert_eq!(
             contract.get_balance(ValidAccountId::try_from(receiver_account_id).unwrap()),
             withdrawal_amount
+        );
+    }
+
+    #[test]
+    fn get_balance_with_unclaimed_receipts() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.is_view = false;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+        contract.register_account();
+
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+
+        let batch = contract.stake_batch.unwrap();
+        // create a stake batch receipt for the stake batch
+        let receipt =
+            domain::StakeBatchReceipt::new(batch.balance().amount(), contract.stake_token_value);
+        contract.stake_batch_receipts.insert(&batch.id(), &receipt);
+        contract.stake_batch = None;
+
+        // create a redeem stake batch receipt for 2 yoctoSTAKE
+        *contract.batch_id_sequence += 1;
+        let redeem_stake_batch =
+            domain::RedeemStakeBatch::new(contract.batch_id_sequence, (2 * YOCTO).into());
+        contract.redeem_stake_batch_receipts.insert(
+            &contract.batch_id_sequence,
+            &domain::RedeemStakeBatchReceipt::new(
+                redeem_stake_batch.balance().amount(),
+                contract.stake_token_value,
+            ),
+        );
+        let (mut account, account_id_hash) = contract.registered_account(account_id);
+        account.redeem_stake_batch = Some(redeem_stake_batch);
+        contract.save_account(&account_id_hash, &account);
+
+        context.is_view = true;
+        testing_env!(context.clone());
+        assert_eq!(
+            contract.get_balance(ValidAccountId::try_from(account_id).unwrap()),
+            (10 * YOCTO).into()
         );
     }
 

@@ -2138,4 +2138,87 @@ mod test {
         let receipt = contract.redeem_stake_batch_receipts.get(&batch_id).unwrap();
         assert_eq!(receipt.redeemed_stake(), (10 * YOCTO).into());
     }
+
+    #[test]
+    fn apply_unclaimed_receipts_to_account() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.is_view = false;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+        contract.register_account();
+
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+
+        let (mut account, account_id_hash) = contract.registered_account(account_id);
+
+        {
+            let batch = contract.stake_batch.unwrap();
+            // create a stake batch receipt for the stake batch
+            let receipt = domain::StakeBatchReceipt::new(
+                batch.balance().amount(),
+                contract.stake_token_value,
+            );
+            contract.stake_batch_receipts.insert(&batch.id(), &receipt);
+
+            *contract.batch_id_sequence += 1;
+            let batch = domain::StakeBatch::new(contract.batch_id_sequence, (10 * YOCTO).into());
+            account.next_stake_batch = Some(batch);
+            let receipt = domain::StakeBatchReceipt::new(
+                batch.balance().amount(),
+                contract.stake_token_value,
+            );
+            contract
+                .stake_batch_receipts
+                .insert(&contract.batch_id_sequence, &receipt);
+
+            contract.stake_batch = None;
+            contract.next_stake_batch = None;
+        }
+
+        {
+            // create a redeem stake batch receipt for 2 yoctoSTAKE
+            *contract.batch_id_sequence += 1;
+            let redeem_stake_batch =
+                domain::RedeemStakeBatch::new(contract.batch_id_sequence, (2 * YOCTO).into());
+            contract.redeem_stake_batch_receipts.insert(
+                &contract.batch_id_sequence,
+                &domain::RedeemStakeBatchReceipt::new(
+                    redeem_stake_batch.balance().amount(),
+                    contract.stake_token_value,
+                ),
+            );
+            account.redeem_stake_batch = Some(redeem_stake_batch);
+
+            *contract.batch_id_sequence += 1;
+            let redeem_stake_batch =
+                domain::RedeemStakeBatch::new(contract.batch_id_sequence, (2 * YOCTO).into());
+            contract.redeem_stake_batch_receipts.insert(
+                &contract.batch_id_sequence,
+                &domain::RedeemStakeBatchReceipt::new(
+                    redeem_stake_batch.balance().amount(),
+                    contract.stake_token_value,
+                ),
+            );
+            account.next_redeem_stake_batch = Some(redeem_stake_batch);
+        }
+        contract.save_account(&account_id_hash, &account);
+
+        context.is_view = true;
+        testing_env!(context.clone());
+        let account = contract
+            .lookup_account(account_id.try_into().unwrap())
+            .unwrap();
+        assert!(account.stake_batch.is_none());
+        assert!(account.redeem_stake_batch.is_none());
+        assert!(account.next_stake_batch.is_none());
+        assert!(account.next_redeem_stake_batch.is_none());
+        assert_eq!(account.stake.unwrap().amount, (2 * 10 * YOCTO).into());
+        assert_eq!(account.near.unwrap().amount, (2 * 2 * YOCTO).into());
+    }
 }

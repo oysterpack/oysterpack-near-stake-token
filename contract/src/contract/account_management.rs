@@ -156,6 +156,7 @@ impl StakeTokenContract {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::interface::StakingService;
     use crate::near::YOCTO;
     use crate::test_utils::*;
     use near_sdk::{serde_json, testing_env, MockedBlockchain};
@@ -191,6 +192,55 @@ mod test {
         assert!(contract
             .lookup_account(account_id.try_into().unwrap())
             .is_none());
+    }
+
+    #[test]
+    fn lookup_account_with_unclaimed_receipts() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.is_view = false;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+        contract.register_account();
+
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+
+        let batch = contract.stake_batch.unwrap();
+        // create a stake batch receipt for the stake batch
+        let receipt =
+            domain::StakeBatchReceipt::new(batch.balance().amount(), contract.stake_token_value);
+        contract.stake_batch_receipts.insert(&batch.id(), &receipt);
+        contract.stake_batch = None;
+
+        // create a redeem stake batch receipt for 2 yoctoSTAKE
+        *contract.batch_id_sequence += 1;
+        let redeem_stake_batch =
+            domain::RedeemStakeBatch::new(contract.batch_id_sequence, (2 * YOCTO).into());
+        contract.redeem_stake_batch_receipts.insert(
+            &contract.batch_id_sequence,
+            &domain::RedeemStakeBatchReceipt::new(
+                redeem_stake_batch.balance().amount(),
+                contract.stake_token_value,
+            ),
+        );
+        let (mut account, account_id_hash) = contract.registered_account(account_id);
+        account.redeem_stake_batch = Some(redeem_stake_batch);
+        contract.save_account(&account_id_hash, &account);
+
+        context.is_view = true;
+        testing_env!(context.clone());
+        let account = contract
+            .lookup_account(account_id.try_into().unwrap())
+            .unwrap();
+        assert!(account.stake_batch.is_none());
+        assert!(account.redeem_stake_batch.is_none());
+        assert_eq!(account.stake.unwrap().amount, (10 * YOCTO).into());
+        assert_eq!(account.near.unwrap().amount, (2 * YOCTO).into());
     }
 
     #[test]
