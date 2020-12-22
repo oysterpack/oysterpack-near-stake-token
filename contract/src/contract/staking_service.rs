@@ -1526,6 +1526,80 @@ mod test {
         assert_eq!(next_redeem_stake_batch.id, batch_id_2);
     }
 
+    /// Given an account has unclaimed stake batch receipts
+    /// When the account tries to redeem STAKE
+    /// Then the stake batch receipts are first claimed before checking the account balance
+    #[test]
+    fn redeem_with_unclaimed_stake_batch_receipts() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.account_balance = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings.clone());
+
+        contract.register_account();
+        context.attached_deposit = 5 * YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+
+        // Given an account has unclaimed stake batch receipts
+        let batch = contract.stake_batch.unwrap();
+        let receipt =
+            domain::StakeBatchReceipt::new(batch.balance().amount(), contract.stake_token_value);
+        contract.stake_batch_receipts.insert(&batch.id(), &receipt);
+
+        // When the account tries to redeem STAKE
+        testing_env!(context.clone());
+        contract.redeem((2 * YOCTO).into());
+
+        let (account, _account_hash_id) = contract.registered_account(account_id);
+        assert_eq!(account.stake.unwrap().amount(), (3 * YOCTO).into());
+        assert_eq!(
+            account.redeem_stake_batch.unwrap().balance().amount(),
+            (2 * YOCTO).into()
+        );
+    }
+
+    /// Given an account has unclaimed stake batch receipts
+    /// When the account tries to redeem STAKE
+    /// Then the stake batch receipts are first claimed before checking the account balance
+    #[test]
+    fn redeem_all_with_unclaimed_stake_batch_receipts() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.account_balance = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings.clone());
+
+        contract.register_account();
+        context.attached_deposit = 5 * YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+
+        // Given an account has unclaimed stake batch receipts
+        let batch = contract.stake_batch.unwrap();
+        let receipt =
+            domain::StakeBatchReceipt::new(batch.balance().amount(), contract.stake_token_value);
+        contract.stake_batch_receipts.insert(&batch.id(), &receipt);
+
+        // When the account tries to redeem STAKE
+        testing_env!(context.clone());
+        contract.redeem_all();
+
+        let (account, _account_hash_id) = contract.registered_account(account_id);
+        assert!(account.stake.is_none());
+        assert_eq!(
+            account.redeem_stake_batch.unwrap().balance().amount(),
+            batch.balance().amount().value().into()
+        );
+    }
+
     /// Given a registered account has STAKE
     /// And there are no contract locks, i.e., no batches are being run
     /// When the account redeems all STAKE
