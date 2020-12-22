@@ -106,7 +106,7 @@ impl StakingService for StakeTokenContract {
                 );
                 self.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
 
-                self.get_account_from_staking_pool()
+                self.get_account_staked_balance_from_staking_pool()
                     .then(self.invoke_on_run_redeem_stake_batch())
                     .then(self.invoke_release_run_redeem_stake_batch_unstaking_lock())
             }
@@ -594,7 +594,7 @@ pub trait ExtStakingPool {
 pub trait ExtRedeemingWokflowCallbacks {
     fn on_run_redeem_stake_batch(
         &mut self,
-        #[callback] staking_pool_account: StakingPoolAccount,
+        #[callback] staked_balance: near_sdk::json_types::U128,
     ) -> Promise;
 
     /// ## Success Workflow
@@ -1669,6 +1669,12 @@ mod test {
         assert_eq!(redeem_stake_batch.id, batch_id);
     }
 
+    #[derive(Deserialize)]
+    #[serde(crate = "near_sdk::serde")]
+    struct GetStakedAccountBalanceArgs {
+        account_id: String,
+    }
+
     /// Given the contract is unlocked and has no batch runs in progress
     /// And there is a redeem stake batch
     /// When the redeem batch is run
@@ -1711,8 +1717,10 @@ mod test {
                 Action::FunctionCall {
                     method_name, args, ..
                 } => {
-                    assert_eq!(method_name, "get_account");
-                    assert_eq!(args, "{\"account_id\":\"stake.oysterpack.near\"}");
+                    assert_eq!(method_name, "get_account_staked_balance");
+                    let args: GetStakedAccountBalanceArgs =
+                        near_sdk::serde_json::from_str(args).unwrap();
+                    assert_eq!(args.account_id, context.current_account_id);
                 }
                 _ => panic!("expected func call action"),
             }

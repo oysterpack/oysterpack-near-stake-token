@@ -128,6 +128,7 @@ impl Default for StakeTokenContract {
 impl StakeTokenContract {
     /// ## Notes
     /// - when the contract is deployed it will measure account storage usage
+    /// - the owner account ID will be set to the operator account ID
     ///
     /// TODO: verify the staking pool - contract is disabled until staking pool is verified via transation
     ///       If the staking pool contract fails verification, then the operator can delete the this contract.
@@ -140,9 +141,10 @@ impl StakeTokenContract {
 
         settings.validate();
 
+        let operator_id: AccountId = settings.operator_id.into();
         let mut contract = Self {
-            owner_id: env::signer_account_id(),
-            operator_id: settings.operator_id.into(),
+            owner_id: operator_id.clone(),
+            operator_id: operator_id,
 
             config: settings.config.unwrap_or_else(Config::default),
             config_change_block_height: env::block_index().into(),
@@ -342,5 +344,7 @@ mod test {
         // And batches should be None
         assert!(contract.stake_batch.is_none());
         assert!(contract.redeem_stake_batch.is_none());
+
+        assert_eq!(contract.owner_id, contract.operator_id);
     }
 }

@@ -1,4 +1,5 @@
 use crate::interface::YoctoNear;
+use near_sdk::json_types::ValidAccountId;
 use near_sdk::AccountId;
 
 pub trait ContractOwner {
@@ -11,6 +12,14 @@ pub trait ContractOwner {
     ///   are not possible. When funds are withdrawan, the fractional NEAR that was not staked is swept
     ///   into the contract account balance.
     fn owner_balance(&self) -> YoctoNear;
+
+    /// TODO: need to protect against accounts that do not exist - options are
+    ///       - send 1 yocto and transfer ownership only if NEAR transfer succeeds
+    ///       - require a contract interface on the owner account
+    ///
+    /// ## Panics
+    /// - if the predecessor account is not the owner account
+    fn transfer_ownership(&mut self, new_owner: ValidAccountId);
 
     /// Deposits the owner's balance into the owners STAKE account
     ///
