@@ -17,7 +17,7 @@ impl StakeTokenContract {
     ) -> StakeTokenValue {
         assert_predecessor_is_self();
         assert!(self.promise_result_succeeded(), GET_STAKED_BALANCE_FAILURE);
-        domain::StakeTokenValue::new(staked_balance.0.into(), self.total_stake.amount()).into()
+        self.stake_token_value(staked_balance.0.into()).into()
     }
 
     /// updates the cached [StakeTokenValue]
@@ -27,8 +27,7 @@ impl StakeTokenContract {
     ) -> StakeTokenValue {
         assert_predecessor_is_self();
         assert!(self.promise_result_succeeded(), GET_STAKED_BALANCE_FAILURE);
-        self.stake_token_value =
-            domain::StakeTokenValue::new(staked_balance.0.into(), self.total_stake.amount());
+        self.stake_token_value = self.stake_token_value(staked_balance.0.into());
         self.stake_token_value.into()
     }
 }

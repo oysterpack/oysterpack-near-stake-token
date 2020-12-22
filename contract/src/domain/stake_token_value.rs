@@ -8,27 +8,14 @@ use primitive_types::U256;
 /// STAKE token value = [total_staked_near_balance] / [total_stake_supply]
 ///
 /// NOTE: The STAKE token value is gathered while the contract is locked.
-#[derive(BorshSerialize, BorshDeserialize, Copy, Clone)]
+#[derive(BorshSerialize, BorshDeserialize, Copy, Clone, Default)]
 pub struct StakeTokenValue {
-    block_time_height: BlockTimeHeight,
-    total_staked_near_balance: YoctoNear,
-    total_stake_supply: YoctoStake,
+    pub block_time_height: BlockTimeHeight,
+    pub total_staked_near_balance: YoctoNear,
+    pub total_stake_supply: YoctoStake,
 }
 
 impl StakeTokenValue {
-    /// [clock_time_height] is retrieved from the NEAR runtime env
-    ///
-    /// ## Panics
-    /// - if NEAR runtime env is not available
-    /// - if only 1 of the balances is zero
-    pub fn new(total_staked_near_balance: YoctoNear, total_stake_supply: YoctoStake) -> Self {
-        Self {
-            block_time_height: BlockTimeHeight::from_env(),
-            total_stake_supply,
-            total_staked_near_balance,
-        }
-    }
-
     pub fn block_time_height(&self) -> BlockTimeHeight {
         self.block_time_height
     }
@@ -95,7 +82,7 @@ mod test {
         let context = new_context(account_id);
         testing_env!(context);
 
-        let stake_token_value = StakeTokenValue::new(YoctoNear(0), YoctoStake(0));
+        let stake_token_value = StakeTokenValue::default();
         assert_eq!(stake_token_value.value(), YoctoNear(YOCTO));
 
         assert_eq!(

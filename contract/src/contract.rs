@@ -3,7 +3,7 @@ pub mod operator;
 pub mod redeeming_workflow_callbacks;
 pub mod settings;
 pub mod staking_service;
-pub mod staking_service_callbacks;
+// pub mod staking_service_callbacks;
 pub mod staking_workflow_callbacks;
 pub mod vault_fungible_token;
 
@@ -25,8 +25,9 @@ impl StakeTokenContract {
 
     pub fn assert_predecessor_is_operator(&self) {
         let predecessor_account_id = env::predecessor_account_id();
-        assert!(
-            predecessor_account_id == self.operator_id,
+        assert_eq!(
+            predecessor_account_id, self.operator_id,
+            "{}",
             PREDECESSOR_IS_OPERATOR
         );
     }

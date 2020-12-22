@@ -148,7 +148,7 @@ impl StakeTokenContract {
             accounts_len: 0,
             total_near: TimestampedNearBalance::new(0.into()),
             total_stake: TimestampedStakeBalance::new(0.into()),
-            stake_token_value: StakeTokenValue::new(0.into(), 0.into()),
+            stake_token_value: StakeTokenValue::default(),
             batch_id_sequence: BatchId::default(),
             stake_batch: None,
             redeem_stake_batch: None,
@@ -212,11 +212,11 @@ impl StakeTokenContract {
         let batch_id = BatchId(0);
         self.stake_batch_receipts.insert(
             &batch_id,
-            &StakeBatchReceipt::new(0.into(), StakeTokenValue::new(0.into(), 0.into())),
+            &StakeBatchReceipt::new(0.into(), StakeTokenValue::default()),
         );
         self.redeem_stake_batch_receipts.insert(
             &batch_id,
-            &RedeemStakeBatchReceipt::new(0.into(), StakeTokenValue::new(0.into(), 0.into())),
+            &RedeemStakeBatchReceipt::new(0.into(), StakeTokenValue::default()),
         );
     }
 

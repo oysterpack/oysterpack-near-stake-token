@@ -3,10 +3,11 @@ use crate::*;
 use crate::{
     domain::{self, RedeemLock},
     errors::{
-        illegal_state::{REDEEM_STAKE_BATCH_RECEIPT_SHOULD_EXIST, REDEEM_STAKE_BATCH_SHOULD_EXIST},
-        redeeming_stake_errors::{
-            UNSTAKED_FUNDS_NOT_AVAILABLE_FOR_WITHDRAWAL, UNSTAKING_BLOCKED_BY_PENDING_WITHDRAWAL,
+        illegal_state::{
+            ILLEGAL_REDEEM_LOCK_STATE, REDEEM_STAKE_BATCH_RECEIPT_SHOULD_EXIST,
+            REDEEM_STAKE_BATCH_SHOULD_EXIST,
         },
+        redeeming_stake_errors::UNSTAKED_FUNDS_NOT_AVAILABLE_FOR_WITHDRAWAL,
         staking_pool_failures::{GET_ACCOUNT_FAILURE, GET_STAKED_BALANCE_FAILURE, UNSTAKE_FAILURE},
     },
     ext_redeeming_workflow_callbacks, ext_staking_pool,
@@ -22,6 +23,12 @@ impl StakeTokenContract {
         #[callback] staking_pool_account: StakingPoolAccount,
     ) -> Promise {
         assert_predecessor_is_self();
+        assert_eq!(
+            self.run_redeem_stake_batch_lock,
+            Some(RedeemLock::Unstaking),
+            "{}",
+            ILLEGAL_REDEEM_LOCK_STATE,
+        );
 
         // the batch should always be present because the purpose of this callback is a step
         // in the batch processing workflow
@@ -32,30 +39,20 @@ impl StakeTokenContract {
 
         assert!(self.promise_result_succeeded(), GET_STAKED_BALANCE_FAILURE);
 
-        // all unstaked NEAR must be withdrawn before we are allowed to unstake more NEAR
-        // - per the staking pool contract, unstaked NEAR funds are locked for 4 epoch periods and
-        //   if more funds are unstaked, then the lock period resets to 4 epochs
-        if staking_pool_account.unstaked_balance.0 > 0 {
-            assert!(
-                staking_pool_account.can_withdraw,
-                UNSTAKING_BLOCKED_BY_PENDING_WITHDRAWAL
-            );
-
-            return self
-                .withdraw_all_funds_from_staking_pool()
-                .then(self.get_account_from_staking_pool())
-                .then(self.invoke_on_run_redeem_stake_batch());
-        }
-
         // update the cached STAKE token value
-        self.stake_token_value = domain::StakeTokenValue::new(
-            staking_pool_account.staked_balance.0.into(),
-            self.total_stake.amount(),
-        );
+        let staked_balance = staking_pool_account.staked_balance.0.into();
+        self.stake_token_value = self.stake_token_value(staked_balance);
 
-        let unstake_amount = self
-            .stake_token_value
-            .stake_to_near(batch.balance().amount());
+        let unstake_amount = self.stake_to_near(batch.balance().amount(), staked_balance);
+
+        env::log(
+            format!(
+                "redeeming {} STAKE for {} NEAR",
+                batch.balance().amount(),
+                unstake_amount
+            )
+            .as_bytes(),
+        );
 
         self.unstake(unstake_amount).then(self.invoke_on_unstake())
     }
@@ -191,6 +188,7 @@ mod test {
         near::YOCTO,
         test_utils::*,
     };
+    use near_sdk::json_types::U128;
     use near_sdk::{serde::Deserialize, serde_json, testing_env, MockedBlockchain};
 
     #[derive(Deserialize)]
@@ -212,6 +210,7 @@ mod test {
         let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
         *contract.batch_id_sequence += 1;
+        contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
 
         let redeem_stake_batch =
             RedeemStakeBatch::new(contract.batch_id_sequence, (100 * YOCTO).into());
@@ -227,7 +226,7 @@ mod test {
             staked_balance: (1100 * YOCTO).into(),
             can_withdraw: true,
         };
-        contract.on_run_redeem_stake_batch(staking_pool_account);
+        contract.on_run_redeem_stake_batch(staking_pool_account.clone());
         let receipts = deserialize_receipts(&env::created_receipts());
         println!("{:#?}", receipts);
         assert_eq!(receipts.len(), 2);
@@ -243,9 +242,10 @@ mod test {
                 } => {
                     assert_eq!(method_name, "unstake");
 
-                    let unstake_amount = contract
-                        .stake_token_value
-                        .stake_to_near(contract.redeem_stake_batch.unwrap().balance().amount());
+                    let unstake_amount = contract.stake_to_near(
+                        contract.redeem_stake_batch.unwrap().balance().amount(),
+                        staking_pool_account.staked_balance.0.into(),
+                    );
                     assert!(args.contains(&unstake_amount.value().to_string()));
                     assert_eq!(
                         contract
@@ -297,6 +297,7 @@ mod test {
     /// And then the account is retrieved from the staking pool
     /// And then the redeem batch is retried
     #[test]
+    #[ignore]
     fn on_run_redeem_stake_batch_with_nonzero_unstaked_balance_and_can_withdraw() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
@@ -306,6 +307,7 @@ mod test {
         let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
         *contract.batch_id_sequence += 1;
+        contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
 
         let redeem_stake_batch =
             RedeemStakeBatch::new(contract.batch_id_sequence, (100 * YOCTO).into());
@@ -324,28 +326,7 @@ mod test {
         contract.on_run_redeem_stake_batch(staking_pool_account);
         let receipts = deserialize_receipts(&env::created_receipts());
         println!("{:#?}", receipts);
-        assert_eq!(receipts.len(), 3);
-        {
-            let receipt = &receipts[0];
-            assert_eq!(receipt.receiver_id, contract.staking_pool_id);
-            match &receipt.actions[0] {
-                Action::FunctionCall {
-                    method_name, gas, ..
-                } => {
-                    assert_eq!(method_name, "withdraw_all");
-                    assert_eq!(
-                        contract
-                            .config
-                            .gas_config()
-                            .staking_pool()
-                            .withdraw()
-                            .value(),
-                        *gas
-                    );
-                }
-                _ => panic!("expected FunctionCall"),
-            }
-        }
+        assert_eq!(receipts.len(), 2);
         {
             let receipt = &receipts[1];
             assert_eq!(receipt.receiver_id, contract.staking_pool_id);
@@ -402,6 +383,7 @@ mod test {
     /// Then the txn fails
     #[test]
     #[should_panic(expected = "unstaking is blocked until all unstaked NEAR can be withdrawn")]
+    #[ignore]
     fn on_run_redeem_stake_batch_with_nonzero_unstaked_balance_and_cannot_withdraw() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
@@ -411,6 +393,7 @@ mod test {
         let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
         *contract.batch_id_sequence += 1;
+        contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
 
         let redeem_stake_batch =
             RedeemStakeBatch::new(contract.batch_id_sequence, (100 * YOCTO).into());
@@ -469,6 +452,7 @@ mod test {
             staked_balance: (1100 * YOCTO).into(),
             can_withdraw: false,
         };
+        contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
         contract.on_run_redeem_stake_batch(staking_pool_account);
     }
 
@@ -694,5 +678,12 @@ mod test {
                 }
             }
         }
+    }
+
+    #[test]
+    fn serialize_u128() {
+        let value = U128(2832187358794090528436378);
+        let json_value = serde_json::to_string(&value).unwrap();
+        println!("{}", json_value);
     }
 }

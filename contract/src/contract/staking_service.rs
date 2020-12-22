@@ -15,27 +15,20 @@ use crate::{
             DEPOSIT_REQUIRED_FOR_STAKE, INSUFFICIENT_STAKE_FOR_REDEEM_REQUEST, ZERO_REDEEM_AMOUNT,
         },
     },
-    interface::{
-        BatchId, RedeemStakeBatchReceipt, StakeTokenValue, StakingService, YoctoNear, YoctoStake,
-    },
+    interface::{BatchId, RedeemStakeBatchReceipt, StakingService, YoctoNear, YoctoStake},
     near::NO_DEPOSIT,
 };
 use near_sdk::{
-    env, ext_contract,
-    json_types::U128,
-    near_bindgen,
+    env, ext_contract, near_bindgen,
     serde::{Deserialize, Serialize},
     AccountId, Promise,
 };
+use primitive_types::U256;
 
 #[near_bindgen]
 impl StakingService for StakeTokenContract {
     fn staking_pool_id(&self) -> AccountId {
         self.staking_pool_id.clone()
-    }
-
-    fn stake_token_value(&self) -> StakeTokenValue {
-        self.stake_token_value.into()
     }
 
     #[payable]
@@ -87,6 +80,7 @@ impl StakingService for StakeTokenContract {
 
     fn redeem_all(&mut self) -> BatchId {
         let (mut account, account_hash) = self.registered_account(&env::predecessor_account_id());
+        self.claim_receipt_funds(&mut account);
         let amount = account.stake.expect("account has no stake").amount();
         let batch_id = self.redeem_stake_for_account(&mut account, amount);
         self.save_account(&account_hash, &account);
@@ -150,20 +144,6 @@ impl StakingService for StakeTokenContract {
 
     fn pending_redeem_stake_batch_receipt(&self) -> Option<RedeemStakeBatchReceipt> {
         unimplemented!()
-    }
-
-    fn refresh_stake_token_value(&self) -> Promise {
-        self.get_account_staked_balance_from_staking_pool().then(
-            ext_staking_pool_callbacks::on_refresh_account_staked_balance(
-                &env::current_account_id(),
-                NO_DEPOSIT.into(),
-                self.config
-                    .gas_config()
-                    .callbacks()
-                    .on_get_account_staked_balance()
-                    .value(),
-            ),
-        )
     }
 }
 
@@ -268,6 +248,8 @@ impl StakeTokenContract {
     ) -> BatchId {
         assert!(amount.value() > 0, ZERO_REDEEM_AMOUNT);
 
+        self.claim_receipt_funds(account);
+
         assert!(
             account.can_redeem(amount),
             INSUFFICIENT_STAKE_FOR_REDEEM_REQUEST
@@ -281,8 +263,6 @@ impl StakeTokenContract {
         } else {
             account.stake = None;
         }
-
-        self.claim_receipt_funds(account);
 
         match self.run_redeem_stake_batch_lock {
             None => {
@@ -521,11 +501,67 @@ impl StakeTokenContract {
             _ => false,
         }
     }
+
+    /// converts NEAR to STAKE rounded down
+    pub(crate) fn near_to_stake(
+        &self,
+        near: domain::YoctoNear,
+        total_staked_near_balance: domain::YoctoNear,
+    ) -> domain::YoctoStake {
+        let total_stake_supply = self.total_stake_supply();
+        if total_staked_near_balance.value() == 0 || total_stake_supply.value() == 0 {
+            return near.value().into();
+        }
+        let value = U256::from(near) * U256::from(total_stake_supply)
+            / U256::from(total_staked_near_balance);
+        value.as_u128().into()
+    }
+
+    pub(crate) fn total_stake_supply(&self) -> domain::YoctoStake {
+        let mut total_supply = self.total_stake.amount();
+        if let Some(batch) = self.redeem_stake_batch {
+            total_supply += batch.balance().amount();
+        }
+        if let Some(batch) = self.next_redeem_stake_batch {
+            total_supply += batch.balance().amount();
+        }
+        total_supply
+    }
+
+    pub fn stake_token_value(
+        &self,
+        total_staked_near_balance: domain::YoctoNear,
+    ) -> domain::StakeTokenValue {
+        domain::StakeTokenValue {
+            block_time_height: domain::BlockTimeHeight::from_env(),
+            total_stake_supply: self.total_stake_supply(),
+            total_staked_near_balance: total_staked_near_balance,
+        }
+    }
+
+    pub(crate) fn stake_to_near(
+        &self,
+        stake: domain::YoctoStake,
+        total_staked_near_balance: domain::YoctoNear,
+    ) -> domain::YoctoNear {
+        let total_stake_supply = self.total_stake_supply();
+        if total_staked_near_balance.value() == 0
+            || total_stake_supply.value() == 0
+            // TODO: when deposit and staked with staking pool, there is a small amount remaining as unstaked
+            //       however, STAKE token value should never be less than 1:1 in terms of NEAR
+            || total_staked_near_balance.value() < total_stake_supply.value()
+        {
+            return stake.value().into();
+        }
+        let value = U256::from(stake) * U256::from(total_staked_near_balance)
+            / U256::from(total_stake_supply);
+        value.as_u128().into()
+    }
 }
 
-type Balance = U128;
+type Balance = near_sdk::json_types::U128;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct StakingPoolAccount {
     pub account_id: AccountId,
@@ -543,23 +579,15 @@ pub trait ExtStakingPool {
 
     fn deposit_and_stake(&mut self);
 
-    fn unstake(&mut self, amount: Balance);
+    fn unstake(&mut self, amount: near_sdk::json_types::U128);
 
-    fn get_account_staked_balance(&self, account_id: AccountId) -> Balance;
+    fn get_account_staked_balance(&self, account_id: AccountId) -> near_sdk::json_types::U128;
 
-    fn get_account_unstaked_balance(&self, account_id: AccountId) -> Balance;
+    fn get_account_unstaked_balance(&self, account_id: AccountId) -> near_sdk::json_types::U128;
 
     fn is_account_unstaked_balance_available(&self, account_id: AccountId) -> bool;
 
     fn withdraw_all(&mut self);
-}
-
-#[ext_contract(ext_staking_pool_callbacks)]
-pub trait ExtStakingPoolCallbacks {
-    fn on_refresh_account_staked_balance(
-        &mut self,
-        #[callback] staked_balance: Balance,
-    ) -> StakeTokenValue;
 }
 
 #[ext_contract(ext_redeeming_workflow_callbacks)]
@@ -861,7 +889,11 @@ mod test {
         // Given there is a receipt for the batch
         // And the receipt exists for the stake batch
         // And STAKE token value = 1 NEAR
-        let stake_token_value = domain::StakeTokenValue::new(YOCTO.into(), YOCTO.into());
+        let stake_token_value = domain::StakeTokenValue {
+            block_time_height: Default::default(),
+            total_staked_near_balance: YOCTO.into(),
+            total_stake_supply: YOCTO.into(),
+        };
         let receipt = domain::StakeBatchReceipt::new((2 * YOCTO).into(), stake_token_value);
         let batch_id = domain::BatchId(batch_id.into());
         contract.stake_batch_receipts.insert(&batch_id, &receipt);
@@ -943,7 +975,11 @@ mod test {
         // Given there is a receipt for the batch
         // And the receipt exists for the stake batch
         // And STAKE token value = 1 NEAR
-        let stake_token_value = domain::StakeTokenValue::new(YOCTO.into(), YOCTO.into());
+        let stake_token_value = domain::StakeTokenValue {
+            block_time_height: Default::default(),
+            total_staked_near_balance: YOCTO.into(),
+            total_stake_supply: YOCTO.into(),
+        };
         let receipt = domain::StakeBatchReceipt::new((2 * YOCTO).into(), stake_token_value);
         let batch_id = domain::BatchId(batch_id.into());
         contract.stake_batch_receipts.insert(&batch_id, &receipt);
@@ -1026,7 +1062,11 @@ mod test {
 
         // Given that the batches have receipts
         // And STAKE token value = 1 NEAR
-        let stake_token_value = domain::StakeTokenValue::new(YOCTO.into(), YOCTO.into());
+        let stake_token_value = domain::StakeTokenValue {
+            block_time_height: Default::default(),
+            total_staked_near_balance: YOCTO.into(),
+            total_stake_supply: YOCTO.into(),
+        };
         let receipt = domain::StakeBatchReceipt::new((2 * YOCTO).into(), stake_token_value);
         contract
             .stake_batch_receipts
@@ -1159,14 +1199,18 @@ mod test {
         let mut contract = StakeTokenContract::new(contract_settings);
 
         contract.total_stake.credit(YOCTO.into());
-        contract.stake_token_value = domain::StakeTokenValue::new(YOCTO.into(), YOCTO.into());
+        contract.stake_token_value = domain::StakeTokenValue {
+            block_time_height: Default::default(),
+            total_staked_near_balance: YOCTO.into(),
+            total_stake_supply: YOCTO.into(),
+        };
 
         assert_eq!(
-            contract.stake_token_value().total_stake_supply,
+            contract.stake_token_value.total_stake_supply,
             contract.total_stake.amount().into()
         );
         assert_eq!(
-            contract.stake_token_value().total_staked_near_balance,
+            contract.stake_token_value.total_staked_near_balance,
             YOCTO.into()
         );
     }
@@ -1834,56 +1878,6 @@ mod test {
         );
         contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
         contract.run_redeem_stake_batch();
-    }
-
-    #[test]
-    fn refresh_stake_token_value() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = YOCTO;
-        context.account_balance = 100 * YOCTO;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let contract = StakeTokenContract::new(contract_settings.clone());
-        contract.refresh_stake_token_value();
-
-        let receipts = deserialize_receipts(&env::created_receipts());
-        println!("receipt count = {}\n{:#?}", receipts.len(), receipts);
-        assert_eq!(receipts.len(), 2);
-        let receipts = receipts.as_slice();
-        {
-            let receipt = receipts.first().unwrap();
-            assert_eq!(receipt.receiver_id, contract.staking_pool_id);
-
-            let actions = receipt.actions.as_slice();
-            let func_call_action = actions.first().unwrap();
-            match func_call_action {
-                Action::FunctionCall {
-                    method_name, args, ..
-                } => {
-                    assert_eq!(method_name, "get_account_staked_balance");
-                    assert_eq!(args, "{\"account_id\":\"stake.oysterpack.near\"}");
-                }
-                _ => panic!("expected func call action"),
-            }
-        }
-        {
-            let receipt = &receipts[1];
-            assert_eq!(receipt.receiver_id, env::current_account_id());
-
-            let actions = receipt.actions.as_slice();
-            let func_call_action = actions.first().unwrap();
-            match func_call_action {
-                Action::FunctionCall {
-                    method_name, args, ..
-                } => {
-                    assert_eq!(method_name, "on_refresh_account_staked_balance");
-                    assert!(args.is_empty());
-                }
-                _ => panic!("expected func call action"),
-            }
-        }
     }
 
     /// Given an account has redeemed STAKE

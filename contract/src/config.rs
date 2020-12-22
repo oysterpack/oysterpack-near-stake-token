@@ -95,9 +95,9 @@ impl Default for StakingPoolGasConfig {
         Self {
             deposit_and_stake: (BASE_GAS.value() * 3).into(),
             unstake: (BASE_GAS.value() * 3).into(),
-            withdraw: (BASE_GAS.value() * 3).into(),
+            withdraw: BASE_GAS,
             get_account_balance: BASE_GAS,
-            get_account: (BASE_GAS.value() * 3).into(),
+            get_account: BASE_GAS,
         }
     }
 }
@@ -113,7 +113,8 @@ impl StakingPoolGasConfig {
     }
 
     pub fn withdraw(&self) -> Gas {
-        self.withdraw
+        BASE_GAS
+        // self.withdraw
     }
 
     pub fn get_account_balance(&self) -> Gas {
@@ -122,7 +123,8 @@ impl StakingPoolGasConfig {
     }
 
     pub fn get_account(&self) -> Gas {
-        self.get_account
+        BASE_GAS
+        // self.get_account
     }
 }
 
@@ -165,11 +167,13 @@ impl CallBacksGasConfig {
     }
 
     pub fn on_unstake(&self) -> Gas {
-        self.on_unstake
+        BASE_GAS
+        // self.on_unstake
     }
 
     pub fn on_run_redeem_stake_batch(&self) -> Gas {
-        self.on_run_redeem_stake_batch
+        BASE_GAS * 5
+        // self.on_run_redeem_stake_batch
     }
 }
 
@@ -178,7 +182,7 @@ impl Default for CallBacksGasConfig {
         Self {
             on_run_stake_batch: BASE_GAS * 3,
             on_deposit_and_stake: BASE_GAS,
-            on_unstake: BASE_GAS * 3,
+            on_unstake: BASE_GAS,
             on_get_account_staked_balance: BASE_GAS * 3,
             unlock: BASE_GAS,
             on_redeeming_stake_pending_withdrawal: BASE_GAS * 3,

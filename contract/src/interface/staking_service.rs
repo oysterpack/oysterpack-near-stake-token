@@ -1,4 +1,4 @@
-use crate::interface::{BatchId, RedeemStakeBatchReceipt, StakeTokenValue, YoctoNear, YoctoStake};
+use crate::interface::{BatchId, RedeemStakeBatchReceipt, YoctoNear, YoctoStake};
 use near_sdk::{AccountId, Promise};
 
 pub trait StakingService {
@@ -8,21 +8,6 @@ pub trait StakingService {
 
     /// returns the staking pool account ID used for the STAKE token
     fn staking_pool_id(&self) -> AccountId;
-
-    /// Returns the cached STAKE token value which is computed from the total STAKE token supply
-    /// and the staked NEAR account balance with the staking pool:
-    ///
-    /// STAKE Token Value = (Total Staked NEAR balance) / (Total STAKE token supply)
-    ///
-    /// Stake rewards are applied once per epoch time period. Thus, the STAKE token value remains
-    /// constant until stake rewards are issued. Based on how stake rewards work, it is safe to
-    /// cache the [StakeTokenValue] until the epoch changes.
-    ///
-    /// Thus, the STAKE token value only changes when the epoch rolls.
-    ///
-    /// NOTE: the STAKE token value is refreshed each time a batch is run. It can also be manually
-    /// refreshed via [refresh_stake_token_value()]
-    fn stake_token_value(&self) -> StakeTokenValue;
 
     //////////////////////////////
     ///     CHANGE METHODS    ///
@@ -71,10 +56,16 @@ pub trait StakingService {
     /// - if there is no stake batch to run
     fn run_stake_batch(&mut self) -> Promise;
 
-    /// Redeem the specified amount of STAKE.
+    /// Redeem the specified amount of STAKE. The STAKE is not immediately redeemed. The redeem
+    /// request is placed into a batch. The account's STAKE balance is debited the amount and moved
+    /// into the batch.
+    /// - [run_redeem_stake_batch] is used to run the batch and redeem the funds from the staking pool
     ///
-    /// If the contract is locked for redeeming, then the request is put into the next batch.    ///
-    /// If the contract is not locked for redeeming, then the request is put into the current batch.
+    /// If the contract is locked for redeeming, then the request is put into the next batch.    
+    /// If the contract is not locked for redeeming, then the request is put into the current batch,
+    /// i.e. the amount is added to the current batch.
+    ///
+    /// Returns the batch ID that the request is batched into.
     ///
     /// ## Panics
     /// - if account is not registered
@@ -133,9 +124,4 @@ pub trait StakingService {
     ///
     /// NOTE: pending withdrawals blocks [RedeemStakeBatch] to run
     fn pending_redeem_stake_batch_receipt(&self) -> Option<RedeemStakeBatchReceipt>;
-
-    /// refreshes the staked balance and updates the cached STAKE token value
-    ///
-    /// Promise returns: [StakeTokenValue]
-    fn refresh_stake_token_value(&self) -> Promise;
 }

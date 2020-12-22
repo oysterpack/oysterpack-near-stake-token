@@ -27,8 +27,7 @@ impl StakeTokenContract {
         assert!(self.promise_result_succeeded(), GET_STAKED_BALANCE_FAILURE);
 
         // update the cached STAKE token value
-        self.stake_token_value =
-            domain::StakeTokenValue::new(staked_balance.0.into(), self.total_stake.amount());
+        self.stake_token_value = self.stake_token_value(staked_balance.0.into());
 
         self.invoke_deposit_and_stake(batch.balance().amount())
             .then(self.invoke_on_deposit_and_stake())
@@ -144,7 +143,7 @@ mod test {
         let mut contract = StakeTokenContract::new(contract_settings);
         contract.register_account();
 
-        let initial_stake_token_value = contract.stake_token_value();
+        let initial_stake_token_value = contract.stake_token_value;
 
         context.attached_deposit = 100 * YOCTO;
         testing_env!(context.clone());
@@ -159,15 +158,15 @@ mod test {
         context.epoch_height += 1;
         testing_env!(context.clone());
         contract.on_run_stake_batch(0.into());
-        let stake_token_value_after_callback = contract.stake_token_value();
+        let stake_token_value_after_callback = contract.stake_token_value;
         assert!(
             stake_token_value_after_callback
                 .block_time_height
-                .epoch_height
+                .epoch_height()
                 .value()
                 > initial_stake_token_value
                     .block_time_height
-                    .epoch_height
+                    .epoch_height()
                     .value(),
             "stake token value should have been updated"
         );

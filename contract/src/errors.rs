@@ -60,6 +60,8 @@ pub mod illegal_state {
 
     pub const REDEEM_STAKE_BATCH_RECEIPT_SHOULD_EXIST: &str =
         "ILLEGAL STATE : redeem stake batch receipt should exist";
+
+    pub const ILLEGAL_REDEEM_LOCK_STATE: &str = "ILLEGAL STATE : illegal redeem lock state";
 }
 
 pub mod account_management {
