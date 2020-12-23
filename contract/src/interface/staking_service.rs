@@ -82,6 +82,7 @@ pub trait StakingService {
     fn redeem_all(&mut self) -> BatchId;
 
     /// Returns false if there was no pending request.
+    /// - STAKE funds that were locked in the redeem stake batch are made available for transfer
     fn cancel_pending_redeem_stake_request(&mut self) -> bool;
 
     /// STAKE tokens are redeemed in 2 steps: first the corresponding NEAR is unstaked with the staking
