@@ -10,7 +10,6 @@ pub trait AccountManagement {
     //////////////////////////
 
     /// If no account exists for the predecessor account ID, then a new one is created and registered.
-    /// The attached deposit will be staked minus the account storage fees.
     /// The account is required to pay for its storage. Storage fees will be escrowed and refunded
     /// when the account is unregistered.
     ///
