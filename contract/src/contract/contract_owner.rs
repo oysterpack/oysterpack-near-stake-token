@@ -64,14 +64,22 @@ mod test {
     fn owner_balance_has_funds() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
-        context.signer_account_id = "owner.near".to_string();
+        context.account_balance = 100 * YOCTO;
         context.is_view = false;
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
 
-        context.account_balance = 100 * YOCTO;
+        context.attached_deposit = contract.account_storage_fee().value();
+        testing_env!(context.clone());
+        contract.register_account();
+
+        assert_eq!(
+            env::account_balance(),
+            (100 * YOCTO) + contract.account_storage_fee().value()
+        );
+
         testing_env!(context.clone());
         assert_eq!(contract.owner_balance(), (100 * YOCTO).into());
 
@@ -84,12 +92,15 @@ mod test {
     fn owner_balance_has_funds_with_pending_stake_batches() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
-        context.signer_account_id = "owner.near".to_string();
+        context.account_balance = 100 * YOCTO;
         context.is_view = false;
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
+        context.attached_deposit = contract.account_storage_fee().value();
+        testing_env!(context.clone());
+        contract.register_account();
 
         *contract.batch_id_sequence += 1;
         contract.stake_batch = Some(domain::StakeBatch::new(
@@ -102,7 +113,6 @@ mod test {
             (2 * YOCTO).into(),
         ));
 
-        context.account_balance = 100 * YOCTO;
         testing_env!(context.clone());
         assert_eq!(contract.owner_balance(), (97 * YOCTO).into());
 
