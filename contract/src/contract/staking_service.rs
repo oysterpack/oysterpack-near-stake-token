@@ -167,6 +167,15 @@ impl StakeTokenContract {
                 .value(),
         )
     }
+
+    pub(crate) fn withdraw_funds_from_staking_pool(&self, amount: domain::YoctoNear) -> Promise {
+        ext_staking_pool::withdraw(
+            amount.value().into(),
+            &self.staking_pool_id,
+            NO_DEPOSIT.into(),
+            self.config.gas_config().staking_pool().withdraw().value(),
+        )
+    }
 }
 
 impl StakeTokenContract {
@@ -596,6 +605,8 @@ pub trait ExtStakingPool {
     fn is_account_unstaked_balance_available(&self, account_id: AccountId) -> bool;
 
     fn withdraw_all(&mut self);
+
+    fn withdraw(&mut self, amount: near_sdk::json_types::U128);
 }
 
 #[ext_contract(ext_redeeming_workflow_callbacks)]

@@ -11,7 +11,7 @@ use crate::{
         staking_pool_failures::{GET_ACCOUNT_FAILURE, GET_STAKED_BALANCE_FAILURE, UNSTAKE_FAILURE},
     },
     ext_redeeming_workflow_callbacks, ext_staking_pool,
-    interface::{BatchId, Operator},
+    interface::BatchId,
     near::{assert_predecessor_is_self, NO_DEPOSIT},
 };
 use near_sdk::{env, near_bindgen, Promise, PromiseOrValue};
@@ -74,23 +74,28 @@ impl StakeTokenContract {
 
         assert!(self.promise_result_succeeded(), GET_ACCOUNT_FAILURE);
 
+        let batch = self
+            .redeem_stake_batch
+            .expect(REDEEM_STAKE_BATCH_SHOULD_EXIST);
+
         if staking_pool_account.unstaked_balance.0 > 0 {
             assert!(
                 staking_pool_account.can_withdraw,
                 UNSTAKED_FUNDS_NOT_AVAILABLE_FOR_WITHDRAWAL
             );
 
+            let withdraw_amount = self
+                .stake_token_value
+                .stake_to_near(batch.balance().amount());
+
             return self
-                .withdraw_all_funds_from_staking_pool()
+                .withdraw_funds_from_staking_pool(withdraw_amount)
                 .then(self.get_account_from_staking_pool())
                 .then(self.invoke_on_redeeming_stake_pending_withdrawal())
                 .into();
         }
 
-        let batch_id = self
-            .redeem_stake_batch
-            .expect(REDEEM_STAKE_BATCH_SHOULD_EXIST)
-            .id();
+        let batch_id = batch.id();
 
         let receipt = self
             .redeem_stake_batch_receipts
@@ -201,6 +206,12 @@ mod test {
     #[derive(Deserialize)]
     #[serde(crate = "near_sdk::serde")]
     struct UnstakeArgs {
+        amount: String,
+    }
+
+    #[derive(Deserialize)]
+    #[serde(crate = "near_sdk::serde")]
+    struct Withdrawrgs {
         amount: String,
     }
 
@@ -586,9 +597,20 @@ mod test {
             assert_eq!(receipt.receiver_id, contract.staking_pool_id);
             match &receipt.actions[0] {
                 Action::FunctionCall {
-                    method_name, gas, ..
+                    method_name,
+                    gas,
+                    args,
+                    ..
                 } => {
-                    assert_eq!(method_name, "withdraw_all");
+                    assert_eq!(method_name, "withdraw");
+                    let amount: Withdrawrgs = serde_json::from_str(args).unwrap();
+                    assert_eq!(
+                        amount.amount,
+                        contract
+                            .stake_token_value
+                            .stake_to_near(contract.redeem_stake_batch.unwrap().balance().amount())
+                            .to_string()
+                    );
                     assert_eq!(
                         contract
                             .config
