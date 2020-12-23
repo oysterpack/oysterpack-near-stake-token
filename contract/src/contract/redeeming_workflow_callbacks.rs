@@ -1,4 +1,5 @@
 //required in order for near_bindgen macro to work outside of lib.rs
+use crate::interface::Operator;
 use crate::*;
 use crate::{
     domain::{self, RedeemLock},
@@ -78,18 +79,15 @@ impl StakeTokenContract {
             .redeem_stake_batch
             .expect(REDEEM_STAKE_BATCH_SHOULD_EXIST);
 
-        if staking_pool_account.unstaked_balance.0 > 0 {
+        let unstaked_balance = staking_pool_account.unstaked_balance.0;
+        if unstaked_balance > 0 {
             assert!(
                 staking_pool_account.can_withdraw,
                 UNSTAKED_FUNDS_NOT_AVAILABLE_FOR_WITHDRAWAL
             );
 
-            let withdraw_amount = self
-                .stake_token_value
-                .stake_to_near(batch.balance().amount());
-
             return self
-                .withdraw_funds_from_staking_pool(withdraw_amount)
+                .withdraw_all_funds_from_staking_pool()
                 .then(self.get_account_from_staking_pool())
                 .then(self.invoke_on_redeeming_stake_pending_withdrawal())
                 .into();
@@ -602,15 +600,8 @@ mod test {
                     args,
                     ..
                 } => {
-                    assert_eq!(method_name, "withdraw");
-                    let amount: Withdrawrgs = serde_json::from_str(args).unwrap();
-                    assert_eq!(
-                        amount.amount,
-                        contract
-                            .stake_token_value
-                            .stake_to_near(contract.redeem_stake_batch.unwrap().balance().amount())
-                            .to_string()
-                    );
+                    assert_eq!(method_name, "withdraw_all");
+                    assert!(args.is_empty());
                     assert_eq!(
                         contract
                             .config
