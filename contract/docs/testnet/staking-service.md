@@ -25,15 +25,18 @@ near call stake.oysterpack.testnet run_redeem_stake_batch --accountId alfio-zapp
 
 ## Staking Pool
 ```shell
-near view stakin.pool.f863973.m0 get_account --args '{"account_id":"stake.oysterpack.testnet"}'
+export STAKING_POOL=staked.pool.f863973.m0
+#export STAKING_POOL=stakin.pool.f863973.m0
 
-near call stakin.pool.f863973.m0 unstake --accountId stake.oysterpack.testnet --args '{"amount":"100"}' --gas 300000000000000
+near view $STAKING_POOL get_account --args '{"account_id":"stake.oysterpack.testnet"}'
 
-near call stakin.pool.f863973.m0 unstake --accountId stake.oysterpack.testnet --args '{"amount":"10000000000000000000000000"}' --gas 300000000000000
+near call $STAKING_POOL unstake --accountId stake.oysterpack.testnet --args '{"amount":"100"}' --gas 300000000000000
 
-near call stakin.pool.f863973.m0 unstake_all --accountId stake.oysterpack.testnet --gas 300000000000000
+near call $STAKING_POOL unstake --accountId stake.oysterpack.testnet --args '{"amount":"10000000000000000000000000"}' --gas 300000000000000
 
-near call stakin.pool.f863973.m0 stake --accountId stake.oysterpack.testnet --args '{"amount":"1000000000000000000000000"}' --gas 300000000000000
+near call $STAKING_POOL unstake_all --accountId stake.oysterpack.testnet --gas 300000000000000
+
+near call $STAKING_POOL stake --accountId stake.oysterpack.testnet --args '{"amount":"1000000000000000000000000"}' --gas 300000000000000
 ```
 
 # 1000000000000000000000000     = 1 NEAR

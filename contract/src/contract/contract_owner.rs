@@ -1,4 +1,4 @@
-use crate::interface::{ContractOwner, YoctoNear};
+use crate::interface::{AccountManagement, ContractOwner, YoctoNear};
 //required in order for near_bindgen macro to work outside of lib.rs
 use crate::*;
 use near_sdk::json_types::ValidAccountId;
@@ -11,7 +11,6 @@ impl ContractOwner for StakeTokenContract {
     }
 
     fn owner_balance(&self) -> YoctoNear {
-        let contract_account_balance = env::account_balance();
         let total_customer_accounts_unstaked_balance = self.total_near.amount().value();
         let customer_batched_stake_deposits = self
             .stake_batch
@@ -19,9 +18,13 @@ impl ContractOwner for StakeTokenContract {
             + self
                 .next_stake_batch
                 .map_or(0, |batch| batch.balance().amount().value());
-        (contract_account_balance
+        let total_account_storage_escrow =
+            self.total_registered_accounts().0 * self.account_storage_fee().value();
+
+        (env::account_balance()
             - total_customer_accounts_unstaked_balance
-            - customer_batched_stake_deposits)
+            - customer_batched_stake_deposits
+            - total_account_storage_escrow)
             .into()
     }
 

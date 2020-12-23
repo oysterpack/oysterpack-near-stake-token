@@ -332,21 +332,47 @@ impl StakeTokenContract {
             }
         }
 
-        if let Some(batch) = account.redeem_stake_batch {
-            if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
-                let redeemed_stake = batch.balance().amount();
-                let near = receipt.stake_token_value().stake_to_near(redeemed_stake);
-                account.apply_near_credit(near);
-                account.redeem_stake_batch = None
-            }
-        }
+        if let Some(RedeemLock::PendingWithdrawal) = self.run_redeem_stake_batch_lock {
+            let batch_pending_withdrawal_id = self.redeem_stake_batch.as_ref().unwrap().id();
 
-        if let Some(batch) = account.next_redeem_stake_batch {
-            if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
-                let redeemed_stake = batch.balance().amount();
-                let near = receipt.stake_token_value().stake_to_near(redeemed_stake);
-                account.apply_near_credit(near);
-                account.next_redeem_stake_batch = None
+            if let Some(batch) = account.redeem_stake_batch {
+                if batch_pending_withdrawal_id != batch.id() {
+                    if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
+                        let redeemed_stake = batch.balance().amount();
+                        let near = receipt.stake_token_value().stake_to_near(redeemed_stake);
+                        account.apply_near_credit(near);
+                        account.redeem_stake_batch = None
+                    }
+                }
+            }
+
+            if let Some(batch) = account.next_redeem_stake_batch {
+                if batch_pending_withdrawal_id != batch.id() {
+                    if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
+                        let redeemed_stake = batch.balance().amount();
+                        let near = receipt.stake_token_value().stake_to_near(redeemed_stake);
+                        account.apply_near_credit(near);
+                        account.next_redeem_stake_batch = None
+                    }
+                }
+            }
+        } else {
+            if let Some(batch) = account.redeem_stake_batch {
+                if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
+                    let redeemed_stake = batch.balance().amount();
+                    let near = receipt.stake_token_value().stake_to_near(redeemed_stake);
+                    account.apply_near_credit(near);
+                    account.redeem_stake_batch = None
+                }
+            }
+
+            if let Some(batch) = account.next_redeem_stake_batch {
+                if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
+                    let redeemed_stake = batch.balance().amount();
+                    let near = receipt.stake_token_value().stake_to_near(redeemed_stake);
+                    account.apply_near_credit(near);
+                    account.next_redeem_stake_batch = None
+                }
             }
         }
 
