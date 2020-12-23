@@ -2828,13 +2828,57 @@ mod test {
         assert!(contract.redeem_stake_batch.is_some());
 
         testing_env!(context.clone());
-        contract.cancel_pending_redeem_stake_request();
+        assert!(contract.cancel_pending_redeem_stake_request());
         let account = contract
             .lookup_account(ValidAccountId::try_from(account_id).unwrap())
             .unwrap();
         assert_eq!(account.stake.unwrap().amount, (100 * YOCTO).into());
         assert!(account.redeem_stake_batch.is_none());
         assert!(contract.redeem_stake_batch.is_none());
+    }
+
+    #[test]
+    fn cancel_pending_redeem_stake_request_success_with_funds_remaining_in_batch() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.is_view = false;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+        contract.register_account();
+
+        let (mut account, account_id_hash) = contract.registered_account(account_id);
+        account.apply_stake_credit((100 * YOCTO).into());
+        contract.save_account(&account_id_hash, &account);
+
+        testing_env!(context.clone());
+        contract.redeem((10 * YOCTO).into());
+        {
+            let mut batch = contract.redeem_stake_batch.unwrap();
+            batch.add(YOCTO.into());
+            contract.redeem_stake_batch = Some(batch);
+        }
+
+        let account = contract
+            .lookup_account(ValidAccountId::try_from(account_id).unwrap())
+            .unwrap();
+        assert_eq!(account.stake.unwrap().amount, (90 * YOCTO).into());
+        assert!(account.redeem_stake_batch.is_some());
+        assert!(contract.redeem_stake_batch.is_some());
+
+        testing_env!(context.clone());
+        assert!(contract.cancel_pending_redeem_stake_request());
+        let account = contract
+            .lookup_account(ValidAccountId::try_from(account_id).unwrap())
+            .unwrap();
+        assert_eq!(account.stake.unwrap().amount, (100 * YOCTO).into());
+        assert!(account.redeem_stake_batch.is_none());
+        assert_eq!(
+            contract.redeem_stake_batch.unwrap().balance().amount(),
+            YOCTO.into()
+        );
     }
 
     #[test]
@@ -2868,12 +2912,94 @@ mod test {
         assert!(contract.next_redeem_stake_batch.is_some());
 
         testing_env!(context.clone());
-        contract.cancel_pending_redeem_stake_request();
+        assert!(contract.cancel_pending_redeem_stake_request());
         let account = contract
             .lookup_account(ValidAccountId::try_from(account_id).unwrap())
             .unwrap();
         assert_eq!(account.stake.unwrap().amount, (90 * YOCTO).into());
         assert!(account.next_redeem_stake_batch.is_none());
         assert!(contract.next_redeem_stake_batch.is_none());
+    }
+
+    #[test]
+    fn cancel_pending_redeem_stake_request_while_locked_success_with_other_funds_in_batch() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.is_view = false;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+        contract.register_account();
+
+        let (mut account, account_id_hash) = contract.registered_account(account_id);
+        account.apply_stake_credit((100 * YOCTO).into());
+        contract.save_account(&account_id_hash, &account);
+
+        testing_env!(context.clone());
+        contract.redeem((10 * YOCTO).into());
+
+        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+        testing_env!(context.clone());
+        contract.redeem((10 * YOCTO).into());
+        {
+            let mut batch = contract.next_redeem_stake_batch.unwrap();
+            batch.add(YOCTO.into());
+            contract.next_redeem_stake_batch = Some(batch);
+        }
+
+        let account = contract
+            .lookup_account(ValidAccountId::try_from(account_id).unwrap())
+            .unwrap();
+        assert_eq!(account.stake.unwrap().amount, (80 * YOCTO).into());
+        assert!(account.next_redeem_stake_batch.is_some());
+        assert!(contract.next_redeem_stake_batch.is_some());
+
+        testing_env!(context.clone());
+        assert!(contract.cancel_pending_redeem_stake_request());
+        let account = contract
+            .lookup_account(ValidAccountId::try_from(account_id).unwrap())
+            .unwrap();
+        assert_eq!(account.stake.unwrap().amount, (90 * YOCTO).into());
+        assert!(account.next_redeem_stake_batch.is_none());
+        assert_eq!(
+            contract.next_redeem_stake_batch.unwrap().balance().amount(),
+            YOCTO.into()
+        );
+    }
+
+    #[test]
+    fn cancel_pending_redeem_stake_request_no_batches_success() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.is_view = false;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+        contract.register_account();
+
+        testing_env!(context.clone());
+        assert!(!contract.cancel_pending_redeem_stake_request());
+    }
+
+    #[test]
+    fn cancel_pending_redeem_stake_request_while_locked_no_next_batch_success() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.is_view = false;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+        contract.register_account();
+        contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
+
+        testing_env!(context.clone());
+
+        assert!(!contract.cancel_pending_redeem_stake_request());
     }
 }
