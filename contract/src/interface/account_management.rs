@@ -1,29 +1,19 @@
 use crate::interface::{StakeAccount, YoctoNear};
-use near_sdk::{
-    json_types::{ValidAccountId, U128},
-    Promise,
-};
+use near_sdk::json_types::{ValidAccountId, U128};
 
 pub trait AccountManagement {
     ////////////////////////////
     ///    CHANGE METHODS   ///
     //////////////////////////
 
-    /// If no account exists for the predecessor account ID, then a new one is created and registered.
-    /// The account is required to pay for its storage. Storage fees will be escrowed and refunded
-    /// when the account is unregistered.
-    ///
-    /// #[payable]
-    /// - storage escrow fee is required
-    ///   - use [account_storage_escrow_fee] to lookup the required storage fee amount
-    /// - any amount above the storage fee will be refunded
+    /// Creates and registers a new account for the predecessor account ID.
+    /// - the account is required to pay for its storage. Storage fees will be escrowed and refunded
+    ///   when the account is unregistered - use [account_storage_escrow_fee] to lookup the required
+    ///   storage fee amount. Overpayment of storage fee is refunded.
     ///
     /// ## Panics
     /// - if deposit is not enough to cover storage fees
-    /// - is account is already registered
-    ///
-    /// ## NOTES
-    /// - panic will automatically refund any attached deposit
+    /// - if account is already registered
     fn register_account(&mut self);
 
     /// In order to unregister the account all NEAR must be unstaked and withdrawn from the account.
@@ -50,21 +40,16 @@ pub trait AccountManagement {
     /// Withdraws the specified amount from the account's available NEAR balance and transfers the
     /// funds to the account.
     ///
-    /// Returns the Promise that transfers the funds. This enables the client to react to the fund
-    /// transfer.
-    ///
     /// ## Panics
     /// - if the account is not registered
     /// - if there are not enough available NEAR funds to fulfill the request
-    fn withdraw(&mut self, amount: YoctoNear) -> Promise;
+    fn withdraw(&mut self, amount: YoctoNear);
 
-    /// Withdraws all available NEAR funds from the account.
-    ///
-    /// Returns the Promise that transfers the funds. This enables the client to react to the fund
-    /// transfer.
+    /// Withdraws all available NEAR funds from the account and transfers the
+    /// funds to the account.
     ///
     /// ## Panics
     /// - if the account is not registered
     /// - if there are no funds to withdraw
-    fn withdraw_all(&mut self) -> Promise;
+    fn withdraw_all(&mut self);
 }

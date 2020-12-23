@@ -86,7 +86,7 @@ impl AccountManagement for StakeTokenContract {
             .map(|account| self.apply_receipt_funds_for_view(&account).into())
     }
 
-    fn withdraw(&mut self, amount: interface::YoctoNear) -> Promise {
+    fn withdraw(&mut self, amount: interface::YoctoNear) {
         let (mut account, account_hash) = self.registered_account(&env::predecessor_account_id());
         match account.near {
             None => panic!("there are no available NEAR funds to withdraw"),
@@ -94,7 +94,7 @@ impl AccountManagement for StakeTokenContract {
         }
     }
 
-    fn withdraw_all(&mut self) -> Promise {
+    fn withdraw_all(&mut self) {
         let (mut account, account_hash) = self.registered_account(&env::predecessor_account_id());
         match account.near {
             None => panic!("there are no available NEAR funds to withdraw"),
@@ -111,11 +111,11 @@ impl StakeTokenContract {
         account: &mut Account,
         account_hash: &Hash,
         amount: YoctoNear,
-    ) -> Promise {
+    ) {
         account.apply_near_debit(amount);
         self.save_account(&account_hash, &account);
         self.total_near.debit(amount);
-        Promise::new(env::predecessor_account_id()).transfer(amount.value())
+        Promise::new(env::predecessor_account_id()).transfer(amount.value());
     }
 
     /// ## Panics
