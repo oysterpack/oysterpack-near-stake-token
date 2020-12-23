@@ -27,7 +27,7 @@ impl StakeTokenContract {
         assert!(self.promise_result_succeeded(), GET_STAKED_BALANCE_FAILURE);
 
         // update the cached STAKE token value
-        self.stake_token_value = self.stake_token_value(staked_balance.0.into());
+        self.stake_token_value = self.stake_token_value(staked_balance.into());
 
         self.invoke_deposit_and_stake(batch.balance().amount())
             .then(self.invoke_on_deposit_and_stake())

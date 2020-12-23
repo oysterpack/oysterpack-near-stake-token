@@ -19,6 +19,12 @@ impl From<u128> for YoctoNear {
     }
 }
 
+impl From<U128> for YoctoNear {
+    fn from(value: U128) -> Self {
+        Self(value.0)
+    }
+}
+
 impl YoctoNear {
     pub fn value(&self) -> u128 {
         self.0

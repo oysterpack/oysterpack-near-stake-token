@@ -63,22 +63,6 @@ impl StakeTokenValue {
             / U256::from(self.total_stake_supply);
         value.as_u128().into()
     }
-
-    /// returns the value of 1 STAKE token
-    pub fn value(&self) -> YoctoNear {
-        self.stake_to_near(YoctoStake(YOCTO))
-    }
-
-    /// returns true if the current epoch height is greater than the epoch height when the stake
-    /// token value was last computed
-    pub fn is_stale(&self) -> bool {
-        near_sdk::env::epoch_height() > self.block_time_height.epoch_height().value()
-    }
-
-    /// returns true if the stake token value was computed within the same epoch period
-    pub fn is_current(&self) -> bool {
-        near_sdk::env::epoch_height() == self.block_time_height.epoch_height().value()
-    }
 }
 
 #[cfg(test)]
@@ -95,7 +79,14 @@ mod test {
         testing_env!(context);
 
         let stake_token_value = StakeTokenValue::default();
-        assert_eq!(stake_token_value.value(), YoctoNear(YOCTO));
+        assert_eq!(
+            stake_token_value.stake_to_near(YOCTO.into()),
+            YoctoNear(YOCTO)
+        );
+        assert_eq!(
+            stake_token_value.near_to_stake(YOCTO.into()),
+            YoctoStake(YOCTO)
+        );
 
         assert_eq!(
             stake_token_value.stake_to_near((10 * YOCTO).into()),
