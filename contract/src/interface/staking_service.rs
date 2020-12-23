@@ -26,6 +26,8 @@ pub trait StakingService {
 
     /// withdraws specified amount from stake batch funds and refunds the account
     ///
+    /// NOTE: all batch receipts are first claimed
+    ///
     /// ## Panics
     /// - if the account is not registered
     /// - if there are insufficient funds to fulfill the request
@@ -34,9 +36,10 @@ pub trait StakingService {
 
     /// withdraws all NEAR from stake batch funds and refunds the account
     ///
+    /// NOTE: all batch receipts are first claimed
+    ///
     /// ## Panics
     /// - if the account is not registered
-    /// - if there are funds batched
     /// - if the contract is locked
     fn withdraw_all_funds_from_stake_batch(&mut self);
 

@@ -18,12 +18,14 @@ pub mod staking_pool_failures {
 }
 
 pub mod staking_errors {
-    pub const STAKE_BATCH_ALREADY_IN_PROGRESS: &str = "staking batch is already in progress";
+    pub const BLOCKED_BY_STAKE_BATCH_RUNNING: &str =
+        "request is blocked by a running staking batch";
 
-    pub const STAKING_BLOCKED_BY_UNSTAKING: &str =
-        "staking is blocked while unstaking is in progress";
+    pub const BLOCKED_BY_UNSTAKING: &str = "request is blocked while unstaking is in progress";
 
     pub const NO_STAKE_BATCH_TO_RUN: &str = "there is no stake batch to run";
+
+    pub const NO_FUNDS_IN_STAKE_BATCH_TO_WITHDRAW: &str = "there are no funds in stake batch";
 }
 
 pub mod redeeming_stake_errors {

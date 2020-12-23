@@ -233,6 +233,7 @@ impl StakeTokenContract {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::interface::StakingService;
     use crate::{interface::AccountManagement, test_utils::*};
     use near_sdk::{serde_json, testing_env, MockedBlockchain};
 
@@ -289,6 +290,11 @@ mod test {
 
         let contract_settings = default_contract_settings();
         let contract = StakeTokenContract::new(contract_settings.clone());
+
+        assert_eq!(
+            &contract.staking_pool_id(),
+            contract_settings.staking_pool_id.as_ref()
+        );
 
         // Then [StakeTokenContract::account_storage_usage] is dynamically computed
         assert_eq!(
