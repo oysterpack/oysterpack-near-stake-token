@@ -3,14 +3,38 @@ use crate::*;
 use crate::{
     contract::ext_staking_pool,
     domain::RedeemLock,
-    interface::Operator,
     interface::{contract_state::ContractState, AccountManagement},
+    interface::{Operator, StakingService},
     near::NO_DEPOSIT,
 };
 use near_sdk::{near_bindgen, Promise};
 
 #[near_bindgen]
 impl Operator for StakeTokenContract {
+    fn contract_state(&self) -> ContractState {
+        ContractState {
+            staking_pool_id: self.staking_pool_id.clone(),
+            registered_accounts_count: self.total_registered_accounts().clone(),
+            total_unstaked_near: self.total_near.into(),
+            total_stake_supply: self.total_stake.into(),
+            stake_token_value: self.stake_token_value.into(),
+            batch_id_sequence: self.batch_id_sequence.into(),
+            stake_batch: self.stake_batch.map(interface::StakeBatch::from),
+            next_stake_batch: self.next_stake_batch.map(interface::StakeBatch::from),
+            redeem_stake_batch: self
+                .redeem_stake_batch
+                .map(interface::RedeemStakeBatch::from),
+            next_redeem_stake_batch: self
+                .next_redeem_stake_batch
+                .map(interface::RedeemStakeBatch::from),
+            pending_withdrawal: self
+                .pending_withdrawal()
+                .map(interface::RedeemStakeBatchReceipt::from),
+            run_stake_batch_locked: self.run_stake_batch_locked,
+            run_redeem_stake_batch_lock: self.run_redeem_stake_batch_lock,
+        }
+    }
+
     fn release_run_stake_batch_lock(&mut self) {
         self.assert_predecessor_is_self_or_operator();
         self.run_stake_batch_locked = false;
@@ -32,30 +56,6 @@ impl Operator for StakeTokenContract {
             NO_DEPOSIT.into(),
             self.config.gas_config().staking_pool().withdraw().value(),
         )
-    }
-
-    fn contract_state(&self) -> ContractState {
-        ContractState {
-            staking_pool_id: self.staking_pool_id.clone(),
-            registered_accounts_count: self.total_registered_accounts().clone(),
-            total_unstaked_near: self.total_near.into(),
-            total_stake_supply: self.total_stake.into(),
-            stake_token_value: self.stake_token_value.into(),
-            batch_id_sequence: self.batch_id_sequence.into(),
-            stake_batch: self.stake_batch.map(interface::StakeBatch::from),
-            next_stake_batch: self.next_stake_batch.map(interface::StakeBatch::from),
-            redeem_stake_batch: self
-                .redeem_stake_batch
-                .map(interface::RedeemStakeBatch::from),
-            next_redeem_stake_batch: self
-                .next_redeem_stake_batch
-                .map(interface::RedeemStakeBatch::from),
-            pending_withdrawal: self
-                .pending_withdrawal
-                .map(interface::RedeemStakeBatchReceipt::from),
-            run_stake_batch_locked: self.run_stake_batch_locked,
-            run_redeem_stake_batch_lock: self.run_redeem_stake_batch_lock,
-        }
     }
 }
 

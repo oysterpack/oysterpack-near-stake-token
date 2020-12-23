@@ -88,10 +88,6 @@ pub struct StakeTokenContract {
     redeem_stake_batch: Option<RedeemStakeBatch>,
     /// used to store batch requests while the contract is locked    
     next_redeem_stake_batch: Option<RedeemStakeBatch>,
-    /// unstaked NEAR funds are not available for 4 epochs after the funds were unstaked
-    /// - [RedeemStakeBatch] can only be processed after all available unstaked NEAR funds have been
-    ///   withdrawn, i.e., ig [pending_withdrawal] is None
-    pending_withdrawal: Option<RedeemStakeBatchReceipt>,
 
     /// receipts serve 2 purposes:
     /// 1. receipts record batch results
@@ -159,7 +155,6 @@ impl StakeTokenContract {
             redeem_stake_batch: None,
             next_stake_batch: None,
             next_redeem_stake_batch: None,
-            pending_withdrawal: None,
             stake_batch_receipts: LookupMap::new(STAKE_BATCH_RECEIPTS_KEY_PREFIX.to_vec()),
             redeem_stake_batch_receipts: LookupMap::new(
                 REDEEM_STAKE_BATCH_RECEIPTS_KEY_PREFIX.to_vec(),

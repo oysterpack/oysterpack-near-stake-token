@@ -3,6 +3,8 @@
 near view stake.oysterpack.testnet staking_pool_id
 
 near view stake.oysterpack.testnet stake_token_value
+
+near view stake.oysterpack.testnet pending_withdrawal
 ```
 
 ### Stateful Func Calls
@@ -12,12 +14,7 @@ near call stake.oysterpack.testnet deposit --accountId 1.alfio-zappala-oysterpac
 
 near call stake.oysterpack.testnet run_stake_batch --accountId alfio-zappala-oysterpack.testnet --gas 300000000000000
 
-near call stake.oysterpack.testnet refresh_stake_token_value --accountId alfio-zappala-oysterpack.testnet --gas 300000000000000
-
-near call stake.oysterpack.testnet claim_all_batch_receipt_funds --accountId alfio-zappala-oysterpack.testnet --gas 300000000000000
-
 near call stake.oysterpack.testnet redeem --accountId alfio-zappala-oysterpack.testnet --args '{"amount":"500000000000000000000000"}'
-
 near call stake.oysterpack.testnet redeem --accountId 1.alfio-zappala-oysterpack.testnet --args '{"amount":"600000000000000000000000"}'
 
 near call stake.oysterpack.testnet redeem_all --accountId 1.alfio-zappala-oysterpack.testnet

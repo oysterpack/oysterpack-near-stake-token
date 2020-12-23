@@ -114,14 +114,8 @@ pub trait StakingService {
     /// - if unstaked funds are not available for withdrawal
     fn run_redeem_stake_batch(&mut self) -> Promise;
 
-    /// Explicitly claims any available funds for batch receipts:
-    /// - updates STAKE and NEAR account balances
-    ///
-    /// NOTE: batch receipts claims are checks are included for every stake and redeem request
-    fn claim_all_batch_receipt_funds(&mut self);
-
     /// Returns the batch that is awaiting for funds to be available to be withdrawn.
     ///
     /// NOTE: pending withdrawals blocks [RedeemStakeBatch] to run
-    fn pending_redeem_stake_batch_receipt(&self) -> Option<RedeemStakeBatchReceipt>;
+    fn pending_withdrawal(&self) -> Option<RedeemStakeBatchReceipt>;
 }

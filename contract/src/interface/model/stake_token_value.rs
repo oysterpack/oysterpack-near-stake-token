@@ -1,7 +1,5 @@
+use crate::domain;
 use crate::interface::{BlockTimeHeight, YoctoNear, YoctoStake};
-use crate::{
-    domain,
-};
 use near_sdk::serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

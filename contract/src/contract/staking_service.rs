@@ -1,7 +1,6 @@
 //required in order for near_bindgen macro to work outside of lib.rs
 use crate::*;
 use crate::{
-    core::Hash,
     domain::{self, Account, RedeemLock, RedeemStakeBatch, StakeBatch},
     errors::{
         redeeming_stake_errors::{
@@ -130,20 +129,14 @@ impl StakingService for StakeTokenContract {
         }
     }
 
-    fn claim_all_batch_receipt_funds(&mut self) {
-        let account_hash = Hash::from(&env::predecessor_account_id());
-        let mut account = self
-            .accounts
-            .get(&account_hash)
-            .expect("account is not registered");
-
-        if self.claim_receipt_funds(&mut account) {
-            self.accounts.insert(&account_hash, &account);
+    fn pending_withdrawal(&self) -> Option<RedeemStakeBatchReceipt> {
+        match self.redeem_stake_batch {
+            Some(batch) => self
+                .redeem_stake_batch_receipts
+                .get(&batch.id())
+                .map(RedeemStakeBatchReceipt::from),
+            None => None,
         }
-    }
-
-    fn pending_redeem_stake_batch_receipt(&self) -> Option<RedeemStakeBatchReceipt> {
-        unimplemented!()
     }
 }
 
@@ -508,7 +501,7 @@ impl StakeTokenContract {
         near: domain::YoctoNear,
         total_staked_near_balance: domain::YoctoNear,
     ) -> domain::YoctoStake {
-        let total_stake_supply = self.total_stake_supply();
+        let total_stake_supply = self.total_stake.amount();
         if total_staked_near_balance.value() == 0 || total_stake_supply.value() == 0 {
             return near.value().into();
         }
@@ -517,34 +510,12 @@ impl StakeTokenContract {
         value.as_u128().into()
     }
 
-    pub(crate) fn total_stake_supply(&self) -> domain::YoctoStake {
-        let mut total_supply = self.total_stake.amount();
-        if let Some(batch) = self.redeem_stake_batch {
-            total_supply += batch.balance().amount();
-        }
-        if let Some(batch) = self.next_redeem_stake_batch {
-            total_supply += batch.balance().amount();
-        }
-        total_supply
-    }
-
-    pub fn stake_token_value(
-        &self,
-        total_staked_near_balance: domain::YoctoNear,
-    ) -> domain::StakeTokenValue {
-        domain::StakeTokenValue::new(
-            domain::BlockTimeHeight::from_env(),
-            total_staked_near_balance,
-            self.total_stake_supply(),
-        )
-    }
-
     pub(crate) fn stake_to_near(
         &self,
         stake: domain::YoctoStake,
         total_staked_near_balance: domain::YoctoNear,
     ) -> domain::YoctoNear {
-        let total_stake_supply = self.total_stake_supply();
+        let total_stake_supply = self.total_stake.amount();
         if total_staked_near_balance.value() == 0
             || total_stake_supply.value() == 0
             // TODO: when deposit and staked with staking pool, there is a small amount remaining as unstaked
@@ -556,6 +527,17 @@ impl StakeTokenContract {
         let value = U256::from(stake) * U256::from(total_staked_near_balance)
             / U256::from(total_stake_supply);
         value.as_u128().into()
+    }
+
+    pub fn stake_token_value(
+        &self,
+        total_staked_near_balance: domain::YoctoNear,
+    ) -> domain::StakeTokenValue {
+        domain::StakeTokenValue::new(
+            domain::BlockTimeHeight::from_env(),
+            total_staked_near_balance,
+            self.total_stake.amount(),
+        )
     }
 }
 
@@ -635,6 +617,7 @@ mod test {
     use super::*;
 
     use crate::{
+        core::Hash,
         interface::{AccountManagement, Operator},
         near::{UNSTAKED_NEAR_FUNDS_NUM_EPOCHS_TO_UNLOCK, YOCTO},
         test_utils::*,
@@ -823,7 +806,8 @@ mod test {
         contract.register_account();
 
         // should have no effect because there are no batches and no receipts
-        contract.claim_all_batch_receipt_funds();
+        let (mut account, _account_id_hash) = contract.registered_account(account_id);
+        contract.claim_receipt_funds(&mut account);
     }
 
     /// Given the account has funds in the stake batch
@@ -851,7 +835,8 @@ mod test {
         contract.save_account(&account_hash, &account);
 
         // When batch receipts are claimed
-        contract.claim_all_batch_receipt_funds();
+        contract.claim_receipt_funds(&mut account);
+        contract.save_account(&account_hash, &account);
         // Then there should be no effect on the account
         let account = contract
             .lookup_account(account_id.try_into().unwrap())
@@ -895,7 +880,8 @@ mod test {
         let batch_id = domain::BatchId(batch_id.into());
         contract.stake_batch_receipts.insert(&batch_id, &receipt);
         // When batch receipts are claimed
-        contract.claim_all_batch_receipt_funds();
+        contract.claim_receipt_funds(&mut account);
+        contract.save_account(&account_hash, &account);
         // Assert
         let account = contract
             .lookup_account(account_id.try_into().unwrap())
@@ -922,7 +908,8 @@ mod test {
         let batch_id = contract.deposit_near_for_account_to_stake(&mut account, YOCTO.into());
         contract.save_account(&account_hash, &account);
         // When batch receipts are claimed
-        contract.claim_all_batch_receipt_funds();
+        contract.claim_receipt_funds(&mut account);
+        contract.save_account(&account_hash, &account);
         // Assert
         let account = contract
             .lookup_account(account_id.try_into().unwrap())
@@ -978,7 +965,8 @@ mod test {
         let batch_id = domain::BatchId(batch_id.into());
         contract.stake_batch_receipts.insert(&batch_id, &receipt);
         // When batch receipts are claimed
-        contract.claim_all_batch_receipt_funds();
+        contract.claim_receipt_funds(&mut account);
+        contract.save_account(&account_hash, &account);
 
         // Assert
         let account = contract
@@ -1067,7 +1055,9 @@ mod test {
             .stake_batch_receipts
             .insert(&domain::BatchId(next_stake_batch_id.into()), &receipt);
         // When batch receipts are claimed
-        contract.claim_all_batch_receipt_funds();
+        let (mut account, account_hash) = contract.registered_account(account_id);
+        contract.claim_receipt_funds(&mut account);
+        contract.save_account(&account_hash, &account);
         // then receipts should be deleted because all funds have been claimed
         assert!(contract
             .stake_batch_receipts
@@ -1979,7 +1969,8 @@ mod test {
             &domain::RedeemStakeBatchReceipt::new((20 * YOCTO).into(), contract.stake_token_value),
         );
 
-        contract.claim_all_batch_receipt_funds();
+        contract.claim_receipt_funds(&mut account);
+        contract.save_account(&account_id_hash, &account);
         let account = contract.accounts.get(&account_id_hash).unwrap();
         assert_eq!(account.near.unwrap().amount(), (10 * YOCTO).into());
         assert!(account.redeem_stake_batch.is_none());
@@ -2025,7 +2016,8 @@ mod test {
             &domain::RedeemStakeBatchReceipt::new((20 * YOCTO).into(), contract.stake_token_value),
         );
 
-        contract.claim_all_batch_receipt_funds();
+        contract.claim_receipt_funds(&mut account);
+        contract.save_account(&account_id_hash, &account);
         let account = contract.accounts.get(&account_id_hash).unwrap();
         assert_eq!(account.near.unwrap().amount(), (25 * YOCTO).into());
         assert!(account.redeem_stake_batch.is_none());
@@ -2079,7 +2071,8 @@ mod test {
             &domain::RedeemStakeBatchReceipt::new((10 * YOCTO).into(), contract.stake_token_value),
         );
 
-        contract.claim_all_batch_receipt_funds();
+        contract.claim_receipt_funds(&mut account);
+        contract.save_account(&account_id_hash, &account);
         let account = contract.accounts.get(&account_id_hash).unwrap();
         assert_eq!(account.near.unwrap().amount(), (10 * YOCTO).into());
         assert_eq!(
@@ -2138,7 +2131,8 @@ mod test {
             &domain::RedeemStakeBatchReceipt::new((20 * YOCTO).into(), contract.stake_token_value),
         );
 
-        contract.claim_all_batch_receipt_funds();
+        contract.claim_receipt_funds(&mut account);
+        contract.save_account(&account_id_hash, &account);
         let account = contract.accounts.get(&account_id_hash).unwrap();
         assert_eq!(account.near.unwrap().amount(), (20 * YOCTO).into());
         assert!(account.redeem_stake_batch.is_none());

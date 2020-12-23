@@ -126,7 +126,7 @@ impl StakeTokenContract {
             .insert(&batch.id(), &batch_receipt);
 
         // update the total STAKE supply
-        self.total_stake.debit(batch_receipt.redeemed_stake());
+        self.total_stake.debit(batch.balance().amount());
     }
 
     /// moves the next batch into the current batch
@@ -183,6 +183,7 @@ mod test {
     use super::*;
 
     use crate::domain::RedeemStakeBatchReceipt;
+    use crate::interface::StakingService;
     use crate::{
         domain::{RedeemStakeBatch, TimestampedStakeBalance},
         near::YOCTO,
@@ -298,7 +299,6 @@ mod test {
     /// And then the account is retrieved from the staking pool
     /// And then the redeem batch is retried
     #[test]
-    // #[ignore]
     fn on_run_redeem_stake_batch_with_nonzero_unstaked_balance_and_can_withdraw() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
@@ -336,7 +336,7 @@ mod test {
                     assert_eq!(method_name, "unstake");
 
                     let args: UnstakeArgs = serde_json::from_str(args).unwrap();
-                    assert_eq!(args.amount, (100 * YOCTO).to_string());
+                    assert_eq!(args.amount, (110 * YOCTO).to_string());
                     assert_eq!(
                         contract
                             .config
@@ -439,12 +439,14 @@ mod test {
         let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
         *contract.batch_id_sequence += 1;
-        contract.total_stake = TimestampedStakeBalance::new((1000 * YOCTO).into());
 
+        contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
         let redeem_stake_batch =
             RedeemStakeBatch::new(contract.batch_id_sequence, (100 * YOCTO).into());
         contract.redeem_stake_batch = Some(redeem_stake_batch);
         contract.total_stake = TimestampedStakeBalance::new((1000 * YOCTO).into());
+        let staked_near_balance = (1100 * YOCTO).into();
+        contract.stake_token_value = contract.stake_token_value(staked_near_balance);
 
         context.predecessor_account_id = context.current_account_id.clone();
         context.epoch_height += 1;
@@ -459,6 +461,21 @@ mod test {
             .get(&contract.redeem_stake_batch.unwrap().id())
             .unwrap();
         assert_eq!(receipt.redeemed_stake(), (100 * YOCTO).into());
+        assert_eq!(
+            receipt.stake_token_value().total_stake_supply(),
+            contract.total_stake.amount() + receipt.redeemed_stake()
+        );
+        assert_eq!(
+            receipt.stake_token_value().total_staked_near_balance(),
+            staked_near_balance
+        );
+
+        let receipt = contract.pending_withdrawal().unwrap();
+        assert_eq!(receipt.redeemed_stake, (100 * YOCTO).into());
+        assert_eq!(
+            contract.run_redeem_stake_batch_lock,
+            Some(RedeemLock::PendingWithdrawal)
+        );
     }
 
     #[test]
