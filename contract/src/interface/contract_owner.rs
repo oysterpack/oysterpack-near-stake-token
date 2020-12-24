@@ -55,7 +55,7 @@ pub trait ContractOwner {
     /// - panics if the owner does not have a registered account
     /// - if the owner balance is too low to fulfill the request
     /// - if the predecessor account is not the owner account
-    fn withdraw_owner_balance(&mut self, amount: YoctoNear) -> YoctoNear;
+    fn withdraw_owner_balance(&mut self, amount: YoctoNear);
 }
 
 #[ext_contract(ext_contract_owner_callbacks)]
