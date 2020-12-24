@@ -26,6 +26,10 @@ pub const UNSTAKED_NEAR_FUNDS_NUM_EPOCHS_TO_UNLOCK: EpochHeight = EpochHeight(4)
 /// should only be called internally - even though they are exposed on the public contract interface
 pub fn assert_predecessor_is_self() {
     if env::predecessor_account_id() != env::current_account_id() {
-        panic!(asserts::PREDECESSOR_IS_SELF)
+        panic!(asserts::PREDECESSOR_MUST_BE_SELF)
     }
+}
+
+pub fn log(msg: String) {
+    env::log(msg.as_bytes());
 }

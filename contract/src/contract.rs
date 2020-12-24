@@ -9,7 +9,9 @@ pub mod vault_fungible_token;
 
 pub use staking_service::*;
 
-use crate::errors::asserts::{PREDECESSOR_IS_OPERATOR, PREDECESSOR_IS_SELF_OR_OPERATOR};
+use crate::errors::asserts::{
+    PREDECESSOR_MUST_BE_OPERATOR, PREDECESSOR_MUST_BE_OWNER, PREDECESSOR_MUST_NE_SELF_OR_OPERATOR,
+};
 use crate::StakeTokenContract;
 use near_sdk::{env, PromiseResult};
 
@@ -19,7 +21,7 @@ impl StakeTokenContract {
         assert!(
             predecessor_account_id == env::current_account_id()
                 || predecessor_account_id == self.operator_id,
-            PREDECESSOR_IS_SELF_OR_OPERATOR
+            PREDECESSOR_MUST_NE_SELF_OR_OPERATOR
         );
     }
 
@@ -28,7 +30,7 @@ impl StakeTokenContract {
             env::predecessor_account_id(),
             self.operator_id,
             "{}",
-            PREDECESSOR_IS_OPERATOR
+            PREDECESSOR_MUST_BE_OPERATOR
         );
     }
 
@@ -37,7 +39,7 @@ impl StakeTokenContract {
             env::predecessor_account_id(),
             self.owner_id,
             "{}",
-            PREDECESSOR_IS_OPERATOR
+            PREDECESSOR_MUST_BE_OWNER
         );
     }
 }

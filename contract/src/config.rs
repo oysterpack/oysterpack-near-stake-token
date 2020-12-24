@@ -140,6 +140,8 @@ pub struct CallBacksGasConfig {
     // used by redeem stake workflow
     on_run_redeem_stake_batch: Gas,
     on_redeeming_stake_pending_withdrawal: Gas,
+    // used by ContractOwner inerface
+    // finalize_ownership_transfer: Gas,
 }
 
 impl CallBacksGasConfig {
@@ -180,6 +182,11 @@ impl CallBacksGasConfig {
         BASE_GAS * 5
         // self.on_run_redeem_stake_batch
     }
+
+    pub fn finalize_ownership_transfer(&self) -> Gas {
+        BASE_GAS
+        // self.finalize_ownership_transfer
+    }
 }
 
 impl Default for CallBacksGasConfig {
@@ -192,6 +199,7 @@ impl Default for CallBacksGasConfig {
             unlock: BASE_GAS,
             on_redeeming_stake_pending_withdrawal: BASE_GAS * 4,
             on_run_redeem_stake_batch: BASE_GAS * 5,
+            // finalize_ownership_transfer: BASE_GAS,
         }
     }
 }

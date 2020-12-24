@@ -124,7 +124,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "func call is pnly allowed internally or by an operator account")]
+    #[should_panic(expected = "contract call is only allowed internally or by an operator account")]
     fn release_run_redeem_stake_batch_unstaking_lock_access_denied() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);

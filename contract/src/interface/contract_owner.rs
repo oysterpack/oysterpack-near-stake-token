@@ -1,6 +1,6 @@
 use crate::interface::YoctoNear;
 use near_sdk::json_types::ValidAccountId;
-use near_sdk::AccountId;
+use near_sdk::{ext_contract, AccountId, Promise};
 
 pub trait ContractOwner {
     fn owner_id(&self) -> AccountId;
@@ -23,7 +23,7 @@ pub trait ContractOwner {
     ///
     /// ## Panics
     /// - if the predecessor account is not the owner account
-    fn transfer_ownership(&mut self, new_owner: ValidAccountId);
+    fn transfer_ownership(&self, new_owner: ValidAccountId) -> Promise;
 
     /// Deposits the owner's balance into the owners STAKE account
     ///
@@ -56,4 +56,15 @@ pub trait ContractOwner {
     /// - if the owner balance is too low to fulfill the request
     /// - if the predecessor account is not the owner account
     fn withdraw_owner_balance(&mut self, amount: YoctoNear) -> YoctoNear;
+}
+
+#[ext_contract(ext_contract_owner_callbacks)]
+pub trait ExtContractOwnerCallbacks {
+    /// callback for getting staked balance from staking pool as part of stake batch processing workflow
+    ///
+    /// ## Success Workflow
+    /// 1. update the stake token value
+    /// 2. deposit and stake funds with staking pool
+    /// 3. register [on_deposit_and_stake] callback on the deposit and stake action
+    fn finalize_transfer_ownership(&mut self, new_owner: AccountId);
 }

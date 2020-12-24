@@ -405,7 +405,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "func call is only allowed internally")]
+    #[should_panic(expected = "contract call is only allowed internally")]
     fn on_run_redeem_stake_batch_invoked_by_non_self() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
@@ -443,7 +443,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "func call is only allowed internally")]
+    #[should_panic(expected = "contract call is only allowed internally")]
     fn on_unstake_invoked_by_non_self() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);

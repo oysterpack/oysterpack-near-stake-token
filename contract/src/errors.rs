@@ -1,10 +1,13 @@
 pub mod asserts {
-    pub const PREDECESSOR_IS_SELF: &str = "func call is only allowed internally";
-    pub const PREDECESSOR_IS_SELF_OR_OPERATOR: &str =
-        "func call is pnly allowed internally or by an operator account";
-    pub const PREDECESSOR_IS_OPERATOR: &str = "func call is pnly allowed by an operator account";
+    pub const PREDECESSOR_MUST_BE_SELF: &str = "contract call is only allowed internally";
+    pub const PREDECESSOR_MUST_NE_SELF_OR_OPERATOR: &str =
+        "contract call is only allowed internally or by an operator account";
+    pub const PREDECESSOR_MUST_BE_OPERATOR: &str =
+        "contract call is only allowed by an operator account";
     pub const OPERATOR_ID_MUST_NOT_BE_CONTRACT_ID: &str =
         "operator account ID must not be the contract account ID";
+    pub const PREDECESSOR_MUST_BE_OWNER: &str =
+        "contract call is only allowed by the contract owner";
 }
 
 pub mod staking_pool_failures {
@@ -96,4 +99,9 @@ pub mod vault_fungible_token {
 
     pub const VAULT_INSUFFICIENT_FUNDS: &str =
         "vault balance is too low to fulfill withdrawal request";
+}
+
+pub mod contract_owner {
+    pub const ACCOUNT_VALIDATION_NEAR_TRANSFER_FAILED: &str =
+        "account validation NEAR transfer failed";
 }
