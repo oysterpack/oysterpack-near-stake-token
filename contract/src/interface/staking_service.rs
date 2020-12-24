@@ -105,8 +105,7 @@ pub trait StakingService {
     /// 1. get account info from staking pool
     /// 2. if unstaked balance is > 0 and unstaked NEAR can be withdrawn:
     ///    2.1 then withdraw all
-    ///    2.2 then go back to step #1
-    /// 3. If unstaked balance == 0, then
+    /// 3. finalize the redeem stake batch
     ///    3.1 update the total NEAR available balance
     ///    3.2 set redeem lock to None
     ///    3.3 pop redeem stake batch

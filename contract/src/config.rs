@@ -113,7 +113,7 @@ impl StakingPoolGasConfig {
     }
 
     pub fn withdraw(&self) -> Gas {
-        BASE_GAS
+        BASE_GAS * 3
         // self.withdraw
     }
 
@@ -163,7 +163,12 @@ impl CallBacksGasConfig {
     }
 
     pub fn on_redeeming_stake_pending_withdrawal(&self) -> Gas {
-        self.on_redeeming_stake_pending_withdrawal
+        BASE_GAS * 5
+        // self.on_redeeming_stake_pending_withdrawal
+    }
+
+    pub fn on_redeeming_stake_post_withdrawal(&self) -> Gas {
+        BASE_GAS
     }
 
     pub fn on_unstake(&self) -> Gas {
@@ -185,7 +190,7 @@ impl Default for CallBacksGasConfig {
             on_unstake: BASE_GAS,
             on_get_account_staked_balance: BASE_GAS * 3,
             unlock: BASE_GAS,
-            on_redeeming_stake_pending_withdrawal: BASE_GAS * 3,
+            on_redeeming_stake_pending_withdrawal: BASE_GAS * 4,
             on_run_redeem_stake_batch: BASE_GAS * 5,
         }
     }

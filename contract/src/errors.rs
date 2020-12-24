@@ -15,6 +15,9 @@ pub mod staking_pool_failures {
     pub const UNSTAKE_FAILURE: &str = "failed to unstake NEAR with staking pool";
 
     pub const GET_ACCOUNT_FAILURE: &str = "failed to get account info from staking pool";
+
+    pub const WITHDRAW_ALL_FAILURE: &str =
+        "failed to withdraw all unstaked funds from staking pool";
 }
 
 pub mod staking_errors {

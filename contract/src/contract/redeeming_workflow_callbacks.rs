@@ -1,4 +1,5 @@
 //required in order for near_bindgen macro to work outside of lib.rs
+use crate::errors::staking_pool_failures::WITHDRAW_ALL_FAILURE;
 use crate::interface::Operator;
 use crate::*;
 use crate::{
@@ -75,10 +76,6 @@ impl StakeTokenContract {
 
         assert!(self.promise_result_succeeded(), GET_ACCOUNT_FAILURE);
 
-        let batch = self
-            .redeem_stake_batch
-            .expect(REDEEM_STAKE_BATCH_SHOULD_EXIST);
-
         let unstaked_balance = staking_pool_account.unstaked_balance.0;
         if unstaked_balance > 0 {
             assert!(
@@ -88,22 +85,34 @@ impl StakeTokenContract {
 
             return self
                 .withdraw_all_funds_from_staking_pool()
-                .then(self.get_account_from_staking_pool())
-                .then(self.invoke_on_redeeming_stake_pending_withdrawal())
+                .then(self.invoke_on_redeeming_stake_post_withdrawal())
                 .into();
         }
 
-        let batch_id = batch.id();
+        PromiseOrValue::Value(self.finalize_redeem_batch())
+    }
+
+    pub fn on_redeeming_stake_post_withdrawal(&mut self) -> BatchId {
+        assert_predecessor_is_self();
+        assert!(self.promise_result_succeeded(), WITHDRAW_ALL_FAILURE);
+        self.finalize_redeem_batch()
+    }
+
+    fn finalize_redeem_batch(&mut self) -> BatchId {
+        let batch = self
+            .redeem_stake_batch
+            .expect(REDEEM_STAKE_BATCH_SHOULD_EXIST);
 
         let receipt = self
             .redeem_stake_batch_receipts
-            .get(&batch_id)
+            .get(&batch.id())
             .expect(REDEEM_STAKE_BATCH_RECEIPT_SHOULD_EXIST);
         self.total_near.credit(receipt.stake_near_value());
 
         self.run_redeem_stake_batch_lock = None;
         self.pop_redeem_stake_batch();
-        PromiseOrValue::Value(batch_id.into())
+
+        batch.id().into()
     }
 }
 
@@ -168,6 +177,18 @@ impl StakeTokenContract {
                 .gas_config()
                 .callbacks()
                 .on_redeeming_stake_pending_withdrawal()
+                .value(),
+        )
+    }
+
+    pub(crate) fn invoke_on_redeeming_stake_post_withdrawal(&mut self) -> Promise {
+        ext_redeeming_workflow_callbacks::on_redeeming_stake_post_withdrawal(
+            &env::current_account_id(),
+            NO_DEPOSIT.into(),
+            self.config
+                .gas_config()
+                .callbacks()
+                .on_redeeming_stake_post_withdrawal()
                 .value(),
         )
     }
@@ -589,7 +610,7 @@ mod test {
         contract.on_redeeming_stake_pending_withdrawal(staking_pool_account);
         let receipts = deserialize_receipts(&env::created_receipts());
         println!("{:#?}", receipts);
-        assert_eq!(receipts.len(), 3);
+        assert_eq!(receipts.len(), 2);
         {
             let receipt = &receipts[0];
             assert_eq!(receipt.receiver_id, contract.staking_pool_id);
@@ -617,7 +638,7 @@ mod test {
         }
         {
             let receipt = &receipts[1];
-            assert_eq!(receipt.receiver_id, contract.staking_pool_id);
+            assert_eq!(receipt.receiver_id, env::current_account_id());
             match &receipt.actions[0] {
                 Action::FunctionCall {
                     method_name,
@@ -625,43 +646,19 @@ mod test {
                     gas,
                     ..
                 } => {
-                    assert_eq!(method_name, "get_account");
-
-                    let args: GetAccountArgs = serde_json::from_str(args).unwrap();
-                    assert_eq!(args.account_id, context.current_account_id);
+                    assert_eq!(method_name, "on_redeeming_stake_post_withdrawal");
+                    assert!(args.is_empty());
                     assert_eq!(
                         contract
                             .config
                             .gas_config()
                             .callbacks()
-                            .on_unstake()
+                            .on_redeeming_stake_post_withdrawal()
                             .value(),
                         *gas
                     );
                 }
                 _ => panic!("expected FunctionCall"),
-            }
-            {
-                let receipt = &receipts[2];
-                assert_eq!(receipt.receiver_id, context.current_account_id);
-                match &receipt.actions[0] {
-                    Action::FunctionCall {
-                        method_name, gas, ..
-                    } => {
-                        assert_eq!(method_name, "on_redeeming_stake_pending_withdrawal");
-
-                        assert_eq!(
-                            contract
-                                .config
-                                .gas_config()
-                                .callbacks()
-                                .on_redeeming_stake_pending_withdrawal()
-                                .value(),
-                            *gas
-                        );
-                    }
-                    _ => panic!("expected FunctionCall"),
-                }
             }
         }
     }

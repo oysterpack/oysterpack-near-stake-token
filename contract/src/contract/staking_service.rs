@@ -786,6 +786,8 @@ pub trait ExtRedeemingWokflowCallbacks {
         &mut self,
         #[callback] staking_pool_account: StakingPoolAccount,
     ) -> near_sdk::PromiseOrValue<BatchId>;
+
+    fn on_redeeming_stake_post_withdrawal(&mut self) -> BatchId;
 }
 
 #[ext_contract(ext_staking_workflow_callbacks)]
