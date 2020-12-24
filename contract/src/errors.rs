@@ -107,4 +107,7 @@ pub mod contract_owner {
 
     pub const INSUFFICIENT_FUNDS_FOR_OWNER_WITHDRAWAL: &str =
         "owner balance is too low to fulfill withdrawal request";
+
+    pub const INSUFFICIENT_FUNDS_FOR_OWNER_STAKING: &str =
+        "owner balance is too low to fulfill stake request";
 }

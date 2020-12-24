@@ -1,7 +1,9 @@
 use crate::interface::{AccountManagement, ContractOwner, YoctoNear};
 //required in order for near_bindgen macro to work outside of lib.rs
-use crate::errors::contract_owner::INSUFFICIENT_FUNDS_FOR_OWNER_WITHDRAWAL;
-use crate::near::log;
+use crate::errors::contract_owner::{
+    INSUFFICIENT_FUNDS_FOR_OWNER_STAKING, INSUFFICIENT_FUNDS_FOR_OWNER_WITHDRAWAL,
+};
+use crate::near::{log, YOCTO};
 use crate::*;
 use crate::{
     errors::contract_owner::ACCOUNT_VALIDATION_NEAR_TRANSFER_FAILED,
@@ -30,12 +32,17 @@ impl ContractOwner for StakeTokenContract {
         let contract_storage_usage_cost =
             env::storage_usage() as u128 * self.config.storage_cost_per_byte().value();
 
-        (env::account_balance()
+        let owner_balance = env::account_balance()
             - total_customer_accounts_unstaked_balance
             - customer_batched_stake_deposits
             - total_account_storage_escrow
-            - contract_storage_usage_cost)
-            .into()
+            - contract_storage_usage_cost;
+
+        if owner_balance > YOCTO {
+            (owner_balance - YOCTO).into()
+        } else {
+            0.into()
+        }
     }
 
     fn transfer_ownership(&self, new_owner: ValidAccountId) -> Promise {
@@ -47,12 +54,24 @@ impl ContractOwner for StakeTokenContract {
 
     fn stake_all_owner_balance(&mut self) -> YoctoNear {
         self.assert_predecessor_is_owner();
-        unimplemented!()
+        let (mut account, account_id_hash) = self.registered_account(&self.owner_id);
+        let owner_balance = self.owner_balance();
+        assert!(owner_balance.value() > 0, "owner balance is zero");
+        self.deposit_near_for_account_to_stake(&mut account, owner_balance.value().into());
+        self.save_account(&account_id_hash, &account);
+        owner_balance
     }
 
     fn stake_owner_balance(&mut self, amount: YoctoNear) {
         self.assert_predecessor_is_owner();
-        unimplemented!()
+        let (mut account, account_id_hash) = self.registered_account(&self.owner_id);
+        let owner_balance = self.owner_balance();
+        assert!(
+            owner_balance.value() >= amount.value(),
+            INSUFFICIENT_FUNDS_FOR_OWNER_STAKING
+        );
+        self.deposit_near_for_account_to_stake(&mut account, amount.into());
+        self.save_account(&account_id_hash, &account);
     }
 
     fn withdraw_all_owner_balance(&mut self) -> YoctoNear {
@@ -137,11 +156,11 @@ mod test {
         );
 
         testing_env!(context.clone());
-        assert_eq!(contract.owner_balance(), (60 * YOCTO).into());
+        assert_eq!(contract.owner_balance(), (59 * YOCTO).into());
 
         contract.total_near.credit((50 * YOCTO).into());
         testing_env!(context.clone());
-        assert_eq!(contract.owner_balance(), (10 * YOCTO).into());
+        assert_eq!(contract.owner_balance(), (9 * YOCTO).into());
     }
 
     #[test]
@@ -170,11 +189,11 @@ mod test {
         ));
 
         testing_env!(context.clone());
-        assert_eq!(contract.owner_balance(), (57 * YOCTO).into());
+        assert_eq!(contract.owner_balance(), (56 * YOCTO).into());
 
         contract.total_near.credit((10 * YOCTO).into());
         testing_env!(context.clone());
-        assert_eq!(contract.owner_balance(), (47 * YOCTO).into());
+        assert_eq!(contract.owner_balance(), (46 * YOCTO).into());
     }
 
     #[test]
@@ -344,6 +363,80 @@ mod test {
         let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(contract_settings);
         contract.withdraw_owner_balance(YOCTO.into());
+    }
+
+    #[test]
+    #[should_panic(expected = "contract call is only allowed by the contract owner")]
+    fn stake_owner_balance_called_by_non_owner() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.account_balance = 100 * YOCTO;
+        context.is_view = false;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+        contract.stake_owner_balance(YOCTO.into());
+    }
+
+    #[test]
+    #[should_panic(expected = "contract call is only allowed by the contract owner")]
+    fn stake_all_owner_balance_called_by_non_owner() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.account_balance = 100 * YOCTO;
+        context.is_view = false;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+        contract.stake_all_owner_balance();
+    }
+
+    #[test]
+    fn stake_all_owner_balance_success() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.account_balance = 100 * YOCTO;
+        context.is_view = false;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+        let owner_balance = contract.owner_balance();
+
+        context.attached_deposit = YOCTO;
+        context.predecessor_account_id = contract.owner_id();
+        testing_env!(context.clone());
+        contract.register_account();
+        contract.stake_all_owner_balance();
+        let account = contract
+            .lookup_account(ValidAccountId::try_from(contract.owner_id.as_str()).unwrap())
+            .unwrap();
+        assert!(account.stake_batch.is_some());
+    }
+
+    #[test]
+    fn stake_owner_balance_success() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.account_balance = 100 * YOCTO;
+        context.is_view = false;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+        let owner_balance = contract.owner_balance();
+
+        context.attached_deposit = YOCTO;
+        context.predecessor_account_id = contract.owner_id();
+        testing_env!(context.clone());
+        contract.register_account();
+        contract.stake_owner_balance(YOCTO.into());
+        let account = contract
+            .lookup_account(ValidAccountId::try_from(contract.owner_id.as_str()).unwrap())
+            .unwrap();
+        assert!(account.stake_batch.is_some());
     }
 
     #[derive(Deserialize)]

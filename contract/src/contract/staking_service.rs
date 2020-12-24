@@ -364,7 +364,7 @@ impl StakeTokenContract {
     ///
     /// ## Notes
     /// - before applying the deposit, batch receipts are processed [claim_receipt_funds]
-    fn deposit_near_for_account_to_stake(
+    pub(crate) fn deposit_near_for_account_to_stake(
         &mut self,
         account: &mut Account,
         amount: domain::YoctoNear,

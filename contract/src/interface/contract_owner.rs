@@ -5,8 +5,12 @@ use near_sdk::{ext_contract, AccountId, Promise};
 pub trait ContractOwner {
     fn owner_id(&self) -> AccountId;
 
-    /// returns the contract's NEAR balance that is owned and available for withdrawal
-    /// - accumulates contract transaction fee rewards
+    /// returns the contract's NEAR balance that is owned and available for withdrawal minus 1 NEAR
+    ///
+    /// ## Notes
+    /// - owner balance accumulates contract transaction fee rewards
+    /// - 1 NEAR is left behind as a safety measure to make sure the contract has enough balance to
+    ///   function
     ///
     /// <pre>
     /// balance computation = env::account_balance()
@@ -14,6 +18,7 @@ pub trait ContractOwner {
     ///   - customer_batched_stake_deposits
     ///   - total_account_storage_escrow
     ///   - contract_storage_usage_cost
+    ///   - 1 NEAR
     /// </pre>
     fn owner_balance(&self) -> YoctoNear;
 
