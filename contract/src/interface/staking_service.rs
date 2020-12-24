@@ -1,4 +1,6 @@
-use crate::interface::{BatchId, RedeemStakeBatchReceipt, YoctoNear, YoctoStake};
+use crate::interface::{
+    BatchId, RedeemStakeBatchReceipt, StakeBatchReceipt, YoctoNear, YoctoStake,
+};
 use near_sdk::{AccountId, Promise};
 
 pub trait StakingService {
@@ -8,6 +10,10 @@ pub trait StakingService {
 
     /// returns the staking pool account ID used for the STAKE token
     fn staking_pool_id(&self) -> AccountId;
+
+    fn stake_batch_receipt(&self, batch_id: BatchId) -> Option<StakeBatchReceipt>;
+
+    fn redeem_stake_batch_receipt(&self, batch_id: BatchId) -> Option<RedeemStakeBatchReceipt>;
 
     //////////////////////////////
     ///     CHANGE METHODS    ///

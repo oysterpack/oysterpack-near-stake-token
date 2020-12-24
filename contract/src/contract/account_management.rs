@@ -88,14 +88,12 @@ impl AccountManagement for StakeTokenContract {
 
     fn withdraw(&mut self, amount: interface::YoctoNear) {
         let (mut account, account_hash) = self.registered_account(&env::predecessor_account_id());
-        match account.near {
-            None => panic!("there are no available NEAR funds to withdraw"),
-            Some(_) => self.withdraw_near_funds(&mut account, &account_hash, amount.into()),
-        }
+        self.withdraw_near_funds(&mut account, &account_hash, amount.into());
     }
 
     fn withdraw_all(&mut self) {
         let (mut account, account_hash) = self.registered_account(&env::predecessor_account_id());
+        self.claim_receipt_funds(&mut account);
         match account.near {
             None => panic!("there are no available NEAR funds to withdraw"),
             Some(balance) => {
@@ -112,6 +110,7 @@ impl StakeTokenContract {
         account_hash: &Hash,
         amount: YoctoNear,
     ) {
+        self.claim_receipt_funds(account);
         account.apply_near_debit(amount);
         self.save_account(&account_hash, &account);
         self.total_near.debit(amount);
@@ -591,7 +590,41 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "there are no available NEAR funds to withdraw")]
+    fn withdraw_all_has_near_funds_in_unclaimed_receipts() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.account_balance = 100 * YOCTO;
+        context.attached_deposit = expected_account_storage_fee();
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(contract_settings);
+
+        contract.register_account();
+
+        // Given the account has some NEAR balance
+        let account_hash = Hash::from(&env::predecessor_account_id());
+        let mut account = contract.accounts.get(&account_hash).unwrap();
+        *contract.batch_id_sequence += 1;
+        account.redeem_stake_batch = Some(RedeemStakeBatch::new(
+            contract.batch_id_sequence,
+            YOCTO.into(),
+        ));
+        contract.accounts.insert(&account_hash, &account);
+        contract.total_near.credit(YOCTO.into());
+        contract.redeem_stake_batch_receipts.insert(
+            &contract.batch_id_sequence,
+            &RedeemStakeBatchReceipt::new(YOCTO.into(), contract.stake_token_value),
+        );
+
+        contract.withdraw_all();
+        // Assert that the account NEAR balance was debited
+        let account = contract.accounts.get(&account_hash).unwrap();
+        assert!(account.near.is_none());
+    }
+
+    #[test]
+    #[should_panic(expected = "account NEAR balance is too low to fulfill request")]
     fn withdraw_with_no_near_funds() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);

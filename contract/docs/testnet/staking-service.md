@@ -5,6 +5,8 @@ near view stake.oysterpack.testnet staking_pool_id
 near view stake.oysterpack.testnet stake_token_value
 
 near view stake.oysterpack.testnet pending_withdrawal
+
+near view stake.oysterpack.testnet redeem_stake_batch_receipt --args '{"batch_id":"3"}'
 ```
 
 ### Stateful Func Calls
@@ -20,7 +22,6 @@ near call stake.oysterpack.testnet redeem --accountId 1.alfio-zappala-oysterpack
 near call stake.oysterpack.testnet redeem_all --accountId 1.alfio-zappala-oysterpack.testnet
 
 near call stake.oysterpack.testnet run_redeem_stake_batch --accountId alfio-zappala-oysterpack.testnet --gas 300000000000000
-
 ```
 
 ## Staking Pool

@@ -31,6 +31,23 @@ impl StakingService for StakeTokenContract {
         self.staking_pool_id.clone()
     }
 
+    fn stake_batch_receipt(&self, batch_id: BatchId) -> Option<interface::StakeBatchReceipt> {
+        let batch_id = batch_id.into();
+        self.stake_batch_receipts
+            .get(&batch_id)
+            .map(interface::StakeBatchReceipt::from)
+    }
+
+    fn redeem_stake_batch_receipt(
+        &self,
+        batch_id: BatchId,
+    ) -> Option<interface::RedeemStakeBatchReceipt> {
+        let batch_id = batch_id.into();
+        self.redeem_stake_batch_receipts
+            .get(&batch_id)
+            .map(interface::RedeemStakeBatchReceipt::from)
+    }
+
     #[payable]
     fn deposit(&mut self) -> BatchId {
         let (mut account, account_hash) = self.registered_account(&env::predecessor_account_id());
@@ -468,7 +485,7 @@ impl StakeTokenContract {
 
     /// returns true if funds were claimed, which means the account's state has changed and requires
     /// to be persisted for the changes to take effect
-    fn claim_receipt_funds(&mut self, account: &mut Account) -> bool {
+    pub(crate) fn claim_receipt_funds(&mut self, account: &mut Account) -> bool {
         let claimed_stake_tokens = self.claim_stake_batch_receipts(account);
         let claimed_neat_tokens = self.claim_redeem_stake_batch_receipts(account);
         claimed_stake_tokens || claimed_neat_tokens
@@ -477,7 +494,7 @@ impl StakeTokenContract {
     /// the purpose of this method is to to compute the account's STAKE balance taking into consideration
     /// that there may be unclaimed receipts on the account
     /// - this enables the latest account info to be returned within the context of a contract 'view'
-    ///   call
+    ///   call - no receipts are physically claimed, i.e., contract state does not change
     pub(crate) fn apply_receipt_funds_for_view(&self, account: &Account) -> Account {
         let mut account = account.clone();
 

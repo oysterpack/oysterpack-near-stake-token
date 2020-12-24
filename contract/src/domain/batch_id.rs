@@ -1,3 +1,4 @@
+use crate::interface;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use std::ops::{Deref, DerefMut};
 
@@ -31,6 +32,12 @@ impl BatchId {
 impl From<BatchId> for u128 {
     fn from(value: BatchId) -> Self {
         value.0
+    }
+}
+
+impl From<interface::BatchId> for BatchId {
+    fn from(value: interface::BatchId) -> Self {
+        BatchId(value.0 .0)
     }
 }
 
