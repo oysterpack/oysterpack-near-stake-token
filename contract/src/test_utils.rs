@@ -36,7 +36,7 @@ pub fn new_context(predecessor_account_id: &str) -> VMContext {
         block_timestamp: 0,
         account_balance: 100 * YOCTO,
         account_locked_balance: 0,
-        storage_usage: 10u64.pow(6),
+        storage_usage: 400 * 1000,
         attached_deposit: 0,
         prepaid_gas: 10u64.pow(18),
         random_seed: vec![0, 1, 2],

@@ -38,6 +38,8 @@ near call $STAKING_POOL unstake --accountId stake.oysterpack.testnet --args '{"a
 near call $STAKING_POOL unstake_all --accountId stake.oysterpack.testnet --gas 300000000000000
 
 near call $STAKING_POOL stake --accountId stake.oysterpack.testnet --args '{"amount":"1000000000000000000000000"}' --gas 300000000000000
+
+near call $STAKING_POOL withdraw_all --accountId stake.oysterpack.testnet --gas 300000000000000
 ```
 
 # 1000000000000000000000000     = 1 NEAR
@@ -50,3 +52,6 @@ near call $STAKING_POOL stake --accountId stake.oysterpack.testnet --args '{"amo
  18588240766627
  18356815353739
   3591923837853
+
+475611913405595162900000000
+475611868769082662900000000

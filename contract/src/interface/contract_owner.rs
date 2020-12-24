@@ -5,12 +5,16 @@ use near_sdk::AccountId;
 pub trait ContractOwner {
     fn owner_id(&self) -> AccountId;
 
-    /// returns the contract's NEAR balance that is owned
-    /// - contract transaction fee rewards
-    /// - staking fractional remainder from staking pool - when NEAR funds are staked with the staking pool,
-    ///   the staking pool converts the NEAR funds to whole shares internally, i.e., fractional shares
-    ///   are not possible. When funds are withdrawan, the fractional NEAR that was not staked is swept
-    ///   into the contract account balance.
+    /// returns the contract's NEAR balance that is owned and available for withdrawal
+    /// - accumulates contract transaction fee rewards
+    ///
+    /// <pre>
+    /// balance computation = env::account_balance()
+    ///   - total_customer_accounts_unstaked_balance
+    ///   - customer_batched_stake_deposits
+    ///   - total_account_storage_escrow
+    ///   - contract_storage_usage_cost
+    /// </pre>
     fn owner_balance(&self) -> YoctoNear;
 
     /// TODO: need to protect against accounts that do not exist - options are

@@ -21,10 +21,14 @@ impl ContractOwner for StakeTokenContract {
         let total_account_storage_escrow =
             self.total_registered_accounts().0 * self.account_storage_fee().value();
 
+        let contract_storage_usage_cost =
+            env::storage_usage() as u128 * self.config.storage_cost_per_byte().value();
+
         (env::account_balance()
             - total_customer_accounts_unstaked_balance
             - customer_batched_stake_deposits
-            - total_account_storage_escrow)
+            - total_account_storage_escrow
+            - contract_storage_usage_cost)
             .into()
     }
 
@@ -81,11 +85,11 @@ mod test {
         );
 
         testing_env!(context.clone());
-        assert_eq!(contract.owner_balance(), (100 * YOCTO).into());
+        assert_eq!(contract.owner_balance(), (60 * YOCTO).into());
 
         contract.total_near.credit((50 * YOCTO).into());
         testing_env!(context.clone());
-        assert_eq!(contract.owner_balance(), (50 * YOCTO).into());
+        assert_eq!(contract.owner_balance(), (10 * YOCTO).into());
     }
 
     #[test]
@@ -114,9 +118,9 @@ mod test {
         ));
 
         testing_env!(context.clone());
-        assert_eq!(contract.owner_balance(), (97 * YOCTO).into());
+        assert_eq!(contract.owner_balance(), (57 * YOCTO).into());
 
-        contract.total_near.credit((50 * YOCTO).into());
+        contract.total_near.credit((10 * YOCTO).into());
         testing_env!(context.clone());
         assert_eq!(contract.owner_balance(), (47 * YOCTO).into());
     }
