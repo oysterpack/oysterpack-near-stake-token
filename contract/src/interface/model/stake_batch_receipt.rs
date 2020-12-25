@@ -7,7 +7,13 @@ use near_sdk::serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct StakeBatchReceipt {
+    /// tracks amount of NEAR that has been claimed on the receipt
+    /// - when the amount reaches zero, then the receipt is deleted
     pub staked_near: YoctoNear,
+
+    /// the STAKE token value at the point in time when the batch was run
+    /// - is used to compute the amount of STAKE tokens to issue to the account based on the amount
+    ///   of NEAR that was staked
     pub stake_token_value: StakeTokenValue,
 }
 

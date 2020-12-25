@@ -1,7 +1,14 @@
 use crate::interface::{StakeAccount, YoctoNear};
 use near_sdk::json_types::{ValidAccountId, U128};
 
-/// Accounts are required to register in order to use the contract.
+/// Used to manage user accounts. The main uses supported by this interface are:
+/// 1. Users can register with the contract. Users are required to pay for account storage usage at
+///    time of registration. Accounts are required to register in order to use the contract.
+/// 2. Users can unregister with the contract. When a user unregisters, the account storage usage fee
+///    will be refunded.
+/// 3. The total number of registered users is tracked.
+/// 4. Users can withdraw unstaked NEAR from STAKE that has been redeemed.
+/// 5. User account info can be looked up.
 pub trait AccountManagement {
     /// Creates and registers a new account for the predecessor account ID.
     /// - the account is required to pay for its storage. Storage fees will be escrowed and then refunded

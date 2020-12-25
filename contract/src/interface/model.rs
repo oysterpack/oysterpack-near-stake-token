@@ -18,9 +18,8 @@ pub use timestamped_near_balance::TimestampedNearBalance;
 pub use timestamped_stake_balance::TimestampedStakeBalance;
 
 use crate::domain;
-use near_sdk::json_types::U64;
 use near_sdk::{
-    json_types::U128,
+    json_types::{U128, U64},
     serde::{Deserialize, Serialize},
 };
 

@@ -210,7 +210,7 @@ impl StakingService for StakeTokenContract {
         batch_id
     }
 
-    fn cancel_pending_redeem_stake_request(&mut self) -> bool {
+    fn cancel_uncommitted_redeem_stake_batch(&mut self) -> bool {
         let (mut account, account_hash) = self.registered_account(&env::predecessor_account_id());
         self.claim_receipt_funds(&mut account);
 
@@ -2803,7 +2803,7 @@ mod test {
         assert!(contract.redeem_stake_batch.is_some());
 
         testing_env!(context.clone());
-        assert!(contract.cancel_pending_redeem_stake_request());
+        assert!(contract.cancel_uncommitted_redeem_stake_batch());
         let account = contract
             .lookup_account(ValidAccountId::try_from(account_id).unwrap())
             .unwrap();
@@ -2844,7 +2844,7 @@ mod test {
         assert!(contract.redeem_stake_batch.is_some());
 
         testing_env!(context.clone());
-        assert!(contract.cancel_pending_redeem_stake_request());
+        assert!(contract.cancel_uncommitted_redeem_stake_batch());
         let account = contract
             .lookup_account(ValidAccountId::try_from(account_id).unwrap())
             .unwrap();
@@ -2887,7 +2887,7 @@ mod test {
         assert!(contract.next_redeem_stake_batch.is_some());
 
         testing_env!(context.clone());
-        assert!(contract.cancel_pending_redeem_stake_request());
+        assert!(contract.cancel_uncommitted_redeem_stake_batch());
         let account = contract
             .lookup_account(ValidAccountId::try_from(account_id).unwrap())
             .unwrap();
@@ -2932,7 +2932,7 @@ mod test {
         assert!(contract.next_redeem_stake_batch.is_some());
 
         testing_env!(context.clone());
-        assert!(contract.cancel_pending_redeem_stake_request());
+        assert!(contract.cancel_uncommitted_redeem_stake_batch());
         let account = contract
             .lookup_account(ValidAccountId::try_from(account_id).unwrap())
             .unwrap();
@@ -2957,7 +2957,7 @@ mod test {
         contract.register_account();
 
         testing_env!(context.clone());
-        assert!(!contract.cancel_pending_redeem_stake_request());
+        assert!(!contract.cancel_uncommitted_redeem_stake_batch());
     }
 
     #[test]
@@ -2975,6 +2975,6 @@ mod test {
 
         testing_env!(context.clone());
 
-        assert!(!contract.cancel_pending_redeem_stake_request());
+        assert!(!contract.cancel_uncommitted_redeem_stake_batch());
     }
 }

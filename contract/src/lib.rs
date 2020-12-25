@@ -100,11 +100,12 @@ use crate::{
         STAKE_BATCH_RECEIPTS_KEY_PREFIX, VAULTS_KEY_PREFIX,
     },
 };
-use near_sdk::json_types::ValidAccountId;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     collections::LookupMap,
-    env, near_bindgen, wee_alloc, AccountId,
+    env,
+    json_types::ValidAccountId,
+    near_bindgen, wee_alloc, AccountId,
 };
 
 #[global_allocator]
