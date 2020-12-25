@@ -3,14 +3,25 @@ use crate::interface::{
 };
 use near_sdk::{AccountId, Promise};
 
+/// Integrates with the staking pool contract and manages the staking/unstaking workflows.
 pub trait StakingService {
     /// returns the staking pool account ID used for the STAKE token
+    /// - this is the staking pool that this contract is linked to
     fn staking_pool_id(&self) -> AccountId;
 
     /// looks up the receipt for the specified batch ID
+    /// - when a batch is successfully processed a receipt is created, meaning the NEAR funds have
+    ///   been successfully deposited and staked with the staking pool
+    /// - the receipt is used by customer accounts to claim STAKE tokens for their staked NEAR based
+    ///   on the STAKE token value at the point in time when the batch was run
     fn stake_batch_receipt(&self, batch_id: BatchId) -> Option<StakeBatchReceipt>;
 
     /// looks up the receipt for the specified batch ID
+    /// - when a batch is successfully processed a receipt is created, meaning the unstaked NEAR
+    ///   has been withdrawn from the staking pool contract
+    /// - the receipt is used by customer accounts to claim the unstaked NEAR tokens for their
+    ///   redeemed STAKE tokens based on the STAKE token value at the point in time when the batch
+    ///   was run
     fn redeem_stake_batch_receipt(&self, batch_id: BatchId) -> Option<RedeemStakeBatchReceipt>;
 
     /// Adds the attached deposit to the next [StakeBatch] scheduled to run.
