@@ -89,7 +89,7 @@ pub trait ResolveVaultCallback {
     /// - Deposits remaining `safe.amount` to `sender_id`
     /// - Deletes the safe
     /// - Returns the total withdrawn amount from the safe `original_amount - safe.amount`.
-    /// #[private]
+    /// #\[private\]
     fn resolve_vault(&mut self, vault_id: VaultId, sender_id: AccountId) -> YoctoStake;
 }
 

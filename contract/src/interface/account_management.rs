@@ -5,7 +5,7 @@ use near_sdk::json_types::{ValidAccountId, U128};
 pub trait AccountManagement {
     /// Creates and registers a new account for the predecessor account ID.
     /// - the account is required to pay for its storage. Storage fees will be escrowed and then refunded
-    ///   when the account is unregistered - use [account_storage_escrow_fee](crate::interface::AccountManagement::account_storage_escrow_fee)
+    ///   when the account is unregistered - use [account_storage_escrow_fee](crate::interface::AccountManagement::account_storage_fee)
     ///   to lookup the required storage fee amount. Overpayment of storage fee is refunded.
     ///
     /// ## Panics
