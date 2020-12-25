@@ -1,18 +1,15 @@
 use crate::interface::{StakeAccount, YoctoNear};
 use near_sdk::json_types::{ValidAccountId, U128};
 
+/// Accounts are required to register in order to use the contract.
 pub trait AccountManagement {
-    ////////////////////////////
-    ///    CHANGE METHODS   ///
-    //////////////////////////
-
     /// Creates and registers a new account for the predecessor account ID.
-    /// - the account is required to pay for its storage. Storage fees will be escrowed and refunded
-    ///   when the account is unregistered - use [account_storage_escrow_fee] to lookup the required
-    ///   storage fee amount. Overpayment of storage fee is refunded.
+    /// - the account is required to pay for its storage. Storage fees will be escrowed and then refunded
+    ///   when the account is unregistered - use [account_storage_escrow_fee](crate::interface::AccountManagement::account_storage_escrow_fee)
+    ///   to lookup the required storage fee amount. Overpayment of storage fee is refunded.
     ///
     /// ## Panics
-    /// - if deposit is not enough to cover storage fees
+    /// - if deposit is not enough to cover storage usage fees
     /// - if account is already registered
     fn register_account(&mut self);
 
@@ -24,17 +21,16 @@ pub trait AccountManagement {
     /// - if registered account has funds
     fn unregister_account(&mut self);
 
-    ////////////////////////////
-    ///     VIEW METHODS    ///
-    //////////////////////////
-
     /// Returns the required deposit amount that is required for account registration.
     fn account_storage_fee(&self) -> YoctoNear;
 
+    /// returns true if the account is registered
     fn account_registered(&self, account_id: ValidAccountId) -> bool;
 
+    /// returns the total number of accounts that are registered with this contract
     fn total_registered_accounts(&self) -> U128;
 
+    /// looks up the registered account
     fn lookup_account(&self, account_id: ValidAccountId) -> Option<StakeAccount>;
 
     /// Withdraws the specified amount from the account's available NEAR balance and transfers the

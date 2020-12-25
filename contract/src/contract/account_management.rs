@@ -1,4 +1,5 @@
 //required in order for near_bindgen macro to work outside of lib.rs
+use crate::errors::account_management::{ACCOUNT_NOT_REGISTERED, ZERO_NEAR_BALANCE_FOR_WITHDRAWAL};
 use crate::*;
 use crate::{
     core::Hash,
@@ -27,24 +28,22 @@ impl AccountManagement for StakeTokenContract {
     /// - if account is already registered
     #[payable]
     fn register_account(&mut self) {
-        let account_storage_fee: YoctoNear = self.account_storage_fee().into();
-        let attached_deposit = YoctoNear(env::attached_deposit());
         assert!(
-            attached_deposit.value() >= account_storage_fee.value(),
+            env::attached_deposit() >= self.account_storage_fee().value(),
             INSUFFICIENT_STORAGE_FEE,
         );
 
+        let account_storage_fee = self.account_storage_fee().into();
         let account = Account::new(account_storage_fee);
         assert!(
-            self.save_account(&Hash::from(&env::predecessor_account_id()), &account)
-                .is_none(),
+            self.save_account(&Hash::from(&env::predecessor_account_id()), &account),
             ACCOUNT_ALREADY_REGISTERED
         );
 
         // refund over payment of storage fees
-        let refund = attached_deposit - account_storage_fee;
-        if refund.value() > 0 {
-            Promise::new(env::predecessor_account_id()).transfer(refund.value());
+        let refund = env::attached_deposit() - account_storage_fee.value();
+        if refund > 0 {
+            Promise::new(env::predecessor_account_id()).transfer(refund);
         }
     }
 
@@ -53,7 +52,7 @@ impl AccountManagement for StakeTokenContract {
         let account_id_hash = Hash::from(&env::predecessor_account_id());
 
         match self.delete_account(&account_id_hash) {
-            None => panic!("account is not registered"),
+            None => panic!(ACCOUNT_NOT_REGISTERED),
             Some(account) => {
                 assert!(!account.has_funds(), UNREGISTER_REQUIRES_ZERO_BALANCES);
                 // refund the escrowed storage fee
@@ -71,8 +70,7 @@ impl AccountManagement for StakeTokenContract {
     }
 
     fn account_registered(&self, account_id: ValidAccountId) -> bool {
-        let hash = Hash::from(account_id.as_ref());
-        self.accounts.get(&hash).is_some()
+        self.accounts.get(&Hash::from(account_id)).is_some()
     }
 
     fn total_registered_accounts(&self) -> U128 {
@@ -80,9 +78,8 @@ impl AccountManagement for StakeTokenContract {
     }
 
     fn lookup_account(&self, account_id: ValidAccountId) -> Option<StakeAccount> {
-        let hash = Hash::from(account_id.as_ref());
         self.accounts
-            .get(&hash)
+            .get(&Hash::from(account_id))
             .map(|account| self.apply_receipt_funds_for_view(&account).into())
     }
 
@@ -95,7 +92,7 @@ impl AccountManagement for StakeTokenContract {
         let (mut account, account_hash) = self.registered_account(&env::predecessor_account_id());
         self.claim_receipt_funds(&mut account);
         match account.near {
-            None => panic!("there are no available NEAR funds to withdraw"),
+            None => panic!(ZERO_NEAR_BALANCE_FOR_WITHDRAWAL),
             Some(balance) => {
                 self.withdraw_near_funds(&mut account, &account_hash, balance.amount())
             }
@@ -120,35 +117,29 @@ impl StakeTokenContract {
     /// ## Panics
     /// if account is not registered
     pub(crate) fn registered_account(&self, account_id: &str) -> (Account, Hash) {
-        let hash = Hash::from(account_id);
-        match self.accounts.get(&hash) {
-            Some(account) => (account, hash),
-            None => panic!("account is not registered: {}", account_id),
+        let account_id_hash = Hash::from(account_id);
+        match self.accounts.get(&Hash::from(account_id)) {
+            Some(account) => (account, account_id_hash),
+            None => panic!("{}: {}", ACCOUNT_NOT_REGISTERED, account_id),
         }
     }
 
-    /// when a new account is registered the following is tracked:
-    /// - total account count is inc
-    pub(crate) fn save_account(&mut self, account_id: &Hash, account: &Account) -> Option<Account> {
-        match self.accounts.insert(account_id, account) {
-            None => {
-                self.accounts_len += 1;
-                None
-            }
-            Some(previous) => Some(previous),
+    /// returns true if this was a new account
+    pub(crate) fn save_account(&mut self, account_id: &Hash, account: &Account) -> bool {
+        if self.accounts.insert(account_id, account).is_none() {
+            // new account was added
+            self.accounts_len += 1;
+            return true;
         }
+        false
     }
 
-    /// when a new account is registered the following is tracked:
-    /// - total account count is dev
+    /// returns the account that was deleted, or None if no account exists for specified account ID
     fn delete_account(&mut self, account_id: &Hash) -> Option<Account> {
-        match self.accounts.remove(account_id) {
-            None => None,
-            Some(account) => {
-                self.accounts_len -= 1;
-                Some(account)
-            }
-        }
+        self.accounts.remove(account_id).map(|account| {
+            self.accounts_len -= 1;
+            account
+        })
     }
 }
 

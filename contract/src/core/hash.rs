@@ -1,3 +1,4 @@
+use near_sdk::json_types::ValidAccountId;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env,
@@ -48,6 +49,12 @@ impl From<&str> for Hash {
 impl From<&String> for Hash {
     fn from(value: &String) -> Self {
         value.as_str().into()
+    }
+}
+
+impl From<ValidAccountId> for Hash {
+    fn from(account_id: ValidAccountId) -> Self {
+        Hash::from(account_id.as_ref())
     }
 }
 

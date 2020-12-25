@@ -47,8 +47,8 @@
 //!   fees.
 //!   - contract ownership can be transferred
 //!   - contract earning can be staked into the contract owner's account
-//! - Contract has an operator role which provides functions to support the contract
-//!
+//! - Contract has an operator role which provides functions to support the contract, e.g., releasing
+//!   locks, config management, etc
 //!
 //! # STAKE Token Contract Design
 //! The STAKE token contract [interfaces](crate::interface) are defined as traits:

@@ -80,6 +80,11 @@ pub mod account_management {
 
     pub const UNREGISTER_REQUIRES_ZERO_BALANCES: &str =
         "all funds must be withdrawn from the account in order to unregister";
+
+    pub const ACCOUNT_NOT_REGISTERED: &str = "account is not registered";
+
+    pub const ZERO_NEAR_BALANCE_FOR_WITHDRAWAL: &str =
+        "there are no available NEAR funds to withdraw";
 }
 
 pub mod vault_fungible_token {
