@@ -83,7 +83,7 @@ impl VaultFungibleToken for StakeTokenContract {
         sender.apply_stake_debit(transfer_amount);
         self.save_account(&sender_account_id, &sender);
 
-        let (receiver, receiver_account_id) = self.registered_account(receiver_id);
+        let (_receiver, receiver_account_id) = self.registered_account(receiver_id);
 
         // Creating a new vault
         *self.vault_id_sequence += 1;

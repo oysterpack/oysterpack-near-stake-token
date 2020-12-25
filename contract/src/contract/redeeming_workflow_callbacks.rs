@@ -45,7 +45,9 @@ impl StakeTokenContract {
         let staked_balance = staked_balance.into();
         self.stake_token_value = self.stake_token_value(staked_balance);
 
-        let unstake_amount = self.stake_to_near(batch.balance().amount(), staked_balance);
+        let unstake_amount = self
+            .stake_token_value
+            .stake_to_near(batch.balance().amount());
 
         env::log(
             format!(
@@ -218,19 +220,7 @@ mod test {
 
     #[derive(Deserialize)]
     #[serde(crate = "near_sdk::serde")]
-    struct GetAccountArgs {
-        account_id: String,
-    }
-
-    #[derive(Deserialize)]
-    #[serde(crate = "near_sdk::serde")]
     struct UnstakeArgs {
-        amount: String,
-    }
-
-    #[derive(Deserialize)]
-    #[serde(crate = "near_sdk::serde")]
-    struct Withdrawrgs {
         amount: String,
     }
 
@@ -274,10 +264,9 @@ mod test {
                 } => {
                     assert_eq!(method_name, "unstake");
 
-                    let unstake_amount = contract.stake_to_near(
-                        contract.redeem_stake_batch.unwrap().balance().amount(),
-                        staked_balance.0.into(),
-                    );
+                    let unstake_amount = contract
+                        .stake_token_value(staked_balance.0.into())
+                        .stake_to_near(contract.redeem_stake_batch.unwrap().balance().amount());
                     assert!(args.contains(&unstake_amount.value().to_string()));
                     assert_eq!(
                         contract
@@ -303,10 +292,6 @@ mod test {
                     ..
                 } => {
                     assert_eq!(method_name, "on_unstake");
-
-                    let unstake_amount = contract
-                        .stake_token_value
-                        .stake_to_near(contract.redeem_stake_batch.unwrap().balance().amount());
                     assert!(args.is_empty());
                     assert_eq!(
                         contract
@@ -432,12 +417,6 @@ mod test {
         context.predecessor_account_id = context.current_account_id.clone();
         testing_env!(context.clone());
 
-        let staking_pool_account = StakingPoolAccount {
-            account_id: context.current_account_id.to_string(),
-            unstaked_balance: (100 * YOCTO).into(),
-            staked_balance: (1100 * YOCTO).into(),
-            can_withdraw: false,
-        };
         contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
         contract.on_run_redeem_stake_batch(YOCTO.into());
     }

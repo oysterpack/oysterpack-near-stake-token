@@ -23,7 +23,6 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
     AccountId, Promise,
 };
-use primitive_types::U256;
 
 #[near_bindgen]
 impl StakingService for StakeTokenContract {
@@ -343,15 +342,6 @@ impl StakeTokenContract {
                 .staking_pool()
                 .get_account_balance()
                 .value(),
-        )
-    }
-
-    pub(crate) fn withdraw_funds_from_staking_pool(&self, amount: domain::YoctoNear) -> Promise {
-        ext_staking_pool::withdraw(
-            amount.value().into(),
-            &self.staking_pool_id,
-            NO_DEPOSIT.into(),
-            self.config.gas_config().staking_pool().withdraw().value(),
         )
     }
 }
@@ -705,40 +695,6 @@ impl StakeTokenContract {
         }
     }
 
-    /// converts NEAR to STAKE rounded down
-    pub(crate) fn near_to_stake(
-        &self,
-        near: domain::YoctoNear,
-        total_staked_near_balance: domain::YoctoNear,
-    ) -> domain::YoctoStake {
-        let total_stake_supply = self.total_stake.amount();
-        if total_staked_near_balance.value() == 0 || total_stake_supply.value() == 0 {
-            return near.value().into();
-        }
-        let value = U256::from(near) * U256::from(total_stake_supply)
-            / U256::from(total_staked_near_balance);
-        value.as_u128().into()
-    }
-
-    pub(crate) fn stake_to_near(
-        &self,
-        stake: domain::YoctoStake,
-        total_staked_near_balance: domain::YoctoNear,
-    ) -> domain::YoctoNear {
-        let total_stake_supply = self.total_stake.amount();
-        if total_staked_near_balance.value() == 0
-            || total_stake_supply.value() == 0
-            // when deposit and staked with staking pool, there is a small amount remaining as unstaked
-            // however, STAKE token value should never be less than 1:1 in terms of NEAR
-            || total_staked_near_balance.value() < total_stake_supply.value()
-        {
-            return stake.value().into();
-        }
-        let value = U256::from(stake) * U256::from(total_staked_near_balance)
-            / U256::from(total_stake_supply);
-        value.as_u128().into()
-    }
-
     pub fn stake_token_value(
         &self,
         total_staked_near_balance: domain::YoctoNear,
@@ -780,8 +736,6 @@ pub trait ExtStakingPool {
     fn is_account_unstaked_balance_available(&self, account_id: AccountId) -> bool;
 
     fn withdraw_all(&mut self);
-
-    fn withdraw(&mut self, amount: near_sdk::json_types::U128);
 }
 
 #[ext_contract(ext_redeeming_workflow_callbacks)]
@@ -2189,10 +2143,12 @@ mod test {
         assert_eq!(account.near.unwrap().amount(), (10 * YOCTO).into());
         assert!(account.redeem_stake_batch.is_none());
 
+        // Then there should be 10 STAKE left unclaimed on the receipt
         let receipt = contract
             .redeem_stake_batch_receipts
             .get(&contract.batch_id_sequence)
             .unwrap();
+        assert_eq!(receipt.redeemed_stake(), (10 * YOCTO).into());
     }
 
     #[test]

@@ -68,8 +68,13 @@ impl StakeTokenValue {
         value.as_u128().into()
     }
 
+    /// converts STAKE to NEAR rounded down
     pub fn stake_to_near(&self, stake: YoctoStake) -> YoctoNear {
-        if self.total_staked_near_balance.value() == 0 || self.total_stake_supply.value() == 0 {
+        if self.total_staked_near_balance.value() == 0 || self.total_stake_supply.value() == 0
+            // when deposit and staked with staking pool, there is a small amount remaining as unstaked
+            // however, STAKE token value should never be less than 1:1 in terms of NEAR
+            || self.total_staked_near_balance.value() < self.total_stake_supply.value()
+        {
             return stake.value().into();
         }
         let value = U256::from(stake) * U256::from(self.total_staked_near_balance)
