@@ -2,17 +2,9 @@ use crate::interface::model::contract_state::ContractState;
 use near_sdk::Promise;
 
 pub trait Operator {
-    ////////////////////////////
-    ///     VIEW METHODS    ///
-    /// //////////////////////
-
     /// returns the contract's state
     /// - useful for monitoring and debugging
     fn contract_state(&self) -> ContractState;
-
-    //////////////////////////////
-    ///     CHANGE METHODS    ///
-    /// ////////////////////////
 
     /// unlocks the contract
     /// - can only be invoked by the contract or the operator account

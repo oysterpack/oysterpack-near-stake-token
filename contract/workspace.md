@@ -15,3 +15,6 @@ cargo install --force cargo-tarpaulin
 `cargo tarpaulin --ignore-tests --output-dir target/tarpaulin --out Html`
 - generates target/tarpaulin/tarpaulin-report.html
 
+## generate docs
+`cargo doc --no-deps --open`
+

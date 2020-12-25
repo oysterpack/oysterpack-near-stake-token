@@ -4,20 +4,14 @@ use crate::interface::{
 use near_sdk::{AccountId, Promise};
 
 pub trait StakingService {
-    ////////////////////////////
-    ///     VIEW METHODS    ///
-    /// //////////////////////
-
     /// returns the staking pool account ID used for the STAKE token
     fn staking_pool_id(&self) -> AccountId;
 
+    /// looks up the receipt for the specified batch ID
     fn stake_batch_receipt(&self, batch_id: BatchId) -> Option<StakeBatchReceipt>;
 
+    /// looks up the receipt for the specified batch ID
     fn redeem_stake_batch_receipt(&self, batch_id: BatchId) -> Option<RedeemStakeBatchReceipt>;
-
-    //////////////////////////////
-    ///     CHANGE METHODS    ///
-    /// ////////////////////////
 
     /// Adds the attached deposit to the next [StakeBatch] scheduled to run.
     ///
