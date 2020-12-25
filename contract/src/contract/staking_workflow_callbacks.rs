@@ -140,7 +140,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         let initial_stake_token_value = contract.stake_token_value;
@@ -240,7 +240,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
 
         contract.register_account();
         context.attached_deposit = 100 * YOCTO;

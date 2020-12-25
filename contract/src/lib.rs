@@ -29,6 +29,7 @@ use crate::{
         STAKE_BATCH_RECEIPTS_KEY_PREFIX, VAULTS_KEY_PREFIX,
     },
 };
+use near_sdk::json_types::ValidAccountId;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     collections::LookupMap,
@@ -124,7 +125,7 @@ impl Default for StakeTokenContract {
 impl StakeTokenContract {
     /// ## Notes
     /// - when the contract is deployed it will measure account storage usage
-    /// - the owner account ID will be set to the operator account ID
+    /// - owner account ID defaults to the operator account ID
     ///
     /// TODO: verify the staking pool - contract is disabled until staking pool is verified via transation
     ///       If the staking pool contract fails verification, then the operator can delete the this contract.
@@ -132,14 +133,14 @@ impl StakeTokenContract {
     ///
     #[payable]
     #[init]
-    pub fn new(settings: ContractSettings) -> Self {
+    pub fn new(owner_id: Option<ValidAccountId>, settings: ContractSettings) -> Self {
         assert!(!env::state_exists(), "contract is already initialized");
 
         settings.validate();
 
         let operator_id: AccountId = settings.operator_id.into();
         let mut contract = Self {
-            owner_id: operator_id.clone(),
+            owner_id: owner_id.map_or(operator_id.clone(), |account_id| account_id.into()),
             operator_id: operator_id,
 
             config: settings.config.unwrap_or_else(Config::default),
@@ -289,7 +290,7 @@ mod test {
         testing_env!(context);
 
         let contract_settings = default_contract_settings();
-        let contract = StakeTokenContract::new(contract_settings.clone());
+        let contract = StakeTokenContract::new(None, contract_settings.clone());
 
         assert_eq!(
             &contract.staking_pool_id(),

@@ -74,7 +74,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
 
         context.predecessor_account_id = context.current_account_id.clone();
@@ -92,7 +92,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
 
         context.predecessor_account_id = contract.operator_id.clone();
@@ -110,7 +110,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
 
         context.predecessor_account_id = context.current_account_id.clone();
@@ -132,7 +132,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
 
         contract.release_run_redeem_stake_batch_unstaking_lock();
     }
@@ -145,7 +145,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let contract = StakeTokenContract::new(contract_settings);
+        let contract = StakeTokenContract::new(None, contract_settings);
 
         context.predecessor_account_id = contract.operator_id.clone();
         testing_env!(context.clone());

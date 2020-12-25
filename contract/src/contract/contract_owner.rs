@@ -144,7 +144,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
 
         context.attached_deposit = contract.account_storage_fee().value();
         testing_env!(context.clone());
@@ -172,7 +172,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         context.attached_deposit = contract.account_storage_fee().value();
         testing_env!(context.clone());
         contract.register_account();
@@ -205,7 +205,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let contract = StakeTokenContract::new(contract_settings);
+        let contract = StakeTokenContract::new(None, contract_settings);
 
         context.predecessor_account_id = contract.owner_id.clone();
         testing_env!(context.clone());
@@ -246,7 +246,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let contract = StakeTokenContract::new(contract_settings);
+        let contract = StakeTokenContract::new(None, contract_settings);
 
         testing_env!(context.clone());
         contract.transfer_ownership(ValidAccountId::try_from(account_id).unwrap());
@@ -262,7 +262,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.finalize_transfer_ownership("new-owner.testnet".to_string());
     }
 
@@ -275,7 +275,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
 
         context.predecessor_account_id = context.current_account_id.clone();
         testing_env!(context.clone());
@@ -292,7 +292,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         let owner_balance = contract.owner_balance();
 
         context.predecessor_account_id = contract.owner_id();
@@ -319,7 +319,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         let owner_balance = contract.owner_balance();
 
         context.predecessor_account_id = contract.owner_id();
@@ -347,7 +347,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.withdraw_all_owner_balance();
     }
 
@@ -361,7 +361,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.withdraw_owner_balance(YOCTO.into());
     }
 
@@ -375,7 +375,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.stake_owner_balance(YOCTO.into());
     }
 
@@ -389,7 +389,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.stake_all_owner_balance();
     }
 
@@ -402,7 +402,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         let owner_balance = contract.owner_balance();
 
         context.attached_deposit = YOCTO;
@@ -425,7 +425,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         let owner_balance = contract.owner_balance();
 
         context.attached_deposit = YOCTO;

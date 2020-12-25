@@ -200,7 +200,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         context.predecessor_account_id = sender_account_id.to_string();
@@ -239,7 +239,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         context.predecessor_account_id = sender_account_id.to_string();
@@ -266,7 +266,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         contract.transfer(ValidAccountId::try_from(account_id).unwrap(), YOCTO.into());
@@ -281,7 +281,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         context.predecessor_account_id = "joe.near".to_string();
@@ -298,7 +298,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         contract.transfer(ValidAccountId::try_from("joe.near").unwrap(), YOCTO.into());
@@ -322,7 +322,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         context.predecessor_account_id = sender_account_id.to_string();
@@ -396,7 +396,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         context.predecessor_account_id = sender_account_id.to_string();
@@ -424,7 +424,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         contract.transfer_with_vault(
@@ -443,7 +443,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         context.predecessor_account_id = "joe.near".to_string();
@@ -464,7 +464,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         let (mut account, account_id_hash) = contract.registered_account(account_id);
@@ -492,7 +492,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         context.predecessor_account_id = sender_account_id.to_string();
@@ -543,7 +543,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         context.predecessor_account_id = sender_account_id.to_string();
@@ -584,7 +584,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         context.predecessor_account_id = sender_account_id.to_string();
@@ -626,7 +626,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         context.predecessor_account_id = sender_account_id.to_string();
@@ -668,7 +668,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         context.predecessor_account_id = sender_account_id.to_string();
@@ -710,7 +710,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         context.predecessor_account_id = sender_account_id.to_string();
@@ -751,7 +751,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         context.predecessor_account_id = sender_account_id.to_string();
@@ -809,7 +809,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         context.attached_deposit = 10 * YOCTO;

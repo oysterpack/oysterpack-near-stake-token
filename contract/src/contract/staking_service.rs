@@ -728,8 +728,8 @@ impl StakeTokenContract {
         let total_stake_supply = self.total_stake.amount();
         if total_staked_near_balance.value() == 0
             || total_stake_supply.value() == 0
-            // TODO: when deposit and staked with staking pool, there is a small amount remaining as unstaked
-            //       however, STAKE token value should never be less than 1:1 in terms of NEAR
+            // when deposit and staked with staking pool, there is a small amount remaining as unstaked
+            // however, STAKE token value should never be less than 1:1 in terms of NEAR
             || total_staked_near_balance.value() < total_stake_supply.value()
         {
             return stake.value().into();
@@ -852,7 +852,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
 
         contract.register_account();
 
@@ -915,7 +915,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
 
         contract.register_account();
         contract.run_stake_batch_locked = true;
@@ -957,7 +957,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
 
         contract.register_account();
 
@@ -1015,7 +1015,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
 
         contract.register_account();
 
@@ -1037,7 +1037,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
 
         contract.register_account();
 
@@ -1074,7 +1074,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
 
         contract.register_account();
 
@@ -1159,7 +1159,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
 
         contract.register_account();
 
@@ -1215,7 +1215,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
 
         contract.register_account();
 
@@ -1298,7 +1298,7 @@ mod test {
         testing_env!(context);
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
 
         contract.run_stake_batch();
     }
@@ -1318,7 +1318,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
 
         contract.register_account();
 
@@ -1348,7 +1348,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
 
         contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
 
@@ -1367,7 +1367,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
 
         contract.register_account();
 
@@ -1391,7 +1391,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
 
         contract.total_stake.credit(YOCTO.into());
         contract.stake_token_value =
@@ -1423,7 +1423,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings.clone());
+        let mut contract = StakeTokenContract::new(None, contract_settings.clone());
 
         contract.register_account();
 
@@ -1519,7 +1519,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
 
         contract.register_account();
 
@@ -1586,7 +1586,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings.clone());
+        let mut contract = StakeTokenContract::new(None, contract_settings.clone());
 
         contract.register_account();
         assert!(contract.redeem_stake_batch.is_none());
@@ -1663,7 +1663,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings.clone());
+        let mut contract = StakeTokenContract::new(None, contract_settings.clone());
 
         contract.register_account();
         assert!(contract.redeem_stake_batch.is_none());
@@ -1742,7 +1742,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings.clone());
+        let mut contract = StakeTokenContract::new(None, contract_settings.clone());
 
         contract.register_account();
         context.attached_deposit = 5 * YOCTO;
@@ -1779,7 +1779,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings.clone());
+        let mut contract = StakeTokenContract::new(None, contract_settings.clone());
 
         contract.register_account();
         context.attached_deposit = 5 * YOCTO;
@@ -1827,7 +1827,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings.clone());
+        let mut contract = StakeTokenContract::new(None, contract_settings.clone());
 
         context.attached_deposit = YOCTO;
         context.account_balance = 100 * YOCTO;
@@ -1894,7 +1894,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings.clone());
+        let mut contract = StakeTokenContract::new(None, contract_settings.clone());
 
         *contract.batch_id_sequence += 1;
         contract.redeem_stake_batch = Some(RedeemStakeBatch::new(
@@ -1973,7 +1973,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings.clone());
+        let mut contract = StakeTokenContract::new(None, contract_settings.clone());
 
         contract.run_stake_batch_locked = true;
         contract.run_redeem_stake_batch();
@@ -1989,7 +1989,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings.clone());
+        let mut contract = StakeTokenContract::new(None, contract_settings.clone());
 
         contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
         contract.run_redeem_stake_batch();
@@ -2005,7 +2005,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings.clone());
+        let mut contract = StakeTokenContract::new(None, contract_settings.clone());
 
         contract.run_redeem_stake_batch();
     }
@@ -2025,7 +2025,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings.clone());
+        let mut contract = StakeTokenContract::new(None, contract_settings.clone());
 
         *contract.batch_id_sequence += 1;
         contract.redeem_stake_batch = Some(RedeemStakeBatch::new(
@@ -2102,7 +2102,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings.clone());
+        let mut contract = StakeTokenContract::new(None, contract_settings.clone());
 
         contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
         contract.run_redeem_stake_batch();
@@ -2118,7 +2118,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings.clone());
+        let mut contract = StakeTokenContract::new(None, contract_settings.clone());
 
         *contract.batch_id_sequence += 1;
         contract.redeem_stake_batch = Some(RedeemStakeBatch::new(
@@ -2139,7 +2139,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings.clone());
+        let mut contract = StakeTokenContract::new(None, contract_settings.clone());
 
         *contract.batch_id_sequence += 1;
         contract.redeem_stake_batch = Some(RedeemStakeBatch::new(
@@ -2166,7 +2166,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings.clone());
+        let mut contract = StakeTokenContract::new(None, contract_settings.clone());
 
         contract.register_account();
 
@@ -2204,7 +2204,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings.clone());
+        let mut contract = StakeTokenContract::new(None, contract_settings.clone());
 
         contract.register_account();
 
@@ -2263,7 +2263,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings.clone());
+        let mut contract = StakeTokenContract::new(None, contract_settings.clone());
 
         contract.register_account();
 
@@ -2314,7 +2314,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings.clone());
+        let mut contract = StakeTokenContract::new(None, contract_settings.clone());
         contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
 
         contract.register_account();
@@ -2364,7 +2364,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         context.attached_deposit = 10 * YOCTO;
@@ -2451,7 +2451,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         context.attached_deposit = 10 * YOCTO;
@@ -2495,7 +2495,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         context.attached_deposit = 10 * YOCTO;
@@ -2536,7 +2536,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
         contract.run_stake_batch_locked = true;
 
@@ -2581,7 +2581,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
         contract.run_stake_batch_locked = true;
 
@@ -2620,7 +2620,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         context.attached_deposit = 10 * YOCTO;
@@ -2643,7 +2643,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         context.attached_deposit = 10 * YOCTO;
@@ -2666,7 +2666,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         testing_env!(context.clone());
@@ -2686,7 +2686,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         context.attached_deposit = 10 * YOCTO;
@@ -2728,7 +2728,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
         contract.run_stake_batch_locked = true;
 
@@ -2767,7 +2767,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         context.attached_deposit = 10 * YOCTO;
@@ -2790,7 +2790,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         context.attached_deposit = 10 * YOCTO;
@@ -2813,7 +2813,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         testing_env!(context.clone());
@@ -2829,7 +2829,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         let (mut account, account_id_hash) = contract.registered_account(account_id);
@@ -2865,7 +2865,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         let (mut account, account_id_hash) = contract.registered_account(account_id);
@@ -2909,7 +2909,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         let (mut account, account_id_hash) = contract.registered_account(account_id);
@@ -2949,7 +2949,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         let (mut account, account_id_hash) = contract.registered_account(account_id);
@@ -2997,7 +2997,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         testing_env!(context.clone());
@@ -3013,7 +3013,7 @@ mod test {
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
         contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
 
