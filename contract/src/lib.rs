@@ -70,7 +70,7 @@
 //!
 
 // TODO: remove to cleanup code
-#![allow(dead_code, unused_variables)]
+// #![allow(dead_code, unused_variables)]
 
 pub mod config;
 mod contract;

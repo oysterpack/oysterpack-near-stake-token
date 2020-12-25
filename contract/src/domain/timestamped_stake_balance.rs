@@ -78,11 +78,13 @@ impl TimestampedStakeBalance {
         self.update_timestamp();
     }
 
+    /// Returns updated balance
+    ///
     /// ## Panics
     /// if overflow occurs
-    pub fn debit(&mut self, amount: YoctoStake) {
-        if amount.0 == 0 {
-            return;
+    pub fn debit(&mut self, amount: YoctoStake) -> YoctoStake {
+        if amount.value() == 0 {
+            return self.amount;
         }
         assert!(
             self.amount >= amount,
@@ -90,6 +92,7 @@ impl TimestampedStakeBalance {
         );
         self.amount -= amount;
         self.update_timestamp();
+        self.amount
     }
 
     fn update_timestamp(&mut self) {

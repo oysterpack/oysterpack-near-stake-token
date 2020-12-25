@@ -58,6 +58,8 @@ pub mod staking_service {
 
     pub const INSUFFICIENT_STAKE_FOR_REDEEM_REQUEST: &str =
         "account STAKE balance is insufficient to fulfill request";
+
+    pub const BATCH_RUN_ALREADY_IN_PROGRESS: &str = "batch run is already in progress";
 }
 
 pub mod illegal_state {

@@ -69,7 +69,8 @@ impl RedeemStakeBatch {
         self.balance.credit(amount)
     }
 
-    pub fn remove(&mut self, amount: YoctoStake) {
+    /// returns updated balance
+    pub fn remove(&mut self, amount: YoctoStake) -> YoctoStake {
         self.balance.debit(amount)
     }
 }

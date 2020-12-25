@@ -1,3 +1,4 @@
+use crate::domain::{RedeemStakeBatch, StakeBatch, YoctoNear, YoctoStake};
 use crate::interface;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use std::ops::{Deref, DerefMut};
@@ -26,6 +27,14 @@ impl From<u128> for BatchId {
 impl BatchId {
     pub fn value(&self) -> u128 {
         self.0
+    }
+
+    pub fn new_stake_batch(&self) -> StakeBatch {
+        StakeBatch::new(*self, YoctoNear(0))
+    }
+
+    pub fn new_redeem_stake_batch(&self) -> RedeemStakeBatch {
+        RedeemStakeBatch::new(*self, YoctoStake(0))
     }
 }
 

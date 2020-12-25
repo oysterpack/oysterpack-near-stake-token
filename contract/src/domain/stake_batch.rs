@@ -37,7 +37,9 @@ impl StakeBatch {
         self.balance.credit(amount)
     }
 
-    pub fn remove(&mut self, amount: YoctoNear) {
-        self.balance.debit(amount)
+    /// deducts the specified amount from the batch and return updated balance
+    pub fn remove(&mut self, amount: YoctoNear) -> YoctoNear {
+        self.balance.debit(amount);
+        self.balance.amount()
     }
 }
