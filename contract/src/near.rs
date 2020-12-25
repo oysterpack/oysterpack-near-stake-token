@@ -30,6 +30,7 @@ pub fn assert_predecessor_is_self() {
     }
 }
 
+/// wrapper around `near_sdk::env::log()` to make it simpler to use
 pub fn log(msg: String) {
     env::log(msg.as_bytes());
 }

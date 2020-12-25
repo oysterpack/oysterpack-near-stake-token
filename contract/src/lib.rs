@@ -2,17 +2,17 @@
 #![allow(dead_code, unused_variables)]
 
 pub mod config;
-pub mod contract;
+mod contract;
 pub mod core;
 pub mod domain;
+pub mod errors;
 pub mod interface;
 pub mod near;
 
 pub use contract::settings::*;
-pub use contract::*;
-pub use errors::*;
+pub(crate) use contract::*;
+pub(crate) use errors::*;
 
-mod errors;
 #[cfg(test)]
 pub(crate) mod test_utils;
 
