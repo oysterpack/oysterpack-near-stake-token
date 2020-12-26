@@ -93,19 +93,19 @@ pub struct StakingPoolGasConfig {
 impl Default for StakingPoolGasConfig {
     fn default() -> Self {
         Self {
-            deposit_and_stake: TGAS * 25,
-            unstake: BASE_GAS * 3,
-            withdraw: BASE_GAS,
             get_account_balance: TGAS * 5,
-            get_account: BASE_GAS,
+            get_account: TGAS * 5,
+
+            deposit_and_stake: TGAS * 50,
+            unstake: BASE_GAS * 3,
+            withdraw: BASE_GAS * 3,
         }
     }
 }
 
 impl StakingPoolGasConfig {
     pub fn deposit_and_stake(&self) -> Gas {
-        TGAS * 50
-        // self.deposit_and_stake
+        self.deposit_and_stake
     }
 
     pub fn unstake(&self) -> Gas {
@@ -113,18 +113,15 @@ impl StakingPoolGasConfig {
     }
 
     pub fn withdraw(&self) -> Gas {
-        BASE_GAS * 3
-        // self.withdraw
+        self.withdraw
     }
 
     pub fn get_account_balance(&self) -> Gas {
-        TGAS * 5
-        // self.get_account_balance
+        self.get_account_balance
     }
 
     pub fn get_account(&self) -> Gas {
-        TGAS * 5
-        // self.get_account
+        self.get_account
     }
 }
 
@@ -134,68 +131,64 @@ pub struct CallBacksGasConfig {
     on_run_stake_batch: Gas,
     on_deposit_and_stake: Gas,
     on_unstake: Gas,
-    on_get_account_staked_balance: Gas,
     unlock: Gas,
 
     // used by redeem stake workflow
     on_run_redeem_stake_batch: Gas,
     on_redeeming_stake_pending_withdrawal: Gas,
-    // used by ContractOwner inerface
-    // finalize_ownership_transfer: Gas,
+    on_redeeming_stake_post_withdrawal: Gas,
+
+    // used by ContractOwner interface
+    finalize_ownership_transfer: Gas,
 }
 
 impl CallBacksGasConfig {
     pub fn on_deposit_and_stake(&self) -> Gas {
-        TGAS * 5
-        // self.on_deposit_and_stake
+        self.on_deposit_and_stake
     }
 
     pub fn unlock(&self) -> Gas {
-        TGAS * 5
-        // self.unlock
+        self.unlock
     }
 
     pub fn on_run_stake_batch(&self) -> Gas {
-        TGAS * 85
-        // self.on_run_stake_batch
+        self.on_run_stake_batch
     }
 
     pub fn on_redeeming_stake_pending_withdrawal(&self) -> Gas {
-        BASE_GAS * 5
-        // self.on_redeeming_stake_pending_withdrawal
+        self.on_redeeming_stake_pending_withdrawal
     }
 
     pub fn on_redeeming_stake_post_withdrawal(&self) -> Gas {
-        BASE_GAS
+        self.on_redeeming_stake_post_withdrawal
     }
 
     pub fn on_unstake(&self) -> Gas {
-        BASE_GAS
-        // self.on_unstake
+        self.on_unstake
     }
 
     pub fn on_run_redeem_stake_batch(&self) -> Gas {
-        BASE_GAS * 5
-        // self.on_run_redeem_stake_batch
+        self.on_run_redeem_stake_batch
     }
 
     pub fn finalize_ownership_transfer(&self) -> Gas {
-        BASE_GAS
-        // self.finalize_ownership_transfer
+        self.finalize_ownership_transfer
     }
 }
 
 impl Default for CallBacksGasConfig {
     fn default() -> Self {
         Self {
-            on_run_stake_batch: BASE_GAS * 3,
-            on_deposit_and_stake: BASE_GAS,
-            on_unstake: BASE_GAS,
-            on_get_account_staked_balance: BASE_GAS * 3,
-            unlock: BASE_GAS,
-            on_redeeming_stake_pending_withdrawal: BASE_GAS * 4,
+            on_run_stake_batch: TGAS * 85,
+            on_deposit_and_stake: TGAS * 5,
+            unlock: TGAS * 5,
+
             on_run_redeem_stake_batch: BASE_GAS * 5,
-            // finalize_ownership_transfer: BASE_GAS,
+            on_unstake: BASE_GAS,
+            on_redeeming_stake_pending_withdrawal: BASE_GAS * 5,
+            on_redeeming_stake_post_withdrawal: BASE_GAS,
+
+            finalize_ownership_transfer: TGAS * 10,
         }
     }
 }

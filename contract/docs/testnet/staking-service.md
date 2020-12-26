@@ -23,13 +23,15 @@ near call stake.oysterpack.testnet redeem --accountId 1.alfio-zappala-oysterpack
 
 near call stake.oysterpack.testnet redeem_all --accountId 1.alfio-zappala-oysterpack.testnet
 
-near call stake.oysterpack.testnet run_redeem_stake_batch --accountId alfio-zappala-oysterpack.testnet --gas 300000000000000
+near call stake.oysterpack.testnet unstake --accountId alfio-zappala-oysterpack.testnet --gas 300000000000000
+
+near call stake.oysterpack.testnet redeem_all_and_unstake --accountId alfio-zappala-oysterpack.testnet --gas 300000000000000
 ```
 
 ## Staking Pool
 ```shell
-export STAKING_POOL=staked.pool.f863973.m0
-#export STAKING_POOL=stakin.pool.f863973.m0
+#export STAKING_POOL=staked.pool.f863973.m0
+export STAKING_POOL=stakin.pool.f863973.m0
 
 near view $STAKING_POOL get_account --args '{"account_id":"stake.oysterpack.testnet"}'
 
