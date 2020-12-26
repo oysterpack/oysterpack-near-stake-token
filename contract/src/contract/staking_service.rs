@@ -66,6 +66,18 @@ impl StakingService for StakeTokenContract {
         assert!(self.can_run_batch(), BLOCKED_BY_BATCH_RUNNING);
         assert!(self.stake_batch.is_some(), NO_STAKE_BATCH_TO_RUN);
 
+        // let min_required_gas = {
+        //     let staking_pool = self.config.gas_config().staking_pool();
+        //     let callbacks = self.config.gas_config().callbacks();
+        //     staking_pool.get_account_balance() + callbacks.on_run_stake_batch() + callbacks.unlock()
+        // };
+        // let remaining_gas = env::prepaid_gas() - env::used_gas();
+        // assert!(
+        //     remaining_gas > min_required_gas.value(),
+        //     "insufficient gas - min required gas is: {:?}",
+        //     (min_required_gas + (TGAS * 40))
+        // );
+
         self.run_stake_batch_locked = true;
 
         self.get_account_staked_balance_from_staking_pool()

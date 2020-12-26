@@ -30,7 +30,7 @@ pub use block_height::BlockHeight;
 pub use block_time_height::BlockTimeHeight;
 pub use block_timestamp::BlockTimestamp;
 pub use epoch_height::EpochHeight;
-pub use gas::Gas;
+pub use gas::{Gas, TGAS};
 pub use lock::RedeemLock;
 pub use redeem_stake_batch::RedeemStakeBatch;
 pub use redeem_stake_batch_receipt::RedeemStakeBatchReceipt;

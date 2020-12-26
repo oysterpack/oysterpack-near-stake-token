@@ -119,6 +119,8 @@ pub trait StakingService {
     /// deposited into the next available batch and the batch ID is returned.
     ///
     /// #\[payable\]
+    ///
+    /// GAS REQUIREMENTS: 150 TGas
     fn deposit_and_stake(&mut self) -> PromiseOrValue<BatchId>;
 
     /// withdraws specified amount from uncommitted stake batch and refunds the account

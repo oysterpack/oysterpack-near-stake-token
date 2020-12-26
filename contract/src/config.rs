@@ -1,4 +1,4 @@
-use crate::domain::{Gas, YoctoNearValue};
+use crate::domain::{Gas, YoctoNearValue, TGAS};
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
@@ -93,10 +93,10 @@ pub struct StakingPoolGasConfig {
 impl Default for StakingPoolGasConfig {
     fn default() -> Self {
         Self {
-            deposit_and_stake: (BASE_GAS.value() * 3).into(),
-            unstake: (BASE_GAS.value() * 3).into(),
+            deposit_and_stake: TGAS * 25,
+            unstake: BASE_GAS * 3,
             withdraw: BASE_GAS,
-            get_account_balance: BASE_GAS,
+            get_account_balance: TGAS * 5,
             get_account: BASE_GAS,
         }
     }
@@ -104,7 +104,7 @@ impl Default for StakingPoolGasConfig {
 
 impl StakingPoolGasConfig {
     pub fn deposit_and_stake(&self) -> Gas {
-        BASE_GAS * 3
+        TGAS * 50
         // self.deposit_and_stake
     }
 
@@ -118,12 +118,12 @@ impl StakingPoolGasConfig {
     }
 
     pub fn get_account_balance(&self) -> Gas {
-        BASE_GAS
+        TGAS * 5
         // self.get_account_balance
     }
 
     pub fn get_account(&self) -> Gas {
-        BASE_GAS
+        TGAS * 5
         // self.get_account
     }
 }
@@ -146,21 +146,17 @@ pub struct CallBacksGasConfig {
 
 impl CallBacksGasConfig {
     pub fn on_deposit_and_stake(&self) -> Gas {
-        BASE_GAS
+        TGAS * 5
         // self.on_deposit_and_stake
     }
 
-    pub fn on_get_account_staked_balance(&self) -> Gas {
-        self.on_get_account_staked_balance
-    }
-
     pub fn unlock(&self) -> Gas {
-        BASE_GAS
+        TGAS * 5
         // self.unlock
     }
 
     pub fn on_run_stake_batch(&self) -> Gas {
-        BASE_GAS * 5
+        TGAS * 85
         // self.on_run_stake_batch
     }
 

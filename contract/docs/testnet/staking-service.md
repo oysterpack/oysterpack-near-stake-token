@@ -16,7 +16,7 @@ near call stake.oysterpack.testnet deposit --accountId 1.alfio-zappala-oysterpac
 
 near call stake.oysterpack.testnet stake --accountId alfio-zappala-oysterpack.testnet --gas 300000000000000
 
-near call stake.oysterpack.testnet deposit_and_stake --accountId alfio-zappala-oysterpack.testnet --gas 300000000000000
+near call stake.oysterpack.testnet deposit_and_stake --accountId alfio-zappala-oysterpack.testnet --amount 1 --gas 150000000000000
 
 near call stake.oysterpack.testnet redeem --accountId alfio-zappala-oysterpack.testnet --args '{"amount":"500000000000000000000000"}'
 near call stake.oysterpack.testnet redeem --accountId 1.alfio-zappala-oysterpack.testnet --args '{"amount":"600000000000000000000000"}'
@@ -46,20 +46,20 @@ near call $STAKING_POOL withdraw_all --accountId stake.oysterpack.testnet --gas 
 
 # 1000000000000000000000000     = 1 NEAR
 #  500000000000000000000000     = 0.5 NEAR
-50456205972400000000
-68100000000000000000000
 
-300000000000000
-  4420049914538
- 27909492989128
-  2427974662416
- 18588240766627
- 18356815353739
-  3591923837853
+# deposit_and_stake transaction (alfio-zappala-oysterpack.testnet:G7ahkVZGrcJZPJWghawh73qtNVDzPnYf6LZPbAaVxHoy)
+  2 427 963 482 746        StakingService::deposit_and_stake         G7ahkVZGrcJZPJWghawh73qtNVDzPnYf6LZPbAaVxHoy
+ 32 328 258 227 662        StakingService::stake                     FkSZkV1pe25JMK9sLNs9MBJbnAcmLwMo9yuzfHLgEFQY
+  4 306 264 748 859        staking-pool::get_account_staked_balance  CwYK77QvyLf8r8oZP5ZuxzwGyLRVcw6t2M3hDv1ZW6na 
+ 18 244 770 167 486        StakingService:on_run_stake_batch         BKAwaxs7cyZQU8XDrGdyVugNipNidzQJYpGgEnzYGe3E
+ 22 721 733 350 873        staking-pool::deposit_and_stake           7ziED2YhMbDcYVYkapcWpHNgWdeQ6iQtqPq5D4sdcy7p
+  4 220 515 569 698        StakingService::on_deposit_and_stake      2eLh9Ds5MWSCF6kVVcGQHELvzDSX2KxFNzMm5pgx3BhB
+  3 790 483 214 956        StakingService::release_run_stake_batch   DXNKjJQW8GRZmzySiiKv7ZYypzGTjMZNC5mgK4B685wx
 
-
-475611913405595162900000000
-475611868769082662900000000
-
-33336520382457483700000000
-33336548907547508500000000
+100 000 000 000 000 
+ 29 985 580 262 929
+ 18 244 770 167 486
+ 32 327 841 739 594
+    210 277 125 000
+  3 591 923 837 853
+110 000 000 000 000

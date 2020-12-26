@@ -21,6 +21,9 @@ use std::ops::{Add, Mul};
 #[serde(crate = "near_sdk::serde")]
 pub struct Gas(pub u64);
 
+/// 1 teraGas
+pub const TGAS: Gas = Gas(1_000_000_000_000);
+
 impl From<u64> for Gas {
     fn from(value: u64) -> Self {
         Self(value)
