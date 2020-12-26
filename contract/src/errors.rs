@@ -26,10 +26,7 @@ pub mod staking_pool_failures {
 }
 
 pub mod staking_errors {
-    pub const BLOCKED_BY_STAKE_BATCH_RUNNING: &str =
-        "request is blocked by a running staking batch";
-
-    pub const BLOCKED_BY_UNSTAKING: &str = "request is blocked while unstaking is in progress";
+    pub const BLOCKED_BY_BATCH_RUNNING: &str = "action is blocked because a batch is running";
 
     pub const NO_STAKE_BATCH_TO_RUN: &str = "there is no stake batch to run";
 

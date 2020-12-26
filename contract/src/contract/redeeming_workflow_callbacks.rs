@@ -47,7 +47,8 @@ impl StakeTokenContract {
             .stake_token_value
             .stake_to_near(batch.balance().amount());
 
-        self.unstake(unstake_amount).then(self.invoke_on_unstake())
+        self.invoke_unstake(unstake_amount)
+            .then(self.invoke_on_unstake())
     }
 
     pub fn on_unstake(&mut self) {
@@ -112,7 +113,7 @@ impl StakeTokenContract {
 }
 
 impl StakeTokenContract {
-    fn unstake(&self, unstake_amount: domain::YoctoNear) -> Promise {
+    fn invoke_unstake(&self, unstake_amount: domain::YoctoNear) -> Promise {
         ext_staking_pool::unstake(
             unstake_amount.value().into(),
             &self.staking_pool_id,

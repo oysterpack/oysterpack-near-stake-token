@@ -1,7 +1,7 @@
 use crate::interface::{
     BatchId, RedeemStakeBatchReceipt, StakeBatchReceipt, YoctoNear, YoctoStake,
 };
-use near_sdk::{AccountId, Promise};
+use near_sdk::{AccountId, Promise, PromiseOrValue};
 
 /// Integrates with the staking pool contract and manages STAKE token assets. The main use
 /// cases supported by this interface are:
@@ -19,27 +19,28 @@ use near_sdk::{AccountId, Promise};
 ///
 /// ## How Staking NEAR Works
 /// Users [deposit](StakingService::deposit) NEAR funds into a [StakeBatch](crate::interface::StakeBatch).
-/// The batch workflow is run via [run_stake_batch()](StakingService::run_stake_batch).
-/// The batch will be scheduled to run on a periodic basis - it should be run at least once per epoch
-/// (every 12 hours). An off-chain process will be required to schedule the batch to run -  but anyone
-/// can manually invoke [run_stake_batch()](StakingService::run_stake_batch) on the contract. When the
-/// batch is run, the STAKE token value at that point in time is computed and recorded into a
+/// The staking batch workflow is run via [stake()](StakingService::stake), which deposits and stakes
+/// the batched NEAR funds with the staking pool. Users have the option to combine the deposit and
+/// stake operations via [deposit_and_stake()](StakingService::deposit_and_stake).
+///
+/// When the batch is run, the STAKE token value at that point in time is computed and recorded into a
 /// [StakeBatchReceipt](crate::interface::StakeBatchReceipt). The STAKE tokens are issued on demand when
 /// the user accounts access the contract for actions that involve STAKE tokens - when staking NEAR,
 /// redeeming STAKE, or withdrawing unstaked NEAR.
 ///
 /// ## How Redeeming STAKE Works
-/// Users submit requests to [redeem](StakingService::redeem) STAKE tokens, which are collected into
-/// a [RedeemStakeBatch](crate::interface::RedeemStakeBatch). The batch workflow is run via
-/// [run_redeem_stake_batch()](StakingService::run_redeem_stake_batch). The batch will be scheduled to
-/// run on a periodic basis - it should be scheduled to run at least once per epoch (every 12 hours).
-/// An off-chain process will be required to schedule the batch to run, but anyone can manually run
-/// the batch.
+/// Users [redeem](StakingService::redeem) STAKE tokens, which are collected into a
+/// [RedeemStakeBatch](crate::interface::RedeemStakeBatch). The redeemed STAKE tokens will need to be
+/// unstaked from the staking pool via [unstake()](StakingService::unstake), which processes the
+/// [RedeemStakeBatch](crate::interface::RedeemStakeBatch). Users have the option to combine the
+/// redeem and unstake operations via [redeem_and_stake()](StakingService::redeem_and_unstake). For
+/// convenience users can also simply redeem all STAKE via [redeem_all()](StakingService::redeem) and
+/// [redeem_all_and_stake()](StakingService::redeem_all_and_unstake).
 ///
 /// Redeeming STAKE tokens requires NEAR to be unstaked and withdrawn from the staking pool.
 /// When NEAR is unstaked, the unstaked NEAR funds are not available for withdrawal until 4 epochs
 /// later (~2 days). While waiting for the unstaked NEAR funds to be released and withdrawn,
-/// [run_redeem_stake_batch()](StakingService::run_redeem_stake_batch) requests will fail.
+/// [unstake()](StakingService::unstake) requests will fail.
 /// When a [RedeemStakeBatch](crate::interface::RedeemStakeBatch) is run, the STAKE
 /// token value is computed at that point in time, which is used to compute the corresponding amount
 /// of NEAR tokens to unstake from the staking pool. This information is recorded in a
@@ -79,7 +80,7 @@ pub trait StakingService {
 
     /// Adds the attached deposit to the next [StakeBatch] scheduled to run.
     /// Returns the [BatchId] for the [StakeBatch] that the funds are deposited into.
-    /// - deposits are committed for staking via [run_stake_batch](StakingService::run_stake_batch)
+    /// - deposits are committed for staking via [stake](StakingService::stake)
     /// - each additional deposit request add the funds to the batch
     /// - NEAR funds can be withdrawn from the batch, as long as the batch is not yet committed via
     ///   - [withdraw_funds_from_stake_batch](StakingService::withdraw_funds_from_stake_batch)
@@ -91,6 +92,34 @@ pub trait StakingService {
     ///
     /// #\[payable\]
     fn deposit(&mut self) -> BatchId;
+
+    /// locks the contract to stake the batched NEAR funds and then kicks off the staking workflow
+    /// 1. lock the contract
+    /// 2. gets the account stake balance from the staking pool
+    /// 3. updates STAKE token value
+    /// 4. deposits and stakes the NEAR funds with the staking pool
+    /// 5. creates the batch receipt
+    /// 6. releases the lock
+    ///
+    /// ## Notes
+    /// [contract_state](crates::interface::Operator::contract_state) can be queried to check if the
+    /// batch cab be run, i.e., to check if there is a batch to run and that the contract is not locked.
+    ///
+    /// ## Panics
+    /// - if contract is locked for
+    ///   - staking batch is in progress
+    ///   - unstaking is in progress
+    /// - if there is no stake batch to run
+    fn stake(&mut self) -> Promise;
+
+    /// Combines [deposit](StakingService::deposit) and [stake](StakingService::stake) calls together.
+    ///
+    /// If the contract is currently locked, then the deposit cannot be be immediately staked. If the
+    /// funds can be staked, then the staking Promise is returned. Otherwise, the funds are simply
+    /// deposited into the next available batch and the batch ID is returned.
+    ///
+    /// #\[payable\]
+    fn deposit_and_stake(&mut self) -> PromiseOrValue<BatchId>;
 
     /// withdraws specified amount from uncommitted stake batch and refunds the account
     ///
@@ -110,25 +139,6 @@ pub trait StakingService {
     /// - if the account is not registered
     /// - if the contract is locked
     fn withdraw_all_funds_from_stake_batch(&mut self);
-
-    /// locks the contract to stake the batched NEAR funds and then kicks off the workflow
-    /// 1. lock the contract
-    /// 2. gets the account stake balance from the staking pool
-    /// 3. updates STAKE token value
-    /// 4. deposits and stakes the NEAR funds with the staking pool
-    /// 5. creates the batch receipt
-    /// 6. releases the lock
-    ///
-    /// ## Notes
-    /// [contract_state](crates::interface::Operator::contract_state) can be queried to check if the
-    /// batch cab be run, i.e., to check if there is a batch to run and that the contract is not locked.
-    ///
-    /// ## Panics
-    /// - if contract is locked for
-    ///   - staking batch is in progress
-    ///   - unstaking is in progress
-    /// - if there is no stake batch to run
-    fn run_stake_batch(&mut self) -> Promise;
 
     /// Submits request to redeem STAKE tokens, which are put into a [RedeemStakeBatch](crate::interface::RedeemStakeBatch).
     /// The account's STAKE balance is debited the amount and moved into the batch.
@@ -158,20 +168,11 @@ pub trait StakingService {
     /// - STAKE funds that were locked in the redeem stake batch are made available for transfer
     fn cancel_uncommitted_redeem_stake_batch(&mut self) -> bool;
 
-    /// STAKE tokens are redeemed in 2 steps: first the corresponding NEAR is unstaked with the staking
-    /// pool. Second, the NEAR funds need to be withdrawn from the staking pool. The unstaked NEAR
-    /// funds are not immediately available. They are locked in the staking pool for 4 epochs. Further
-    /// STAKE funds cannot be redeemed, i.e., unstaked from the staking pool, until the unstaked NEAR
-    /// funds are withdrawn from the staking pool.
-    ///
-    /// For example, 50 NEAR are unstaked at epoch 100, which means the 50 NEAR is available
-    /// for withdrawal at epoch 104. However, if a user submits a transaction to unstake another 50
-    /// NEAR at epoch 103, then the entire 100 unstaked NEAR will be available to be withdrawn at
-    /// epoch 107. In this example, in order to be able to withdraw the 50 NEAR at epoch 104, the 2nd
-    /// unstaking request must be submitted after the NEAR is withdrawn.
-    ///
-    /// Thus, to redeem STAKE tokens, 2 sub-workflows are required: first workflow to unstake the NEAR
-    /// following by a second workflow to withdraw the unstaked NEAR from the staking pool.
+    /// Runs the workflow to process redeem STAKE for NEAR from the staking pool. The workflow consists
+    /// of 2 sub-workflows:
+    /// 1. NEAR funds are unstaked with the staking pool
+    /// 2. NEAR funds are withdrawn from the staking pool, once the unstaked NEAR funds become available
+    ///    for withdrawal (4 epochs / ~2 days)
     ///
     /// ## unstaking workflow
     /// 1. locks the contract for unstaking
@@ -194,14 +195,39 @@ pub trait StakingService {
     /// ## Notes
     /// - [contract_state](crates::interface::Operator::contract_state) can be queried to check if the
     ///   batch cab be run, i.e., to check if there is a batch to run and that the contract is not locked.
+    /// - while the unstake workflow is locked, users can continue to submit [redeem](STakingService::redeem)
+    ///   requests which will be run in the next batch
     /// - while awaiting the unstaked NEAR funds to be withdrawn, NEAR funds can continue to be staked,
-    ///   i.e., it is legal to invoke [run_stake_batch](StakingService::run_stake_batch)
+    ///   i.e., it is legal to invoke [stake](StakingService::stake)
+    /// - because unstaked NEAR funds are locked for 4 epochs, depending on unstake workflows that are
+    ///   in progress, it may take a user 4-8 epochs to get access to their NEAR tokens for the STAKE
+    ///   tokens they have redeemed. For example, user-1 unstakes at epoch 100, which means the next
+    ///   unstaking is not eligible until epoch 104. If user-2 redeems STAKE in epoch 100, but after
+    ///   the unstake workflow was run, then user-2 will need to wait until epoch 104 to run the unstake
+    ///   workflow.
     ///
     /// ## Panics
     /// - if staking is in progress
     /// - if the redeem stake batch is already in progress
     /// - if pending withdrawal and unstaked funds are not available for withdrawal
-    fn run_redeem_stake_batch(&mut self) -> Promise;
+    ///
+    /// ## FAQ
+    /// ### Why are the unstaked NEAR funds locked for 2 days?
+    /// Because that is how the current [staking pools](https://github.com/near/core-contracts/tree/master/staking-pool)
+    /// are designed to work.
+    ///
+    /// For example, 50 NEAR are unstaked at epoch 100, which means the 50 NEAR is available
+    /// for withdrawal at epoch 104. However, if a user submits a transaction to unstake another 50
+    /// NEAR at epoch 103, then the entire 100 unstaked NEAR will be available to be withdrawn at
+    /// epoch 107. In this example, in order to be able to withdraw the 50 NEAR at epoch 104, the 2nd
+    /// unstaking request must be submitted after the NEAR is withdrawn.
+    fn unstake(&mut self) -> Promise;
+
+    /// combines the [redeem](StakingService::redeem) and [unstake](StakingService::unstake) calls
+    fn redeem_and_unstake(&mut self, amount: YoctoStake) -> PromiseOrValue<BatchId>;
+
+    /// combines the [redeem_all](StakingService::redeem) and [unstake](StakingService::unstake) calls
+    fn redeem_all_and_unstake(&mut self) -> PromiseOrValue<BatchId>;
 
     /// Returns the batch that is awaiting for funds to be available to be withdrawn.
     ///

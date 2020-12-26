@@ -150,7 +150,7 @@ mod test {
 
         // account deposits into stake batch
         contract.deposit();
-        contract.run_stake_batch();
+        contract.stake();
 
         // callback can only be invoked from itself
         context.predecessor_account_id = context.current_account_id.clone();
@@ -246,7 +246,7 @@ mod test {
         context.attached_deposit = 100 * YOCTO;
         testing_env!(context.clone());
         contract.deposit();
-        contract.run_stake_batch();
+        contract.stake();
 
         assert!(contract.run_stake_batch_locked);
 

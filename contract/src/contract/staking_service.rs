@@ -1,19 +1,12 @@
 //required in order for near_bindgen macro to work outside of lib.rs
-use crate::errors::illegal_state::{
-    REDEEM_STAKE_BATCH_RECEIPT_SHOULD_EXIST, REDEEM_STAKE_BATCH_SHOULD_EXIST,
-};
-use crate::errors::staking_errors::NO_FUNDS_IN_STAKE_BATCH_TO_WITHDRAW;
-use crate::errors::staking_service::BATCH_RUN_ALREADY_IN_PROGRESS;
 use crate::*;
 use crate::{
     domain::{self, Account, RedeemLock, RedeemStakeBatch, StakeBatch},
     errors::{
-        redeeming_stake_errors::{
-            NO_REDEEM_STAKE_BATCH_TO_RUN, REDEEM_STAKE_BATCH_BLOCKED_BY_STAKE_BATCH_RUN,
-            UNSTAKED_FUNDS_PENDING_WITHDRAWAL,
-        },
+        illegal_state::{REDEEM_STAKE_BATCH_RECEIPT_SHOULD_EXIST, REDEEM_STAKE_BATCH_SHOULD_EXIST},
+        redeeming_stake_errors::{NO_REDEEM_STAKE_BATCH_TO_RUN, UNSTAKED_FUNDS_PENDING_WITHDRAWAL},
         staking_errors::{
-            BLOCKED_BY_STAKE_BATCH_RUNNING, BLOCKED_BY_UNSTAKING, NO_STAKE_BATCH_TO_RUN,
+            BLOCKED_BY_BATCH_RUNNING, NO_FUNDS_IN_STAKE_BATCH_TO_WITHDRAW, NO_STAKE_BATCH_TO_RUN,
         },
         staking_service::{
             DEPOSIT_REQUIRED_FOR_STAKE, INSUFFICIENT_STAKE_FOR_REDEEM_REQUEST, ZERO_REDEEM_AMOUNT,
@@ -25,7 +18,7 @@ use crate::{
 use near_sdk::{
     env, ext_contract, near_bindgen,
     serde::{Deserialize, Serialize},
-    AccountId, Promise,
+    AccountId, Promise, PromiseOrValue,
 };
 
 #[near_bindgen]
@@ -60,6 +53,37 @@ impl StakingService for StakeTokenContract {
         batch_id
     }
 
+    /// runs the stake batch
+    ///
+    /// logical workflow:
+    /// 1. lock the contract
+    /// 2. get account stake balance
+    /// 3. deposit and stake NEAR funds
+    /// 4. create stake batch receipt
+    /// 5. update STAKE token supply
+    /// 6. unlock contract
+    fn stake(&mut self) -> Promise {
+        assert!(self.can_run_batch(), BLOCKED_BY_BATCH_RUNNING);
+        assert!(self.stake_batch.is_some(), NO_STAKE_BATCH_TO_RUN);
+
+        self.run_stake_batch_locked = true;
+
+        self.get_account_staked_balance_from_staking_pool()
+            .then(self.invoke_on_run_stake_batch())
+            .then(self.invoke_release_run_stake_batch_lock())
+    }
+
+    #[payable]
+    fn deposit_and_stake(&mut self) -> PromiseOrValue<BatchId> {
+        let batch_id = self.deposit();
+
+        if self.can_run_batch() {
+            PromiseOrValue::Promise(self.stake())
+        } else {
+            PromiseOrValue::Value(batch_id)
+        }
+    }
+
     fn withdraw_funds_from_stake_batch(&mut self, amount: YoctoNear) {
         let (mut account, account_id_hash) =
             self.registered_account(&env::predecessor_account_id());
@@ -92,8 +116,7 @@ impl StakingService for StakeTokenContract {
         }
 
         if let Some(mut batch) = account.stake_batch {
-            assert!(!self.run_stake_batch_locked, BLOCKED_BY_STAKE_BATCH_RUNNING);
-            assert!(!self.is_unstaking(), BLOCKED_BY_UNSTAKING);
+            assert!(self.can_run_batch(), BLOCKED_BY_BATCH_RUNNING);
 
             let amount = amount.into();
 
@@ -148,8 +171,7 @@ impl StakingService for StakeTokenContract {
         }
 
         if let Some(batch) = account.stake_batch {
-            assert!(!self.run_stake_batch_locked, BLOCKED_BY_STAKE_BATCH_RUNNING);
-            assert!(!self.is_unstaking(), BLOCKED_BY_UNSTAKING);
+            assert!(self.can_run_batch(), BLOCKED_BY_BATCH_RUNNING);
 
             let amount = batch.balance().amount();
 
@@ -172,25 +194,6 @@ impl StakingService for StakeTokenContract {
         }
 
         panic!(NO_FUNDS_IN_STAKE_BATCH_TO_WITHDRAW);
-    }
-
-    /// logical workflow:
-    /// 1. lock the contract
-    /// 2. get account stake balance
-    /// 3. deposit and stake NEAR funds
-    /// 4. create stake batch receipt
-    /// 5. update STAKE token supply
-    /// 6. unlock contract
-    fn run_stake_batch(&mut self) -> Promise {
-        assert!(!self.run_stake_batch_locked, BLOCKED_BY_STAKE_BATCH_RUNNING);
-        assert!(!self.is_unstaking(), BLOCKED_BY_UNSTAKING);
-        assert!(self.stake_batch.is_some(), NO_STAKE_BATCH_TO_RUN);
-
-        self.run_stake_batch_locked = true;
-
-        self.get_account_staked_balance_from_staking_pool()
-            .then(self.invoke_on_run_stake_batch())
-            .then(self.invoke_release_run_stake_batch_lock())
     }
 
     fn redeem(&mut self, amount: YoctoStake) -> BatchId {
@@ -267,14 +270,10 @@ impl StakingService for StakeTokenContract {
         }
     }
 
-    fn run_redeem_stake_batch(&mut self) -> Promise {
-        assert!(
-            !self.run_stake_batch_locked,
-            REDEEM_STAKE_BATCH_BLOCKED_BY_STAKE_BATCH_RUN
-        );
+    fn unstake(&mut self) -> Promise {
+        assert!(self.can_run_batch(), BLOCKED_BY_BATCH_RUNNING);
 
         match self.run_redeem_stake_batch_lock {
-            Some(RedeemLock::Unstaking) => panic!(BATCH_RUN_ALREADY_IN_PROGRESS),
             None => {
                 assert!(
                     self.redeem_stake_batch.is_some(),
@@ -302,6 +301,29 @@ impl StakingService for StakeTokenContract {
                 self.get_account_from_staking_pool()
                     .then(self.invoke_on_redeeming_stake_pending_withdrawal())
             }
+            // this should already be handled by above assert and should never be hit
+            // but it was added to satisfy the match clause for completeness
+            Some(RedeemLock::Unstaking) => panic!(BLOCKED_BY_BATCH_RUNNING),
+        }
+    }
+
+    fn redeem_and_unstake(&mut self, amount: YoctoStake) -> PromiseOrValue<BatchId> {
+        let batch_id = self.redeem(amount);
+
+        if self.can_run_batch() {
+            PromiseOrValue::Promise(self.unstake())
+        } else {
+            PromiseOrValue::Value(batch_id)
+        }
+    }
+
+    fn redeem_all_and_unstake(&mut self) -> PromiseOrValue<BatchId> {
+        let batch_id = self.redeem_all();
+
+        if self.can_run_batch() {
+            PromiseOrValue::Promise(self.unstake())
+        } else {
+            PromiseOrValue::Value(batch_id)
         }
     }
 
@@ -346,6 +368,10 @@ impl StakeTokenContract {
 }
 
 impl StakeTokenContract {
+    fn can_run_batch(&self) -> bool {
+        !self.run_stake_batch_locked && !self.is_unstaking()
+    }
+
     /// batches the NEAR to stake at the contract level and account level
     ///
     /// ## Panics
@@ -1257,7 +1283,7 @@ mod test {
     /// Then the call fails
     #[test]
     #[should_panic(expected = "there is no stake batch to run")]
-    fn run_stake_batch_no_stake_batch() {
+    fn stake_no_stake_batch() {
         let account_id = "alfio-zappala.near";
         let context = new_context(account_id);
         testing_env!(context);
@@ -1265,7 +1291,7 @@ mod test {
         let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(None, contract_settings);
 
-        contract.run_stake_batch();
+        contract.stake();
     }
 
     /// Given the contract has a stake batch
@@ -1274,8 +1300,8 @@ mod test {
     /// When the stake batch is run again while the contract is locked
     /// Then the func call panics
     #[test]
-    #[should_panic(expected = "request is blocked by a running staking batch")]
-    fn run_stake_batch_contract_when_stake_batch_in_progress() {
+    #[should_panic(expected = "action is blocked because a batch is running")]
+    fn stake_contract_when_stake_batch_in_progress() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
         context.attached_deposit = YOCTO;
@@ -1292,20 +1318,20 @@ mod test {
 
         context.attached_deposit = 0;
         testing_env!(context.clone());
-        contract.run_stake_batch();
+        contract.stake();
         assert!(contract.run_stake_batch_locked);
 
         testing_env!(context.clone());
         // should panic because contract is locked
-        contract.run_stake_batch();
+        contract.stake();
     }
 
     /// Given the contract is running the redeem stake batch
     /// When the stake batch is run
     /// Then the func call panics
     #[test]
-    #[should_panic(expected = "request is blocked while unstaking is in progress")]
-    fn run_stake_batch_contract_when_redeem_stake_batch_in_progress_unstaking() {
+    #[should_panic(expected = "action is blocked because a batch is running")]
+    fn stake_contract_when_redeem_stake_batch_in_progress_unstaking() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
         context.attached_deposit = YOCTO;
@@ -1318,13 +1344,13 @@ mod test {
         contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
 
         contract.register_account();
-        contract.run_stake_batch();
+        contract.stake();
     }
 
     /// Given the contract is redeem status is pending withdrawal
     /// Then it is allowed to run stake batches
     #[test]
-    fn run_stake_batch_contract_when_redeem_status_pending_withdrawal() {
+    fn stake_contract_when_redeem_status_pending_withdrawal() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
         context.attached_deposit = YOCTO;
@@ -1342,7 +1368,7 @@ mod test {
         contract.deposit();
 
         contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
-        contract.run_stake_batch();
+        contract.stake();
     }
 
     /// Given the contract has just been deployed
@@ -1380,7 +1406,7 @@ mod test {
     ///   2. and then to callback into this contract - on_run_stake_batch
     ///   3. and finally a callback into this contract to unlock the contract
     #[test]
-    fn run_stake_batch_success() {
+    fn stake_success() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
         context.attached_deposit = YOCTO;
@@ -1397,7 +1423,7 @@ mod test {
 
         context.prepaid_gas = 10u64.pow(18);
         testing_env!(context.clone());
-        contract.run_stake_batch();
+        contract.stake();
         assert!(contract.run_stake_batch_locked);
         println!(
             "prepaid gas: {}, used_gas: {}, unused_gas: {}",
@@ -1477,7 +1503,7 @@ mod test {
     /// And the total STAKE supply is updated
     /// And if there are funds in the next stake batch, then move it into the current batch
     #[test]
-    fn run_stake_batch_workflow_success() {
+    fn stake_workflow_success() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
         context.attached_deposit = YOCTO;
@@ -1499,7 +1525,7 @@ mod test {
                 testing_env!(context.clone());
                 // capture the batch ID to lookup the batch receipt after the workflow is done
                 let batch_id = contract.stake_batch.unwrap().id();
-                contract.run_stake_batch();
+                contract.stake();
                 assert!(contract.run_stake_batch_locked);
                 {
                     context.predecessor_account_id = context.current_account_id.clone();
@@ -1851,7 +1877,7 @@ mod test {
     ///   - func call to get account from staking pool
     ///   - func call for callback to clear the release lock if the state is `Unstaking`
     #[test]
-    fn run_redeem_batch_no_locks() {
+    fn unstake_no_locks() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
         context.attached_deposit = YOCTO;
@@ -1867,7 +1893,7 @@ mod test {
             (10 * YOCTO).into(),
         ));
 
-        contract.run_redeem_stake_batch();
+        contract.unstake();
         assert_eq!(
             contract.run_redeem_stake_batch_lock,
             Some(RedeemLock::Unstaking)
@@ -1929,8 +1955,8 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "RedeemStakeBatch is blocked by StakeBatch run")]
-    fn run_redeem_stake_batch_locked_for_staking() {
+    #[should_panic(expected = "action is blocked because a batch is running")]
+    fn unstake_locked_for_staking() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
         context.attached_deposit = YOCTO;
@@ -1941,12 +1967,12 @@ mod test {
         let mut contract = StakeTokenContract::new(None, contract_settings.clone());
 
         contract.run_stake_batch_locked = true;
-        contract.run_redeem_stake_batch();
+        contract.unstake();
     }
 
     #[test]
-    #[should_panic(expected = "batch run is already in progress")]
-    fn run_redeem_stake_batch_locked_for_unstaking() {
+    #[should_panic(expected = "action is blocked because a batch is running")]
+    fn unstake_locked_for_unstaking() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
         context.attached_deposit = YOCTO;
@@ -1957,12 +1983,12 @@ mod test {
         let mut contract = StakeTokenContract::new(None, contract_settings.clone());
 
         contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
-        contract.run_redeem_stake_batch();
+        contract.unstake();
     }
 
     #[test]
     #[should_panic(expected = "there is no redeem stake batch")]
-    fn run_redeem_stake_batch_no_batch() {
+    fn unstake_no_batch() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
         context.attached_deposit = YOCTO;
@@ -1972,7 +1998,7 @@ mod test {
         let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(None, contract_settings.clone());
 
-        contract.run_redeem_stake_batch();
+        contract.unstake();
     }
 
     /// Given the contract is unlocked and has no batch runs in progress
@@ -1982,7 +2008,7 @@ mod test {
     ///   - func call to get account from staking pool
     ///   - func call for callback to clear the release lock if the state is `Unstaking`
     #[test]
-    fn run_redeem_batch_pending_withdrawal() {
+    fn unstake_pending_withdrawal() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
         context.attached_deposit = YOCTO;
@@ -2004,7 +2030,7 @@ mod test {
         contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
         context.epoch_height += UNSTAKED_NEAR_FUNDS_NUM_EPOCHS_TO_UNLOCK.value();
         testing_env!(context.clone());
-        contract.run_redeem_stake_batch();
+        contract.unstake();
         assert_eq!(
             contract.run_redeem_stake_batch_lock,
             Some(RedeemLock::PendingWithdrawal)
@@ -2059,7 +2085,7 @@ mod test {
 
     #[test]
     #[should_panic(expected = "ILLEGAL STATE : redeem stake batch should exist")]
-    fn run_redeem_batch_pending_withdrawal_with_batch_not_exists() {
+    fn unstake_pending_withdrawal_with_batch_not_exists() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
         context.attached_deposit = YOCTO;
@@ -2070,12 +2096,12 @@ mod test {
         let mut contract = StakeTokenContract::new(None, contract_settings.clone());
 
         contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
-        contract.run_redeem_stake_batch();
+        contract.unstake();
     }
 
     #[test]
     #[should_panic(expected = "ILLEGAL STATE : redeem stake batch receipt should exist")]
-    fn run_redeem_batch_pending_withdrawal_with_batch_receipt_not_exists() {
+    fn unstake_pending_withdrawal_with_batch_receipt_not_exists() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
         context.attached_deposit = YOCTO;
@@ -2091,12 +2117,12 @@ mod test {
             (10 * YOCTO).into(),
         ));
         contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
-        contract.run_redeem_stake_batch();
+        contract.unstake();
     }
 
     #[test]
     #[should_panic(expected = "unstaked funds are not yet available for withdrawal")]
-    fn run_redeem_batch_pending_withdrawal_cannot_withdraw() {
+    fn unstake_pending_withdrawal_cannot_withdraw() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
         context.attached_deposit = YOCTO;
@@ -2116,7 +2142,7 @@ mod test {
             &domain::RedeemStakeBatchReceipt::new((10 * YOCTO).into(), contract.stake_token_value),
         );
         contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
-        contract.run_redeem_stake_batch();
+        contract.unstake();
     }
 
     /// Given an account has redeemed STAKE
@@ -2578,7 +2604,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "request is blocked by a running staking batch")]
+    #[should_panic(expected = "action is blocked because a batch is running")]
     fn withdraw_funds_from_stake_batch_while_stake_batch_run_locked_and_stake_batch() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
@@ -2601,7 +2627,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "request is blocked while unstaking is in progress")]
+    #[should_panic(expected = "action is blocked because a batch is running")]
     fn withdraw_funds_from_stake_batch_while_unstaking_and_stake_batch() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
@@ -2725,7 +2751,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "request is blocked by a running staking batch")]
+    #[should_panic(expected = "action is blocked because a batch is running")]
     fn withdraw_all_funds_from_stake_batch_while_stake_batch_run_locked_and_stake_batch() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
@@ -2748,7 +2774,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "request is blocked while unstaking is in progress")]
+    #[should_panic(expected = "action is blocked because a batch is running")]
     fn withdraw_all_funds_from_stake_batch_while_unstaking_and_stake_batch() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
