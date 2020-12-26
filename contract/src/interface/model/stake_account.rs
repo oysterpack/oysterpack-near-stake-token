@@ -1,4 +1,3 @@
-use crate::domain::Account;
 use crate::interface::{
     RedeemStakeBatch, StakeBatch, TimestampedNearBalance, TimestampedStakeBalance,
 };
@@ -29,18 +28,4 @@ pub struct StakeAccount {
     /// While batches are running, the contract is locked. The account can still set submit requests
     /// to redeem STAKE tokens into the next batch while the contract is locked.
     pub next_redeem_stake_batch: Option<RedeemStakeBatch>,
-}
-
-impl From<Account> for StakeAccount {
-    fn from(account: Account) -> Self {
-        Self {
-            storage_escrow: account.storage_escrow.into(),
-            near: account.near.map(Into::into),
-            stake: account.stake.map(Into::into),
-            stake_batch: account.stake_batch.map(Into::into),
-            next_stake_batch: account.next_stake_batch.map(Into::into),
-            redeem_stake_batch: account.redeem_stake_batch.map(Into::into),
-            next_redeem_stake_batch: account.next_redeem_stake_batch.map(Into::into),
-        }
-    }
 }

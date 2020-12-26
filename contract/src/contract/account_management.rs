@@ -7,7 +7,7 @@ use crate::{
     errors::account_management::{
         ACCOUNT_ALREADY_REGISTERED, INSUFFICIENT_STORAGE_FEE, UNREGISTER_REQUIRES_ZERO_BALANCES,
     },
-    interface::{self, AccountManagement, StakeAccount},
+    interface::{self, AccountManagement, StakeAccount, StakingService},
 };
 use near_sdk::{
     env,
@@ -80,7 +80,26 @@ impl AccountManagement for StakeTokenContract {
     fn lookup_account(&self, account_id: ValidAccountId) -> Option<StakeAccount> {
         self.accounts
             .get(&Hash::from(account_id))
-            .map(|account| self.apply_receipt_funds_for_view(&account).into())
+            .map(|account| self.apply_receipt_funds_for_view(&account))
+            .map(|account| StakeAccount {
+                storage_escrow: account.storage_escrow.into(),
+                near: account.near.map(Into::into),
+                stake: account.stake.map(Into::into),
+                stake_batch: account.stake_batch.map(Into::into),
+                next_stake_batch: account.next_stake_batch.map(Into::into),
+                redeem_stake_batch: account.redeem_stake_batch.map(|batch| {
+                    interface::RedeemStakeBatch::from(
+                        batch,
+                        self.redeem_stake_batch_receipt(batch.id().into()),
+                    )
+                }),
+                next_redeem_stake_batch: account.next_redeem_stake_batch.map(|batch| {
+                    interface::RedeemStakeBatch::from(
+                        batch,
+                        self.redeem_stake_batch_receipt(batch.id().into()),
+                    )
+                }),
+            })
     }
 
     fn withdraw(&mut self, amount: interface::YoctoNear) {
@@ -231,6 +250,61 @@ mod test {
         assert!(account.redeem_stake_batch.is_none());
         assert_eq!(account.stake.unwrap().amount, (10 * YOCTO).into());
         assert_eq!(account.near.unwrap().amount, (2 * YOCTO).into());
+    }
+
+    #[test]
+    fn lookup_account_with_unclaimed_receipts_pending_withdrawal() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.is_view = false;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(None, contract_settings);
+        contract.register_account();
+
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+
+        let batch = contract.stake_batch.unwrap();
+        // create a stake batch receipt for the stake batch
+        let receipt =
+            domain::StakeBatchReceipt::new(batch.balance().amount(), contract.stake_token_value);
+        contract.stake_batch_receipts.insert(&batch.id(), &receipt);
+        contract.stake_batch = None;
+
+        // create a redeem stake batch receipt for 2 yoctoSTAKE
+        *contract.batch_id_sequence += 1;
+        let redeem_stake_batch =
+            domain::RedeemStakeBatch::new(contract.batch_id_sequence, (2 * YOCTO).into());
+        contract.redeem_stake_batch = Some(redeem_stake_batch);
+        contract.redeem_stake_batch_receipts.insert(
+            &contract.batch_id_sequence,
+            &domain::RedeemStakeBatchReceipt::new(
+                redeem_stake_batch.balance().amount(),
+                contract.stake_token_value,
+            ),
+        );
+        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+        let (mut account, account_id_hash) = contract.registered_account(account_id);
+        account.redeem_stake_batch = Some(redeem_stake_batch);
+        contract.save_account(&account_id_hash, &account);
+
+        context.is_view = true;
+        testing_env!(context.clone());
+        let account = contract
+            .lookup_account(account_id.try_into().unwrap())
+            .unwrap();
+        assert!(account.stake_batch.is_none());
+        assert_eq!(account.stake.unwrap().amount, (10 * YOCTO).into());
+        assert!(account.near.is_none());
+        account
+            .redeem_stake_batch
+            .unwrap()
+            .receipt
+            .expect("receipt should be present");
     }
 
     #[test]

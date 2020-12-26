@@ -97,8 +97,8 @@ impl Default for StakingPoolGasConfig {
             get_account: TGAS * 5,
 
             deposit_and_stake: TGAS * 50,
-            unstake: BASE_GAS * 3,
-            withdraw: BASE_GAS * 3,
+            unstake: TGAS * 50,
+            withdraw: TGAS * 50,
         }
     }
 }
@@ -109,11 +109,13 @@ impl StakingPoolGasConfig {
     }
 
     pub fn unstake(&self) -> Gas {
-        self.unstake
+        TGAS * 50
+        // self.unstake
     }
 
     pub fn withdraw(&self) -> Gas {
-        self.withdraw
+        TGAS * 50
+        // self.withdraw
     }
 
     pub fn get_account_balance(&self) -> Gas {
@@ -156,19 +158,23 @@ impl CallBacksGasConfig {
     }
 
     pub fn on_redeeming_stake_pending_withdrawal(&self) -> Gas {
-        self.on_redeeming_stake_pending_withdrawal
+        TGAS * 85
+        // self.on_redeeming_stake_pending_withdrawal
     }
 
     pub fn on_redeeming_stake_post_withdrawal(&self) -> Gas {
-        self.on_redeeming_stake_post_withdrawal
-    }
-
-    pub fn on_unstake(&self) -> Gas {
-        self.on_unstake
+        TGAS * 5
+        // self.on_redeeming_stake_post_withdrawal
     }
 
     pub fn on_run_redeem_stake_batch(&self) -> Gas {
-        self.on_run_redeem_stake_batch
+        TGAS * 85
+        // self.on_run_redeem_stake_batch
+    }
+
+    pub fn on_unstake(&self) -> Gas {
+        TGAS * 5
+        // self.on_unstake
     }
 
     pub fn finalize_ownership_transfer(&self) -> Gas {
@@ -183,10 +189,11 @@ impl Default for CallBacksGasConfig {
             on_deposit_and_stake: TGAS * 5,
             unlock: TGAS * 5,
 
-            on_run_redeem_stake_batch: BASE_GAS * 5,
-            on_unstake: BASE_GAS,
-            on_redeeming_stake_pending_withdrawal: BASE_GAS * 5,
-            on_redeeming_stake_post_withdrawal: BASE_GAS,
+            on_run_redeem_stake_batch: TGAS * 85,
+            on_unstake: TGAS * 5,
+
+            on_redeeming_stake_pending_withdrawal: TGAS * 85,
+            on_redeeming_stake_post_withdrawal: TGAS * 5,
 
             finalize_ownership_transfer: TGAS * 10,
         }

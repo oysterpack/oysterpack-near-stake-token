@@ -21,12 +21,18 @@ impl Operator for StakeTokenContract {
             batch_id_sequence: self.batch_id_sequence.into(),
             stake_batch: self.stake_batch.map(interface::StakeBatch::from),
             next_stake_batch: self.next_stake_batch.map(interface::StakeBatch::from),
-            redeem_stake_batch: self
-                .redeem_stake_batch
-                .map(interface::RedeemStakeBatch::from),
-            next_redeem_stake_batch: self
-                .next_redeem_stake_batch
-                .map(interface::RedeemStakeBatch::from),
+            redeem_stake_batch: self.redeem_stake_batch.map(|batch| {
+                interface::RedeemStakeBatch::from(
+                    batch,
+                    self.redeem_stake_batch_receipt(batch.id().into()),
+                )
+            }),
+            next_redeem_stake_batch: self.next_redeem_stake_batch.map(|batch| {
+                interface::RedeemStakeBatch::from(
+                    batch,
+                    self.redeem_stake_batch_receipt(batch.id().into()),
+                )
+            }),
             pending_withdrawal: self
                 .pending_withdrawal()
                 .map(interface::RedeemStakeBatchReceipt::from),

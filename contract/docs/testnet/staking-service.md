@@ -14,7 +14,7 @@ near view stake.oysterpack.testnet redeem_stake_batch_receipt --args '{"batch_id
 near call stake.oysterpack.testnet deposit --accountId alfio-zappala-oysterpack.testnet --amount 1
 near call stake.oysterpack.testnet deposit --accountId 1.alfio-zappala-oysterpack.testnet --amount 2
 
-near call stake.oysterpack.testnet stake --accountId alfio-zappala-oysterpack.testnet --gas 300000000000000
+near call stake.oysterpack.testnet stake --accountId alfio-zappala-oysterpack.testnet --gas 150000000000000
 
 near call stake.oysterpack.testnet deposit_and_stake --accountId alfio-zappala-oysterpack.testnet --amount 1 --gas 150000000000000
 
@@ -23,9 +23,13 @@ near call stake.oysterpack.testnet redeem --accountId 1.alfio-zappala-oysterpack
 
 near call stake.oysterpack.testnet redeem_all --accountId 1.alfio-zappala-oysterpack.testnet
 
-near call stake.oysterpack.testnet unstake --accountId alfio-zappala-oysterpack.testnet --gas 300000000000000
+near call stake.oysterpack.testnet unstake --accountId alfio-zappala-oysterpack.testnet --gas 150000000000000
 
-near call stake.oysterpack.testnet redeem_all_and_unstake --accountId alfio-zappala-oysterpack.testnet --gas 300000000000000
+near call stake.oysterpack.testnet redeem_and_unstake --accountId alfio-zappala-oysterpack.testnet --args '{"amount":"500000000000000000000000"}' --gas 150000000000000
+near call stake.oysterpack.testnet redeem_all_and_unstake --accountId alfio-zappala-oysterpack.testnet --gas 150000000000000
+
+near call stake.oysterpack.testnet cancel_uncommitted_redeem_stake_batch --accountId alfio-zappala-oysterpack.testnet
+
 ```
 
 ## Staking Pool
@@ -65,3 +69,11 @@ near call $STAKING_POOL withdraw_all --accountId stake.oysterpack.testnet --gas 
     210 277 125 000
   3 591 923 837 853
 110 000 000 000 000
+
+  2 427 974 662 416
+  4 307 213 416 125 'C5ZcCt4ytQ6u5BNVC4G7HkFSiFfdd5J89mkK2axuyQwC',
+ 18 335 095 321 900 'B9cSUpFonwGyPKqQtZSegmPBXtsz7JrL2mpos6pFJezk',
+ 18 678 677 812 567
+    210 277 125 000
+  '9AwVWP78wwD1JUewJuxTphbTLKmewHkvKB1xnYCvpWNY',
+  'Bh2aqj9tGn8uAwHH3QMrhimiepPRPhJzcGCh9ki4mRkt',
