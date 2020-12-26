@@ -1,3 +1,5 @@
+//! centralizes all error messages
+
 pub mod asserts {
     pub const PREDECESSOR_MUST_BE_SELF: &str = "contract call is only allowed internally";
     pub const PREDECESSOR_MUST_NE_SELF_OR_OPERATOR: &str =

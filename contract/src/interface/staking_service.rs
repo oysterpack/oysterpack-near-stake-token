@@ -3,7 +3,7 @@ use crate::interface::{
 };
 use near_sdk::{AccountId, Promise};
 
-/// Integrates with the staking pool contract and manages STAKE token assets. The main actions use
+/// Integrates with the staking pool contract and manages STAKE token assets. The main use
 /// cases supported by this interface are:
 /// 1. Users can [deposit](StakingService::deposit) NEAR funds to stake.
 /// 2. Users can withdraw NEAR funds from [StakeBatch](crate::interface::StakeBatch) that has not yet run.
@@ -31,13 +31,16 @@ use near_sdk::{AccountId, Promise};
 /// ## How Redeeming STAKE Works
 /// Users submit requests to [redeem](StakingService::redeem) STAKE tokens, which are collected into
 /// a [RedeemStakeBatch](crate::interface::RedeemStakeBatch). The batch workflow is run via
-/// [run_redeem_stake_batch()](StakingService::run_redeem_stake_batch). THe batch will be scheduled to
-/// run on a periodic basis - it should be scheduled to run at least once per epoc (every 12 hours).
-/// An off-chain process will be required to schedule the batch to run. Redeeming STAKE tokens requires
-/// NEAR to be unstaked and withdrawn from the staking pool. When NEAR is unstaked, the unstaked NEAR
-/// funds are not available for withdrawal until 4 epochs later (~2 days). While waiting for the unstaked
-/// NEAR funds to be released and withdrawn, [run_redeem_stake_batch()](StakingService::run_redeem_stake_batch)
-/// requests will fail. When a [RedeemStakeBatch](crate::interface::RedeemStakeBatch) is run, the STAKE
+/// [run_redeem_stake_batch()](StakingService::run_redeem_stake_batch). The batch will be scheduled to
+/// run on a periodic basis - it should be scheduled to run at least once per epoch (every 12 hours).
+/// An off-chain process will be required to schedule the batch to run, but anyone can manually run
+/// the batch.
+///
+/// Redeeming STAKE tokens requires NEAR to be unstaked and withdrawn from the staking pool.
+/// When NEAR is unstaked, the unstaked NEAR funds are not available for withdrawal until 4 epochs
+/// later (~2 days). While waiting for the unstaked NEAR funds to be released and withdrawn,
+/// [run_redeem_stake_batch()](StakingService::run_redeem_stake_batch) requests will fail.
+/// When a [RedeemStakeBatch](crate::interface::RedeemStakeBatch) is run, the STAKE
 /// token value is computed at that point in time, which is used to compute the corresponding amount
 /// of NEAR tokens to unstake from the staking pool. This information is recorded in a
 /// [RedeemStakeBatchReceipt](crate::interface::RedeemStakeBatchReceipt), which is later used by user
@@ -47,8 +50,7 @@ use near_sdk::{AccountId, Promise};
 /// - Batches are processed serially
 /// - Users can continue to submit requests to [deposit](StakingService::deposit) and [redeem](StakingService::redeem)
 ///   funds and they will be queued into the next batch
-///
-/// ## How
+/// - batch receipts will be deleted from storage once all funds on the receipt are claimed
 pub trait StakingService {
     /// returns the staking pool account ID used for the STAKE token
     /// - this is the staking pool that this contract is linked to

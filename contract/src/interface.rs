@@ -1,3 +1,5 @@
+//! defines the interfaces that the contract exposes externally
+
 mod account_management;
 mod contract_owner;
 mod model;

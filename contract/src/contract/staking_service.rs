@@ -1,4 +1,7 @@
 //required in order for near_bindgen macro to work outside of lib.rs
+use crate::errors::illegal_state::{
+    REDEEM_STAKE_BATCH_RECEIPT_SHOULD_EXIST, REDEEM_STAKE_BATCH_SHOULD_EXIST,
+};
 use crate::errors::staking_errors::NO_FUNDS_IN_STAKE_BATCH_TO_WITHDRAW;
 use crate::errors::staking_service::BATCH_RUN_ALREADY_IN_PROGRESS;
 use crate::*;
@@ -286,11 +289,11 @@ impl StakingService for StakeTokenContract {
             Some(RedeemLock::PendingWithdrawal) => {
                 let batch = self
                     .redeem_stake_batch
-                    .expect("illegal state - batch does not exist");
+                    .expect(REDEEM_STAKE_BATCH_SHOULD_EXIST);
                 let batch_receipt = self
                     .redeem_stake_batch_receipts
                     .get(&batch.id())
-                    .expect("illegal state - batch receipt does not exist");
+                    .expect(REDEEM_STAKE_BATCH_RECEIPT_SHOULD_EXIST);
                 assert!(
                     batch_receipt.unstaked_funds_available_for_withdrawal(),
                     UNSTAKED_FUNDS_PENDING_WITHDRAWAL
@@ -696,7 +699,7 @@ impl StakeTokenContract {
         claimed_funds
     }
 
-    fn is_unstaking(&self) -> bool {
+    pub(crate) fn is_unstaking(&self) -> bool {
         match self.run_redeem_stake_batch_lock {
             Some(RedeemLock::Unstaking) => true,
             _ => false,
@@ -2055,7 +2058,7 @@ mod test {
     // .expect("illegal state - batch receipt does not exist");
 
     #[test]
-    #[should_panic(expected = "illegal state - batch does not exist")]
+    #[should_panic(expected = "ILLEGAL STATE : redeem stake batch should exist")]
     fn run_redeem_batch_pending_withdrawal_with_batch_not_exists() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
@@ -2071,7 +2074,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "illegal state - batch receipt does not exist")]
+    #[should_panic(expected = "ILLEGAL STATE : redeem stake batch receipt should exist")]
     fn run_redeem_batch_pending_withdrawal_with_batch_receipt_not_exists() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);

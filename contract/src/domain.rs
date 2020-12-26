@@ -1,3 +1,8 @@
+//! defines the internal domain model used to implement the business logic
+//!
+//! NOTE: the domain model is separate from the interface model. That being said, the interface model
+//! closely mirrors the domain model.
+
 mod account;
 mod batch_id;
 mod block_height;

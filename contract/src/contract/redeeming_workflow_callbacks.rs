@@ -1,6 +1,5 @@
 //required in order for near_bindgen macro to work outside of lib.rs
-use crate::errors::staking_pool_failures::WITHDRAW_ALL_FAILURE;
-use crate::interface::Operator;
+use crate::errors::illegal_state::STAKE_BATCH_SHOULD_EXIST;
 use crate::*;
 use crate::{
     domain::{self, RedeemLock},
@@ -10,10 +9,13 @@ use crate::{
             REDEEM_STAKE_BATCH_SHOULD_EXIST,
         },
         redeeming_stake_errors::UNSTAKED_FUNDS_NOT_AVAILABLE_FOR_WITHDRAWAL,
-        staking_pool_failures::{GET_ACCOUNT_FAILURE, GET_STAKED_BALANCE_FAILURE, UNSTAKE_FAILURE},
+        staking_pool_failures::{
+            GET_ACCOUNT_FAILURE, GET_STAKED_BALANCE_FAILURE, UNSTAKE_FAILURE, WITHDRAW_ALL_FAILURE,
+        },
     },
     ext_redeeming_workflow_callbacks, ext_staking_pool,
     interface::BatchId,
+    interface::Operator,
     near::{assert_predecessor_is_self, NO_DEPOSIT},
 };
 use near_sdk::{env, near_bindgen, Promise, PromiseOrValue};
@@ -25,12 +27,9 @@ impl StakeTokenContract {
         #[callback] staked_balance: near_sdk::json_types::U128,
     ) -> Promise {
         assert_predecessor_is_self();
-        assert_eq!(
-            self.run_redeem_stake_batch_lock,
-            Some(RedeemLock::Unstaking),
-            "{}",
-            ILLEGAL_REDEEM_LOCK_STATE,
-        );
+        // this callback should only be invoked when we are unstaking, i.e., when the RedeemStakeBatch
+        // is kicked off
+        assert!(self.is_unstaking(), ILLEGAL_REDEEM_LOCK_STATE);
 
         // the batch should always be present because the purpose of this callback is a step
         // in the batch processing workflow
@@ -42,28 +41,17 @@ impl StakeTokenContract {
         assert!(self.promise_result_succeeded(), GET_STAKED_BALANCE_FAILURE);
 
         // update the cached STAKE token value
-        let staked_balance = staked_balance.into();
-        self.stake_token_value = self.stake_token_value(staked_balance);
+        self.stake_token_value = self.stake_token_value(staked_balance.into());
 
         let unstake_amount = self
             .stake_token_value
             .stake_to_near(batch.balance().amount());
-
-        env::log(
-            format!(
-                "redeeming {} STAKE for {} NEAR",
-                batch.balance().amount(),
-                unstake_amount
-            )
-            .as_bytes(),
-        );
 
         self.unstake(unstake_amount).then(self.invoke_on_unstake())
     }
 
     pub fn on_unstake(&mut self) {
         assert_predecessor_is_self();
-
         assert!(self.promise_result_succeeded(), UNSTAKE_FAILURE);
 
         self.create_redeem_stake_batch_receipt();
@@ -75,10 +63,14 @@ impl StakeTokenContract {
         #[callback] staking_pool_account: StakingPoolAccount,
     ) -> PromiseOrValue<BatchId> {
         assert_predecessor_is_self();
-
         assert!(self.promise_result_succeeded(), GET_ACCOUNT_FAILURE);
 
         let unstaked_balance = staking_pool_account.unstaked_balance.0;
+        // if unstaked balance is zero, then it means the unstaked NEAR funds were withdrawn, but the
+        // workflow failed downstream, e.g., if not enough gas was supplied.
+        //
+        // When [run_redeem_stake_batch](crate::interface::StakingService::run_redeem_stake_batch] is
+        // retried, then it can skip the fund withdrawal step
         if unstaked_balance > 0 {
             assert!(
                 staking_pool_account.can_withdraw,
@@ -104,11 +96,12 @@ impl StakeTokenContract {
         let batch = self
             .redeem_stake_batch
             .expect(REDEEM_STAKE_BATCH_SHOULD_EXIST);
-
         let receipt = self
             .redeem_stake_batch_receipts
             .get(&batch.id())
             .expect(REDEEM_STAKE_BATCH_RECEIPT_SHOULD_EXIST);
+
+        // update the total NEAR balance that is available for withdrawal
         self.total_near.credit(receipt.stake_near_value());
 
         self.run_redeem_stake_batch_lock = None;
@@ -129,18 +122,13 @@ impl StakeTokenContract {
     }
 
     fn create_redeem_stake_batch_receipt(&mut self) {
-        let batch = self
-            .redeem_stake_batch
-            .expect("illegal state - batch should exist");
-
-        // create batch receipt
-        let batch_receipt =
-            domain::RedeemStakeBatchReceipt::new(batch.balance().amount(), self.stake_token_value);
+        let batch = self.redeem_stake_batch.expect(STAKE_BATCH_SHOULD_EXIST);
+        let batch_receipt = (batch, self.stake_token_value).into();
         self.redeem_stake_batch_receipts
             .insert(&batch.id(), &batch_receipt);
 
         // update the total STAKE supply
-        self.total_stake.debit(batch.balance().amount());
+        self.total_stake.debit(batch_receipt.redeemed_stake());
     }
 
     /// moves the next batch into the current batch

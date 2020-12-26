@@ -1,7 +1,7 @@
 use crate::interface::{StakeAccount, YoctoNear};
 use near_sdk::json_types::{ValidAccountId, U128};
 
-/// Used to manage user accounts. The main uses supported by this interface are:
+/// Used to manage user accounts. The main use cases supported by this interface are:
 /// 1. Users can register with the contract. Users are required to pay for account storage usage at
 ///    time of registration. Accounts are required to register in order to use the contract.
 /// 2. Users can unregister with the contract. When a user unregisters, the account storage usage fee
