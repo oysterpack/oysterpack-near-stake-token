@@ -69,7 +69,7 @@
 //! STAKE token value in NEAR = `total staked NEAR balance / total STAKE token supply`
 //!
 
-// TODO: remove to cleanup code
+// TODO: comment out when doing a release build
 // #![allow(dead_code, unused_variables)]
 
 pub mod config;

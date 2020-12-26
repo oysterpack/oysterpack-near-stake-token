@@ -1,6 +1,6 @@
 use crate::{
     domain,
-    interface::{EpochHeight, StakeTokenValue, YoctoStake},
+    interface::{StakeTokenValue, YoctoStake},
 };
 use near_sdk::serde::{Deserialize, Serialize};
 
@@ -15,23 +15,6 @@ pub struct RedeemStakeBatchReceipt {
     /// - is used to compute the amount of STAKE tokens to issue to the account based on the amount
     ///   of NEAR that was staked
     pub stake_token_value: StakeTokenValue,
-}
-
-impl RedeemStakeBatchReceipt {
-    /// returns true if the unstaked NEAR should be available for withdrawal based on how much time
-    /// has passed since the NEAR funds were unstaked.
-    /// - current staking pools hold unstaked NEAR funds for 4 epochs before releasing them for withdrawal
-    pub fn unstaked_near_withdrawal_availability(&self) -> EpochHeight {
-        EpochHeight(
-            (self
-                .stake_token_value
-                .block_time_height
-                .epoch_height
-                .value()
-                + 4)
-            .into(),
-        )
-    }
 }
 
 impl From<domain::RedeemStakeBatchReceipt> for RedeemStakeBatchReceipt {
