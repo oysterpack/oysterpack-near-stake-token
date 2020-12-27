@@ -75,5 +75,7 @@ near call $STAKING_POOL withdraw_all --accountId stake.oysterpack.testnet --gas 
  18 335 095 321 900 'B9cSUpFonwGyPKqQtZSegmPBXtsz7JrL2mpos6pFJezk',
  18 678 677 812 567
     210 277 125 000
+     99 607 375 000
+  3 790 483 214 956
   '9AwVWP78wwD1JUewJuxTphbTLKmewHkvKB1xnYCvpWNY',
   'Bh2aqj9tGn8uAwHH3QMrhimiepPRPhJzcGCh9ki4mRkt',

@@ -1,4 +1,7 @@
-use crate::{config, interface::model::contract_state::ContractState};
+use crate::{
+    config,
+    interface::{self, model::contract_state::ContractState},
+};
 use near_sdk::Promise;
 
 /// provides functions to support DevOps
@@ -8,6 +11,18 @@ pub trait Operator {
     fn contract_state(&self) -> ContractState;
 
     fn config(&self) -> config::Config;
+
+    /// resets the config to default settings
+    ///
+    /// ## Panics
+    /// if not invoked by the operator account
+    fn reset_config_default(&mut self) -> config::Config;
+
+    /// merges in config changes
+    ///
+    /// ## Panics
+    /// if not invoked by the operator account
+    fn update_config(&mut self, config: interface::Config) -> config::Config;
 
     /// unlocks the contract
     ///
