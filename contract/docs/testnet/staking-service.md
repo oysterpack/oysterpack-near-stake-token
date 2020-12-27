@@ -53,6 +53,10 @@ near call $STAKING_POOL withdraw_all --accountId stake.oysterpack.testnet --gas 
 # 1000000000000000000000000     = 1 NEAR
 #  500000000000000000000000     = 0.5 NEAR
 
+   500000000000000000000000
+   2504182481837150800772062
+   2497219431892304397903632
+
 # deposit_and_stake transaction (alfio-zappala-oysterpack.testnet:G7ahkVZGrcJZPJWghawh73qtNVDzPnYf6LZPbAaVxHoy)
   2 427 963 482 746        StakingService::deposit_and_stake         G7ahkVZGrcJZPJWghawh73qtNVDzPnYf6LZPbAaVxHoy
  32 328 258 227 662        StakingService::stake                     FkSZkV1pe25JMK9sLNs9MBJbnAcmLwMo9yuzfHLgEFQY

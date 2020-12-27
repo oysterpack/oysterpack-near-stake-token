@@ -91,6 +91,8 @@ pub trait StakingService {
     /// - if no deposit is attached
     ///
     /// #\[payable\]
+    ///
+    /// GAS REQUIREMENTS: 10 TGas
     fn deposit(&mut self) -> BatchId;
 
     /// locks the contract to stake the batched NEAR funds and then kicks off the staking workflow
@@ -110,6 +112,8 @@ pub trait StakingService {
     ///   - staking batch is in progress
     ///   - unstaking is in progress
     /// - if there is no stake batch to run
+    ///
+    /// GAS REQUIREMENTS: 150 TGas
     fn stake(&mut self) -> Promise;
 
     /// Combines [deposit](StakingService::deposit) and [stake](StakingService::stake) calls together.
@@ -225,9 +229,13 @@ pub trait StakingService {
     /// NEAR at epoch 103, then the entire 100 unstaked NEAR will be available to be withdrawn at
     /// epoch 107. In this example, in order to be able to withdraw the 50 NEAR at epoch 104, the 2nd
     /// unstaking request must be submitted after the NEAR is withdrawn.
+    ///
+    /// GAS REQUIREMENTS: 150 TGas
     fn unstake(&mut self) -> Promise;
 
     /// combines the [redeem](StakingService::redeem) and [unstake](StakingService::unstake) calls
+    ///
+    /// GAS REQUIREMENTS: 150 TGas
     fn redeem_and_unstake(&mut self, amount: YoctoStake) -> PromiseOrValue<BatchId>;
 
     /// combines the [redeem_all](StakingService::redeem) and [unstake](StakingService::unstake) calls

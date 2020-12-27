@@ -12,6 +12,7 @@ use crate::{
     near::{assert_predecessor_is_self, NO_DEPOSIT},
 };
 
+use crate::domain::Gas;
 use near_sdk::{env, json_types::ValidAccountId, near_bindgen, AccountId, Promise};
 
 #[near_bindgen]
@@ -38,32 +39,17 @@ impl VaultFungibleToken for StakeTokenContract {
         amount: YoctoStake,
         payload: String,
     ) -> Promise {
-        let transfer_with_vault_gas = self
-            .config
-            .gas_config()
-            .vault_fungible_token()
-            .transfer_with_vault();
+        // the amount of gas required for the `resolve_vault` callback
+        let resolve_vault_gas = self.resolve_vault_gas();
 
-        let resolve_vault_gas = self
-            .config
-            .gas_config()
-            .vault_fungible_token()
-            .resolve_vault();
+        // compute how much gas to supply to the receiver on the `on_receive_with_vault` cross contract call
+        let on_receive_with_vault_gas = env::prepaid_gas()
+            .saturating_sub(self.transfer_with_vault_gas().value() + resolve_vault_gas.value());
 
-        let gas_to_receiver = env::prepaid_gas()
-            .saturating_sub(transfer_with_vault_gas.value() + resolve_vault_gas.value());
-
-        if gas_to_receiver
-            < self
-                .config
-                .gas_config()
-                .vault_fungible_token()
-                .min_gas_for_receiver()
-                .value()
-        {
+        if on_receive_with_vault_gas < self.min_gas_for_receiver().value() {
             panic!(
                 "Not enough gas attached. Attach at least {}",
-                gas_to_receiver
+                on_receive_with_vault_gas
             );
         }
 
@@ -83,7 +69,9 @@ impl VaultFungibleToken for StakeTokenContract {
         sender.apply_stake_debit(transfer_amount);
         self.save_account(&sender_account_id, &sender);
 
-        let (_receiver, receiver_account_id) = self.registered_account(receiver_id);
+        // verifies that the receiver account is registered
+        // - panics if the receiver account ID is not registered
+        let (_, receiver_account_id) = self.registered_account(receiver_id);
 
         // Creating a new vault
         *self.vault_id_sequence += 1;
@@ -98,7 +86,7 @@ impl VaultFungibleToken for StakeTokenContract {
             payload,
             &receiver_id.to_string(),
             NO_DEPOSIT.value(),
-            gas_to_receiver,
+            on_receive_with_vault_gas,
         )
         .then(ext_self::resolve_vault(
             self.vault_id_sequence.into(),
@@ -118,20 +106,22 @@ impl VaultFungibleToken for StakeTokenContract {
         let vault_id = vault_id.into();
         let mut vault = self.vaults.get(&vault_id).expect(VAULT_DOES_NOT_EXIST);
 
-        let (_vault_owner, vault_owner_id) =
-            self.registered_account(&env::predecessor_account_id());
+        let (_, vault_owner_id) = self.registered_account(&env::predecessor_account_id());
         if vault_owner_id != vault.owner_id_hash() {
             panic!(VAULT_ACCESS_DENIED);
         }
 
+        // verifies that the receiver account is registered - panics if the account is not registered
         let (mut receiver_account, receiver_account_id) =
             self.registered_account(receiver_id.as_ref());
 
+        // debit the vault
         let transfer_amount = amount.into();
         assert!(vault.balance() >= transfer_amount, VAULT_INSUFFICIENT_FUNDS);
         vault.debit(transfer_amount);
         self.vaults.insert(&vault_id, &vault);
 
+        // credit the receiver account
         receiver_account.apply_stake_credit(transfer_amount);
         self.save_account(&receiver_account_id, &receiver_account);
     }
@@ -164,6 +154,29 @@ impl ResolveVaultCallback for StakeTokenContract {
             self.save_account(&account_hash_id, &account);
         }
         vault.balance().into()
+    }
+}
+
+impl StakeTokenContract {
+    fn resolve_vault_gas(&self) -> Gas {
+        self.config
+            .gas_config()
+            .vault_fungible_token()
+            .resolve_vault()
+    }
+
+    fn transfer_with_vault_gas(&self) -> Gas {
+        self.config
+            .gas_config()
+            .vault_fungible_token()
+            .transfer_with_vault()
+    }
+
+    fn min_gas_for_receiver(&self) -> Gas {
+        self.config
+            .gas_config()
+            .vault_fungible_token()
+            .min_gas_for_receiver()
     }
 }
 

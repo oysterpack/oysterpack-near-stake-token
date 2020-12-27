@@ -8,9 +8,21 @@ use near_sdk::{
     AccountId, Promise,
 };
 
+/// Implements [NEP-122 vault based fungible token standard](https://github.com/near/NEPs/issues/122)
+/// with the following modifications:
+/// - all token owners must be registered with the contract, which implies that token transfers can
+///   only be between registered accounts
+///   - this removes the need to require an attached deposit on each transfer because the accounts
+///     are pre-registered
+///   - eliminates transfers to non-existent accounts - on simple [transfers](VaultFungibleToken::transfer)
+/// - renamed `transfer_raw` to `transfer`
+/// - instead of using simple U128 to specify token amounts, [YoctoStake](crate::interface::YoctoStake)
+///   because in the context of the STAKE token, YoctoStake is used as the logical token unit
+///   - NOTE: YoctoStake is simply a wrapper around U128, i.e., on the wire, the type is marshalled as U128
 pub trait VaultFungibleToken {
-    /// Simple transfers
-    /// Gas requirement: 5 TGas or 5000000000000 Gas
+    /// Simple direct transfers between registered accounts.
+    ///
+    /// Gas requirement: 5 TGas
     /// Should be called by the balance owner.
     /// Requires that the sender and the receiver accounts be registered.
     ///
@@ -22,7 +34,6 @@ pub trait VaultFungibleToken {
     /// - if [receiver_id] account is not registered
     /// - if sender account is same as receiver account
     /// - if account balance has insufficient funds for transfer
-    /// - if there is no attached deposit
     fn transfer(&mut self, receiver_id: ValidAccountId, amount: YoctoStake);
 
     /// Transfer to a contract with payload
@@ -44,7 +55,6 @@ pub trait VaultFungibleToken {
     /// - if [receiver_id] account is not registered
     /// - if sender account is same as receiver account
     /// - if account balance has insufficient funds for transfer
-    /// - if there is no attached deposit
     fn transfer_with_vault(
         &mut self,
         receiver_id: ValidAccountId,
@@ -52,17 +62,19 @@ pub trait VaultFungibleToken {
         payload: String,
     ) -> Promise;
 
-    /// Withdraws from a given safe
-    /// Gas requirement: 5 TGas or 5000000000000 Gas
+    /// Withdraws from a given vault and transfers the funds to the specified receiver account ID.
+    ///
+    /// Gas requirement: 5 TGas
     /// Should be called by the contract that owns a given safe.
     ///
     /// Actions:
-    /// - checks that the safe with `safe_id` exists and `predecessor_id == safe.receiver_id`
-    /// - withdraws `amount` from the safe or panics if `safe.amount < amount`
+    /// - checks that the safe with `vault_id` exists and `predecessor_id == vault.receiver_id`
+    /// - withdraws `amount` from the vault or panics if `vault.amount < amount`
     /// - deposits `amount` on the `receiver_id`
     ///
     /// ## panics
     /// - if predecessor account is not registered
+    /// - if predecessor account does not own the vault
     /// - if [receiver_id] account is not registered
     /// - if vault balance has insufficient funds for transfer
     fn withdraw_from_vault(
@@ -72,17 +84,22 @@ pub trait VaultFungibleToken {
         amount: YoctoStake,
     );
 
+    /// returns the total STAKE token supply
     fn get_total_supply(&self) -> YoctoStake;
 
+    /// returns the balance for the specified account
+    ///
+    /// ## Panics
+    /// if account is not registered
     fn get_balance(&self, account_id: ValidAccountId) -> YoctoStake;
 }
 
 /// implements required callbacks defined in [ExtSelf]
 pub trait ResolveVaultCallback {
-    /// Resolves a given vault
-    /// Gas requirement: 5 TGas or 5000000000000 Gas
-    /// A callback. Should be called by this fungible token contract (`current_account_id`)
-    /// Returns the remaining balance.
+    /// Resolves a given vault, i.e., transfers any remaining vault balance to the sender account
+    /// and then deletes the vault. Returns the vault remaining balance.
+    ///
+    /// Gas requirement: 5 TGas
     ///
     /// Actions:
     /// - Reads safe with `safe_id`
@@ -90,6 +107,12 @@ pub trait ResolveVaultCallback {
     /// - Deletes the safe
     /// - Returns the total withdrawn amount from the safe `original_amount - safe.amount`.
     /// #\[private\]
+    ///
+    /// ## Panics
+    /// - if not called by self as callback
+    /// - following panics should never happen (if they do, then there is a bug in the code)
+    ///   - if the sender account is not registered
+    ///   - if the vault does not exist
     fn resolve_vault(&mut self, vault_id: VaultId, sender_id: AccountId) -> YoctoStake;
 }
 

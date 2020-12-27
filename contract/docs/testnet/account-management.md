@@ -5,7 +5,7 @@ near view stake.oysterpack.testnet account_storage_fee
 near view stake.oysterpack.testnet total_registered_accounts
 
 near view stake.oysterpack.testnet lookup_account --args '{"account_id":"alfio-zappala-oysterpack.testnet"}'
-near view stake.oysterpack.testnet lookup_account --args '{"oysterpack.testnet"}'
+near view stake.oysterpack.testnet lookup_account --args '{"account_id":"oysterpack.testnet"}'
 
 near view stake.oysterpack.testnet account_registered --args '{"account_id":"alfio-zappala-oysterpack.testnet"}'
 
