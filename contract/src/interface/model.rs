@@ -1,3 +1,4 @@
+mod config;
 pub mod contract_state;
 mod redeem_stake_batch;
 mod redeem_stake_batch_receipt;
@@ -8,6 +9,7 @@ mod stake_token_value;
 mod timestamped_near_balance;
 mod timestamped_stake_balance;
 
+pub use config::*;
 pub use redeem_stake_batch::RedeemStakeBatch;
 pub use redeem_stake_batch_receipt::RedeemStakeBatchReceipt;
 pub use stake_account::StakeAccount;

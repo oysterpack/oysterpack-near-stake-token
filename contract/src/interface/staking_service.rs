@@ -143,8 +143,10 @@ pub trait StakingService {
     fn withdraw_all_funds_from_stake_batch(&mut self);
 
     /// Submits request to redeem STAKE tokens, which are put into a [RedeemStakeBatch](crate::interface::RedeemStakeBatch).
+    /// In effect, this locks up STAKE in the [RedeemStakeBatch](crate::interface::RedeemStakeBatch),
+    /// and the STAKE tokens are no longer tradeable.  
     /// The account's STAKE balance is debited the amount and moved into the batch.
-    /// - redeem requests are committed via [run_redeem_stake_batch](StkaingService::run_redeem_stake_batch)
+    /// - redeem STAKE tokens are committed and unstaked via [unstake](StakingService::unstake)
     /// - each redeem request adds the STAKE into the batch
     /// - the entire redeem batch can be cancelled via [cancel_uncommitted_redeem_stake_batch](StakingService::cancel_uncommitted_redeem_stake_batch)
     ///

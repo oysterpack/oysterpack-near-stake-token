@@ -41,5 +41,5 @@ pub use storage_usage::StorageUsage;
 pub use timestamped_near_balance::TimestampedNearBalance;
 pub use timestamped_stake_balance::TimestampedStakeBalance;
 pub use vault::{Vault, VaultId};
-pub use yocto_near::{YoctoNear, YoctoNearValue};
+pub use yocto_near::YoctoNear;
 pub use yocto_stake::YoctoStake;

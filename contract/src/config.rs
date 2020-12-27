@@ -1,4 +1,7 @@
-use crate::domain::{Gas, YoctoNearValue, TGAS};
+use crate::{
+    domain::{Gas, YoctoNear, TGAS},
+    interface,
+};
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
@@ -7,7 +10,7 @@ use near_sdk::{
 #[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Config {
-    storage_cost_per_byte: YoctoNearValue,
+    storage_cost_per_byte: YoctoNear,
     gas_config: GasConfig,
 }
 
@@ -23,23 +26,30 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn new(storage_cost_per_byte: YoctoNearValue, gas_config: GasConfig) -> Self {
+    pub fn new(storage_cost_per_byte: YoctoNear, gas_config: GasConfig) -> Self {
         Self {
             storage_cost_per_byte,
             gas_config,
         }
     }
 
-    pub fn storage_cost_per_byte(&self) -> &YoctoNearValue {
+    pub fn storage_cost_per_byte(&self) -> &YoctoNear {
         &self.storage_cost_per_byte
     }
 
     pub fn gas_config(&self) -> &GasConfig {
         &self.gas_config
     }
-}
 
-pub const BASE_GAS: Gas = Gas(25_000_000_000_000);
+    pub fn update(&mut self, config: interface::Config) {
+        if let Some(value) = config.storage_cost_per_byte {
+            self.storage_cost_per_byte = value.value().into();
+        }
+        // TODO
+
+        unimplemented!()
+    }
+}
 
 /// Basic compute.
 pub const GAS_BASE_COMPUTE: Gas = Gas(5_000_000_000_000);
