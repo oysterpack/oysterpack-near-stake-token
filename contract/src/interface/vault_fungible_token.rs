@@ -14,7 +14,7 @@ use near_sdk::{
 ///   only be between registered accounts
 ///   - this removes the need to require an attached deposit on each transfer because the accounts
 ///     are pre-registered
-///   - eliminates transfers to non-existent accounts - on simple [transfers](VaultFungibleToken::transfer)
+///   - eliminates transfers to non-existent accounts
 /// - renamed `transfer_raw` to `transfer`
 /// - instead of using simple U128 to specify token amounts, [YoctoStake](crate::interface::YoctoStake)
 ///   because in the context of the STAKE token, YoctoStake is used as the logical token unit

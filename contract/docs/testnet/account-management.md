@@ -15,7 +15,7 @@ near view stake.oysterpack.testnet account_registered --args '{"account_id":"alf
 ```shell
 near call stake.oysterpack.testnet register_account --accountId oysterpack.testnet --amount 1
 near call stake.oysterpack.testnet register_account --accountId alfio-zappala-oysterpack.testnet --amount 1
-near call stake.oysterpack.testnet register_account --accountId 1.alfio-zappala-oysterpack.testnet --amount 1
+near call stake.oysterpack.testnet register_account --accountId 1.alfio-zappala-oysterpack.testnet --amount 0.0681
 
 near call stake.oysterpack.testnet unregister_account --accountId alfio-zappala-oysterpack.testnet
 
