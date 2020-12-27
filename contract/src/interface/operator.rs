@@ -19,10 +19,24 @@ pub trait Operator {
     fn reset_config_default(&mut self) -> config::Config;
 
     /// merges in config changes
+    /// - performs basic validation to prevent mis-configurations
+    ///
+    /// NOTE: you can [force a config change](Operator::force_update_config) if the validation logic
+    ///       is flawed or becomes invalidated because of NEAR platform changes in the future.
     ///
     /// ## Panics
-    /// if not invoked by the operator account
+    /// - if not invoked by the operator account
+    /// - if config validation fails
     fn update_config(&mut self, config: interface::Config) -> config::Config;
+
+    /// merges in config changes with no validations run
+    /// - the purpose to allow config to be updated without validation is in case the assumptions
+    ///   made for validation prove to be wrong later on, e.g, gas usage or storage fees may change
+    ///   that require config changes that would cause validation to fail
+    ///
+    /// ## Panics
+    /// - if not invoked by the operator account
+    fn force_update_config(&mut self, config: interface::Config) -> config::Config;
 
     /// unlocks the contract
     ///

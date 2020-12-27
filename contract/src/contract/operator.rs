@@ -57,6 +57,12 @@ impl Operator for StakeTokenContract {
         self.config.clone()
     }
 
+    fn force_update_config(&mut self, config: interface::Config) -> Config {
+        self.assert_predecessor_is_operator();
+        self.config.force_merge(config);
+        self.config.clone()
+    }
+
     fn release_run_stake_batch_lock(&mut self) {
         self.assert_predecessor_is_self_or_operator();
         self.run_stake_batch_locked = false;
