@@ -224,9 +224,6 @@ pub struct CallBacksGasConfig {
     on_run_redeem_stake_batch: Gas,
     on_redeeming_stake_pending_withdrawal: Gas,
     on_redeeming_stake_post_withdrawal: Gas,
-
-    // used by ContractOwner interface
-    finalize_ownership_transfer: Gas,
 }
 
 impl CallBacksGasConfig {
@@ -274,13 +271,6 @@ impl CallBacksGasConfig {
             );
             self.on_redeeming_stake_post_withdrawal = gas;
         }
-        if let Some(gas) = config.finalize_ownership_transfer {
-            assert!(
-                gas >= TGAS * 5,
-                "callbacks::finalize_ownership_transfer must be >= 5 TGas"
-            );
-            self.finalize_ownership_transfer = gas;
-        }
     }
 
     pub fn on_deposit_and_stake(&self) -> Gas {
@@ -310,10 +300,6 @@ impl CallBacksGasConfig {
     pub fn on_unstake(&self) -> Gas {
         self.on_unstake
     }
-
-    pub fn finalize_ownership_transfer(&self) -> Gas {
-        self.finalize_ownership_transfer
-    }
 }
 
 impl Default for CallBacksGasConfig {
@@ -328,8 +314,6 @@ impl Default for CallBacksGasConfig {
 
             on_redeeming_stake_pending_withdrawal: TGAS * 85,
             on_redeeming_stake_post_withdrawal: TGAS * 5,
-
-            finalize_ownership_transfer: TGAS * 10,
         }
     }
 }

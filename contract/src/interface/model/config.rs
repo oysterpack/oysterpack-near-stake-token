@@ -38,9 +38,6 @@ pub struct CallBacksGasConfig {
     pub on_run_redeem_stake_batch: Option<Gas>,
     pub on_redeeming_stake_pending_withdrawal: Option<Gas>,
     pub on_redeeming_stake_post_withdrawal: Option<Gas>,
-
-    // used by ContractOwner interface
-    pub finalize_ownership_transfer: Option<Gas>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

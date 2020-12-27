@@ -106,12 +106,13 @@ pub mod vault_fungible_token {
 }
 
 pub mod contract_owner {
-    pub const ACCOUNT_VALIDATION_NEAR_TRANSFER_FAILED: &str =
-        "account validation NEAR transfer failed";
 
     pub const INSUFFICIENT_FUNDS_FOR_OWNER_WITHDRAWAL: &str =
         "owner balance is too low to fulfill withdrawal request";
 
     pub const INSUFFICIENT_FUNDS_FOR_OWNER_STAKING: &str =
         "owner balance is too low to fulfill stake request";
+
+    pub const TRANSFER_TO_NON_REGISTERED_ACCOUNT: &str =
+        "contract ownership can only be transferred to a registered account";
 }
