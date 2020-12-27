@@ -1,58 +1,54 @@
-# OysterPack NEAR STAKE Token
-The OysterPack STAKE token is backed by staked NEAR tokens. 
-It enables you to trade your staked NEAR, i.e., you can stake your NEAR and use it as money.
+# OysterPack STAKE Token NEAR Smart Contract
+The OysterPack STAKE token is backed by staked NEAR. This contract enables you to delegate your
+NEAR to stake, and in return you are issued STAKE tokens. This enables you to trade your STAKE
+tokens while your NEAR is staked and earning staking rewards. The STAKE token transforms your
+staked NEAR into a tradeable asset.
 
-When you stake your NEAR, it will get locked up within the staking pool contract.
-OysterPack will issue STAKE token for staked NEAR. 
+STAKE token value is pegged to NEAR token value and stake earnings. As staking rewards are earned,
+the STAKE token value increases. In other words, STAKE tokens appreciate in NEAR token value over
+time.
 
-STAKE token value is pegged to NEAR token value and stake earnings. As staking rewards are earned, the STAKE token value 
-increases. In other words, STAKE tokens appreciate in NEAR token value over time.
+## STAKE Token Vision
+Leverage NEAR as a digital currency beyond being a utility token for the NEAR network to pay for
+transaction gas and storage usage. NEAR is designed to be scalable and fast with very low and
+predictable transaction costs and pricing. NEAR tokenomics has built in inflation, with a 5%
+maximum inflation target. The inflation provides incentive to stake your NEAR, which helps to further
+secure the network. Transforming staked NEAR into a tradeable asset via the STAKE token enhances
+the value proposition. Since most of the NEAR token supply will be staked, we can get more value
+out of the staked NEAR by being able to use it as a tradeable digital asset.
 
-There is one STAKE token contract per staking pool. 
+The long term vision is to integrate the STAKE token with the NEAR wallet:
+- users would be able to stake their NEAR via this contract
+- users would be able to transfer STAKE tokens via the NEAR wallet
 
-### How is the STAKE token valued
+## Problem With Current Unstaking Process
+With the current staking pool implementations, the problem is that unstaked NEAR is not immediately
+available for withdrawal from the staking pool contract. The unstaked NEAR is locked for 4 epoch
+time periods, which translates to ~48 hours in NEAR time. This makes it more difficult and complex
+to utilize NEAR as a digital asset, i.e., as a fungible token.
+
+## STAKE Token Benefits
+1. NEAR token asset value is maximized through staking.
+2. Transforms staked NEAR into tradeable digital asset, i.e., into a fungible token.
+3. Provides more incentive to stake NEAR, which helps to further strengthen and secure the network
+   by providing more economic incentive to validators.
+
+# Contract Key Features and High Level Design
+- Contract users must register with the account in order to use it. Users must pay an upfront
+  account storage usage fee because long term storage is not "free" on NEAR. When an account
+  unregisters, the storage usage fee will be refunded.
+- STAKE token contract is linked to a single staking pool contract that is specified as part of
+  contract deployment and becomes permanent for contract's lifetime. A STAKE token contract will
+  be deployed per staking pool contract.
+- Implements [NEP-122 vault based fungible token standard](https://github.com/near/NEPs/issues/122)
+  - NEAR community is currently trying to standardize fungible token interface. STAKE token implements
+    NEP-122 Vault Based Fungible Token (WIP), but waiting for NEP-122 standard to be finalized.
+- Has concept of contract ownership. The contract owner earns the contract rewards from transaction
+  fees.
+  - contract ownership can be transferred
+  - contract earning can be staked into the contract owner's account
+- Contract has an operator role which provides functions to support the contract, e.g., releasing
+  locks, config management, etc
+
+## How is the STAKE token value computed?
 STAKE token value in NEAR = `total staked NEAR balance / total STAKE token supply`
-
-## Account Registration and Storage Fees
-Customers must first register their accounts to be able to use the contract. The account is responsible to pay for its account storage.
-As part of the account registration process, customers are required to attach a deposit to pay for account storage fees.
-Storage fee deposits are escrowed and refunded when the customer unregisters their account.
-
-# How staking works
-1. The customer deposits NEAR into the STAKE token contract
-2. The STAKE token contract batches together deposits from multiple customers.
-3. Staking requests are serialized, i.e., the contract is locked while a staking batch request is being processed. 
-4. If the contract is locked, then the request is put into the next batch that runs.
-
-# How redeeming STAKE tokens for NEAR works
-There is a limitation in the staking pool contracts that needs to be worked around. Unstaked NEAR is not available for
-withdrawal for 4 epochs. However, if another unstaking transaction is submitted, then the total unstaked NEAR balance
-is locked for another 4 epochs. For example, 50 NEAR are unstaked at epoch 100, which means the 50 NEAR is available
-for withdrawal at epoch 104. However, if a user submits a transaction to unstake another 50 NEAR at epoch 103, then
-the entire 100 unstaked NEAR will be available to be withdrawn at epoch 107. In this example, in order to be able to 
-withdraw the 50 NEAR at epoch 104, the 2nd unstaking request must be submitted after the NEAR is withdrawn.
-
-To work around this staking pool limitation, the scheduling algorithm needs to take this into consideration. When a redeem 
-STAKE batch is run, the epoch height is recorded. A batch will not be run unless it has been at least 4 epochs since the 
-last batch run and after all available funds have been withdrawn from the staking pool.
-
-### Workflow
-1. Customer submits request to redeem STAKE
-2. The STAKE contract batches together requests from multiple customers
-3. Batches are processed serially, i.e., the batch transaction must acquire the contract lock to run the batch.
-4. In addition, batches to redeem STAKE can only be run if there are no pending withdrawals from a prior batch.
-
-# How funds are claimed from processed batches
-When a batch is processed, the STAKE token value at that point in time is computed and recorded in the contract state on
-the blockchain. Each time an account performs an action, the account checks if there are any batch receipts to apply and
-updates account balances accordingly. Explicit contract function will be exposed to process the account's batch receipts.
-
-# STAKE Token Value is Pegged to NEAR Value
-Overtime the STAKE token value will increase in NEAR value as STAKE rewards are earned.
-Periodically the STAKE token value will be reset to 1:1 to NEAR by issuing more STAKE tokens to accounts.
-
-## Notes
-- while the contract is locked, customer requests to stake NEAR and redeem STAKE will be scheduled into the next batch
-  - the contract is locked in order to compute STAKE token value which requires balances to be static
-- clients can query the contract to check if it is locked
-- anyone can kickoff batches to run
