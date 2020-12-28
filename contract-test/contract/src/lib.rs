@@ -36,7 +36,8 @@ impl TestHarness {
             stake_token_contract.as_ref()
         ));
 
-        let callback_gas = env::prepaid_gas().saturating_sub(TGAS * 20);
+        let callback_gas =
+            env::prepaid_gas().saturating_sub(env::used_gas().saturating_add(TGAS * 20));
         // log(format!("callback_gas = {}", callback_gas));
 
         account_management::account_registered(

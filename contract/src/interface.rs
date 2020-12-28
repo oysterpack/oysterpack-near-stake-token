@@ -2,6 +2,7 @@
 
 mod account_management;
 mod contract_owner;
+pub mod fungible_token;
 mod model;
 mod operator;
 mod staking_service;
