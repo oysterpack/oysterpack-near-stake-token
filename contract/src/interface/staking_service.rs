@@ -122,6 +122,13 @@ pub trait StakingService {
     /// funds can be staked, then the staking Promise is returned. Otherwise, the funds are simply
     /// deposited into the next available batch and the batch ID is returned.
     ///
+    /// ## Notes
+    /// - the NEAR funds are committed into the stake batch before kicking off the [stake](StakingService::stake)
+    ///   workflow. This means if the [stake](StakingService::stake) Promise fails, the NEAR funds
+    ///   remain in the stake batch, and will be staked the next time [stake](StakingService::stake)
+    /// - the [stake](StakingService::stake) workflow may fail if not enough gas was supplied to the
+    ///   for the `deposit_and_stake` call on the staking pool - check the gas config
+    ///
     /// #\[payable\]
     ///
     /// GAS REQUIREMENTS: 150 TGas
