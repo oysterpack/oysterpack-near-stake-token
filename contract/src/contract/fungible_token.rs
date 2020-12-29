@@ -11,7 +11,7 @@ use crate::{
     interface::{
         ext_self_finalize_transfer_callback, ext_self_resolve_vault_callback, ext_token_receiver,
         ext_transfer_call_recipient, FungibleToken, Metadata, ResolveVaultCallback, SimpleTransfer,
-        TransferAndNotify, TransferProtocol, VaultBasedTransfer, VaultId,
+        TransferCall, TransferProtocol, VaultBasedTransfer, VaultId,
     },
     near::{assert_predecessor_is_self, NO_DEPOSIT},
 };
@@ -204,7 +204,7 @@ impl ResolveVaultCallback for StakeTokenContract {
 }
 
 #[near_bindgen]
-impl TransferAndNotify for StakeTokenContract {
+impl TransferCall for StakeTokenContract {
     fn transfer_call(
         &mut self,
         recipient: ValidAccountId,

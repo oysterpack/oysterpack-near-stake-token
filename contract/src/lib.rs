@@ -54,8 +54,11 @@
 //! The STAKE token contract [interfaces](crate::interface) are defined as traits:
 //! - [AccountManagement](crate::interface::AccountManagement)
 //! - [StakingService](crate::interface::StakingService)
-//! - [VaultFungibleToken](crate::interface::VaultFungibleToken)
-//!   - [ResolveVaultCallback](crate::interface::ResolveVaultCallback)
+//! - [FungibleToken](crate::interface::FungibleToken)
+//!   - supports following token transfer protocols:
+//!     - [simple](crate::interface::SimpleTransfer)
+//!     - [vault based](crate::interface::VaultBasedTransfer)
+//!     - [transfer-call](crate::interface::TransferCall)
 //! - [Operator](crate::interface::Operator)
 //! - [ContractOwner](crate::interface::ContractOwner)
 //!

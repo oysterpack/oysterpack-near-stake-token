@@ -126,7 +126,7 @@ pub trait SimpleTransfer {
     );
 }
 
-pub trait TransferAndNotify {
+pub trait TransferCall {
     /// Transfer `amount` of tokens from the predecessor account to a `recipient` contract.
     /// The recipient contract MUST implement [TransferCallRecipient] interface. The tokens are
     /// deposited but locked in the recipient account until the transfer has been confirmed by the
