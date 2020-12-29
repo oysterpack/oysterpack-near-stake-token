@@ -310,7 +310,7 @@ impl StakingService for StakeTokenContract {
     fn redeem_and_unstake(&mut self, amount: YoctoStake) -> PromiseOrValue<BatchId> {
         let batch_id = self.redeem(amount);
 
-        if self.can_run_batch() {
+        if self.can_unstake() {
             PromiseOrValue::Promise(self.unstake())
         } else {
             PromiseOrValue::Value(batch_id)
@@ -320,7 +320,7 @@ impl StakingService for StakeTokenContract {
     fn redeem_all_and_unstake(&mut self) -> PromiseOrValue<BatchId> {
         let batch_id = self.redeem_all();
 
-        if self.can_run_batch() {
+        if self.can_unstake() {
             PromiseOrValue::Promise(self.unstake())
         } else {
             PromiseOrValue::Value(batch_id)
@@ -370,6 +370,27 @@ impl StakeTokenContract {
 impl StakeTokenContract {
     fn can_run_batch(&self) -> bool {
         !self.run_stake_batch_locked && !self.is_unstaking()
+    }
+
+    fn can_unstake(&self) -> bool {
+        if self.can_run_batch() {
+            match self.run_redeem_stake_batch_lock {
+                None => self.redeem_stake_batch.is_some(),
+                Some(RedeemLock::PendingWithdrawal) => {
+                    let batch = self
+                        .redeem_stake_batch
+                        .expect(REDEEM_STAKE_BATCH_SHOULD_EXIST);
+                    let batch_receipt = self
+                        .redeem_stake_batch_receipts
+                        .get(&batch.id())
+                        .expect(REDEEM_STAKE_BATCH_RECEIPT_SHOULD_EXIST);
+                    batch_receipt.unstaked_funds_available_for_withdrawal()
+                }
+                Some(RedeemLock::Unstaking) => false,
+            }
+        } else {
+            self.can_run_batch()
+        }
     }
 
     /// batches the NEAR to stake at the contract level and account level

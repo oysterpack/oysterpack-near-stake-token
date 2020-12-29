@@ -17,6 +17,8 @@ pub struct StakeAccount {
     /// account STAKE token balance
     pub stake: Option<TimestampedStakeBalance>,
 
+    pub locked_stake: Option<TimestampedStakeBalance>,
+
     /// NEAR funds that have been deposited to be staked when the batch is run
     pub stake_batch: Option<StakeBatch>,
     /// While batches are running, the contract is locked. The account can still deposit NEAR funds

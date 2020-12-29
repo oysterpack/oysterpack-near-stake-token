@@ -17,6 +17,9 @@ pub struct Account {
     pub near: Option<TimestampedNearBalance>,
     /// STAKE tokens that the account owns
     pub stake: Option<TimestampedStakeBalance>,
+    /// STAKE that is locked for a token transfer call to another contract
+    /// - once the contract confirms the token transfer, then the funds are unlocked
+    pub locked_stake: Option<TimestampedStakeBalance>,
 
     /// users will deposit NEAR funds into a batch that will be processed, i.e. deposited and staked
     /// into the staking pool, at scheduled intervals (at least once per epoch)
@@ -48,6 +51,7 @@ impl Account {
             storage_escrow: TimestampedNearBalance::new(storage_escrow_fee),
             near: None,
             stake: None,
+            locked_stake: None,
             stake_batch: None,
             next_stake_batch: None,
             redeem_stake_batch: None,
@@ -64,6 +68,7 @@ impl Account {
             storage_escrow: TimestampedNearBalance::new(0.into()),
             near: Some(TimestampedNearBalance::new(0.into())),
             stake: Some(TimestampedStakeBalance::new(0.into())),
+            locked_stake: Some(TimestampedStakeBalance::new(0.into())),
             stake_batch: Some(StakeBatch::new(0.into(), 0.into())),
             next_stake_batch: Some(StakeBatch::new(0.into(), 0.into())),
             redeem_stake_batch: Some(RedeemStakeBatch::new(0.into(), 0.into())),
@@ -123,6 +128,45 @@ impl Account {
         balance.debit(debit);
         if balance.amount() == 0.into() {
             self.stake = None
+        }
+    }
+
+    pub fn lock_stake(&mut self, credit: YoctoStake) {
+        self.locked_stake
+            .get_or_insert_with(|| TimestampedStakeBalance::new(YoctoStake(0)))
+            .credit(credit);
+    }
+
+    pub fn unlock_stake(&mut self, debit: YoctoStake) {
+        let balance = self
+            .locked_stake
+            .get_or_insert_with(|| TimestampedStakeBalance::new(YoctoStake(0)));
+
+        assert!(balance.amount() >= debit, ACCOUNT_INSUFFICIENT_STAKE_FUNDS);
+        balance.debit(debit);
+        if balance.amount() == 0.into() {
+            self.locked_stake = None
+        }
+    }
+
+    /// returns STAKE balance that is not locked
+    pub fn available_stake_balance(&self) -> YoctoStake {
+        match self.locked_stake {
+            Some(locked_stake) => {
+                if let Some(stake) = self.stake.map(|mut stake| {
+                    stake.debit(locked_stake.amount());
+                    stake
+                }) {
+                    if stake.amount().value() > 0 {
+                        stake.amount()
+                    } else {
+                        YoctoStake(0)
+                    }
+                } else {
+                    YoctoStake(0)
+                }
+            }
+            None => self.stake.map_or(YoctoStake(0), |stake| stake.amount()),
         }
     }
 }

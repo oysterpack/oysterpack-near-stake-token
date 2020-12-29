@@ -119,16 +119,16 @@ pub trait SimpleTransfer {
     /// Requires that the sender and the receiver accounts be registered.
     ///
     /// Actions:
-    /// - Transfers `amount` of tokens from `predecessor_id` to `receiver_id`.
+    /// - Transfers `amount` of tokens from `predecessor_id` to `recipient`.
     ///
     /// ## Panics
     /// - if predecessor account is not registered - sender account
-    /// - if [receiver_id] account is not registered
+    /// - if [recipient] account is not registered
     /// - if sender account is same as receiver account
     /// - if account balance has insufficient funds for transfer
     fn transfer(
         &mut self,
-        receiver_id: ValidAccountId,
+        recipient: ValidAccountId,
         amount: U128,
         msg: Option<String>,
         memo: Option<String>,
@@ -154,7 +154,19 @@ pub trait TransferAndNotify {
         amount: U128,
         msg: Option<String>,
         memo: Option<String>,
-    );
+    ) -> Promise;
+}
+
+pub trait FinalizeTransferCallback {
+    /// Finalizes the token transfer
+    ///
+    /// Actions:
+    /// - if the call `TransferCallRecipient::on_ft_receive` succeeds, then commit the transfer,
+    ///   i.e., unlock the balance on the recipient account
+    /// - else rollback the transfer by returning the locked balance to the sender
+    ///
+    /// #[private]
+    fn finalize_ft_transfer(&mut self, sender: AccountId, recipient: AccountId, amount: U128);
 }
 
 /// Interface for recipient call on fungible-token transfers.
@@ -196,26 +208,26 @@ pub trait ExtFinalizeTransferCallback {
 pub trait VaultBasedTransfer {
     /// Transfer to a contract with payload
     /// Gas requirement: 40+ TGas or 40000000000000 Gas.
-    /// Consumes: 30 TGas and the remaining gas is passed to the `receiver_id` (at least 10 TGas)
+    /// Consumes: 30 TGas and the remaining gas is passed to the `recipient` (at least 10 TGas)
     /// Should be called by the balance owner.
     /// Returns a promise, that will result in the unspent balance from the transfer `amount`.
     ///
     /// Actions:
     /// - Withdraws `amount` from the `predecessor_id` account.
     /// - Creates a new local safe with a new unique `safe_id` with the following content:
-    ///     `{sender_id: predecessor_id, amount: amount, receiver_id: receiver_id}`
+    ///     `{sender_id: predecessor_id, amount: amount, recipient: recipient}`
     /// - Saves this safe to the storage.
-    /// - Calls on `receiver_id` method `on_token_receive(sender_id: predecessor_id, amount, safe_id, payload)`/
+    /// - Calls on `recipient` method `on_token_receive(sender_id: predecessor_id, amount, safe_id, payload)`/
     /// - Attaches a self callback to this promise `resolve_safe(safe_id, sender_id)`
     ///
     /// ## Panics
     /// - if predecessor account is not registered
-    /// - if [receiver_id] account is not registered
+    /// - if [recipient] account is not registered
     /// - if sender account is same as receiver account
     /// - if account balance has insufficient funds for transfer
     fn transfer_with_vault(
         &mut self,
-        receiver_id: ValidAccountId,
+        recipient: ValidAccountId,
         amount: U128,
         msg: Option<String>,
         memo: Option<String>,
@@ -227,16 +239,16 @@ pub trait VaultBasedTransfer {
     /// Should be called by the contract that owns a given safe.
     ///
     /// Actions:
-    /// - checks that the safe with `vault_id` exists and `predecessor_id == vault.receiver_id`
+    /// - checks that the safe with `vault_id` exists and `predecessor_id == vault.recipient`
     /// - withdraws `amount` from the vault or panics if `vault.amount < amount`
-    /// - deposits `amount` on the `receiver_id`
+    /// - deposits `amount` on the `recipient`
     ///
     /// ## panics
     /// - if predecessor account is not registered
     /// - if predecessor account does not own the vault
-    /// - if [receiver_id] account is not registered
+    /// - if [recipient] account is not registered
     /// - if vault balance has insufficient funds for transfer
-    fn withdraw_from_vault(&mut self, vault_id: VaultId, receiver_id: ValidAccountId, amount: U128);
+    fn withdraw_from_vault(&mut self, vault_id: VaultId, recipient: ValidAccountId, amount: U128);
 }
 
 /// implements required callbacks defined in [ExtResolveVaultCallback]
@@ -273,18 +285,18 @@ pub trait ExtTokenVaultReceiver {
     /// There are bunch of options what the contract can do. E.g.
     /// - Option 1: withdraw and account internally
     ///     - Increase inner balance by `amount` for the `sender_id` of a token contract ID `predecessor_id`.
-    ///     - Promise call `withdraw_from_safe(safe_id, receiver_id: env::current_account_id(), amount)` to withdraw the amount to this contract
+    ///     - Promise call `withdraw_from_safe(safe_id, recipient: env::current_account_id(), amount)` to withdraw the amount to this contract
     ///     - Return the promise
     /// - Option 2: Simple redirect to another account
-    ///     - Promise call `withdraw_from_safe(safe_id, receiver_id: ANOTHER_ACCOUNT_ID, amount)` to withdraw to `ANOTHER_ACCOUNT_ID`
+    ///     - Promise call `withdraw_from_safe(safe_id, recipient: ANOTHER_ACCOUNT_ID, amount)` to withdraw to `ANOTHER_ACCOUNT_ID`
     ///     - Return the promise
     /// - Option 3: Partial redirect to another account (e.g. with commission)
-    ///     - Promise call `withdraw_from_safe(safe_id, receiver_id: ANOTHER_ACCOUNT_ID, amount: ANOTHER_AMOUNT)` to withdraw to `ANOTHER_ACCOUNT_ID`
-    ///     - Chain with (using .then) promise call `withdraw_from_safe(safe_id, receiver_id: env::current_account_id(), amount: amount - ANOTHER_AMOUNT)` to withdraw to self
+    ///     - Promise call `withdraw_from_safe(safe_id, recipient: ANOTHER_ACCOUNT_ID, amount: ANOTHER_AMOUNT)` to withdraw to `ANOTHER_ACCOUNT_ID`
+    ///     - Chain with (using .then) promise call `withdraw_from_safe(safe_id, recipient: env::current_account_id(), amount: amount - ANOTHER_AMOUNT)` to withdraw to self
     ///     - Return the 2nd promise
     /// - Option 4: redirect some of the payments and call another contract `NEW_RECEIVER_ID`
-    ///     - Promise call `withdraw_from_safe(safe_id, receiver_id: current_account_id, amount)` to withdraw the amount to this contract
-    ///     - Chain with promise call `transfer_with_safe(receiver_id: NEW_RECEIVER_ID, amount: SOME_AMOUNT, payload: NEW_PAYLOAD)`
+    ///     - Promise call `withdraw_from_safe(safe_id, recipient: current_account_id, amount)` to withdraw the amount to this contract
+    ///     - Chain with promise call `transfer_with_safe(recipient: recipient, amount: SOME_AMOUNT, payload: NEW_PAYLOAD)`
     ///     - Chain with the promise call to this contract to handle callback (in case we want to refund).
     ///     - Return the callback promise.
     fn on_receive_with_vault(

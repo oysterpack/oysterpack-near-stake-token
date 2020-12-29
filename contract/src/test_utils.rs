@@ -6,7 +6,7 @@ use near_sdk::{
 };
 use near_vm_logic::mocks::mock_external as near_mocks;
 
-pub const EXPECTED_ACCOUNT_STORAGE_USAGE: u64 = 681;
+pub const EXPECTED_ACCOUNT_STORAGE_USAGE: u64 = 722;
 
 pub fn expected_account_storage_fee() -> u128 {
     EXPECTED_ACCOUNT_STORAGE_USAGE as u128 * Config::default().storage_cost_per_byte().value()

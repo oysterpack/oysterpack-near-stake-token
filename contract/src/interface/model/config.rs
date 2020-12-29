@@ -44,8 +44,14 @@ pub struct CallBacksGasConfig {
 #[serde(crate = "near_sdk::serde")]
 pub struct VaultFungibleTokenGasConfig {
     pub min_gas_for_receiver: Option<Gas>,
-
-    /// We need to create 2 promises with dependencies and with some basic compute to write to the state.
     pub transfer_with_vault: Option<Gas>,
     pub resolve_vault: Option<Gas>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct FungibleTokenTransferCallGasConfig {
+    pub min_gas_for_receiver: Option<Gas>,
+    pub transfer_call: Option<Gas>,
+    pub finalize_ft_transfer: Option<Gas>,
 }

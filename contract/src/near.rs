@@ -30,7 +30,8 @@ pub fn assert_predecessor_is_self() {
     }
 }
 
+// TODO: log structured events
 /// wrapper around `near_sdk::env::log()` to make it simpler to use
-pub fn log(msg: String) {
+pub fn log(msg: &str) {
     env::log(msg.as_bytes());
 }

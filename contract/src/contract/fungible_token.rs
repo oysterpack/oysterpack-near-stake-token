@@ -1,4 +1,6 @@
 //required in order for near_bindgen macro to work outside of lib.rs
+use crate::interface::FinalizeTransferCallback;
+use crate::near::log;
 use crate::*;
 use crate::{
     domain::{Gas, Vault, TGAS},
@@ -7,15 +9,16 @@ use crate::{
         VAULT_DOES_NOT_EXIST, VAULT_INSUFFICIENT_FUNDS,
     },
     interface::{
-        ext_self_resolve_vault_callback, ext_token_receiver, FungibleToken, Metadata,
-        ResolveVaultCallback, SimpleTransfer, TransferProtocol, VaultBasedTransfer, VaultId,
+        ext_self_finalize_transfer_callback, ext_self_resolve_vault_callback, ext_token_receiver,
+        ext_transfer_call_recipient, FungibleToken, Metadata, ResolveVaultCallback, SimpleTransfer,
+        TransferAndNotify, TransferProtocol, VaultBasedTransfer, VaultId,
     },
     near::{assert_predecessor_is_self, NO_DEPOSIT},
 };
-
 use near_sdk::{
     env, json_types::ValidAccountId, json_types::U128, near_bindgen, AccountId, Promise,
 };
+use std::convert::TryFrom;
 
 #[near_bindgen]
 impl FungibleToken for StakeTokenContract {
@@ -26,15 +29,17 @@ impl FungibleToken for StakeTokenContract {
             reference: None,
             granularity: 1,
             supported_transfer_protocols: vec![
-                // TODO: make configurable
                 TransferProtocol::simple(TGAS * 5),
                 TransferProtocol::vault_transfer(
                     self.transfer_with_vault_gas()
-                        + self.min_gas_for_receiver()
+                        + self.min_gas_for_vault_receiver()
                         + self.resolve_vault_gas(),
                 ),
-                // TODO: make configurable
-                TransferProtocol::transfer_and_notify(TGAS * 10),
+                TransferProtocol::transfer_and_notify(
+                    self.transfer_call_gas()
+                        + self.min_gas_for_transfer_call_receiver()
+                        + self.finalize_ft_transfer_gas(),
+                ),
             ],
         }
     }
@@ -56,12 +61,12 @@ impl FungibleToken for StakeTokenContract {
 impl SimpleTransfer for StakeTokenContract {
     fn transfer(
         &mut self,
-        receiver_id: ValidAccountId,
+        recipient: ValidAccountId,
         amount: U128,
         _msg: Option<String>,
         _memo: Option<String>,
     ) {
-        let receiver_id: &str = receiver_id.as_ref();
+        let receiver_id: &str = recipient.as_ref();
         assert_receiver_is_not_sender(receiver_id);
 
         let (mut sender, sender_account_id) =
@@ -72,7 +77,12 @@ impl SimpleTransfer for StakeTokenContract {
         self.claim_receipt_funds(&mut receiver);
 
         let stake_amount = amount.into();
+        assert!(
+            sender.available_stake_balance().value() >= amount.0,
+            ACCOUNT_INSUFFICIENT_STAKE_FUNDS
+        );
         sender.apply_stake_debit(stake_amount);
+
         receiver.apply_stake_credit(stake_amount);
 
         self.save_account(&sender_account_id, &sender);
@@ -84,7 +94,7 @@ impl SimpleTransfer for StakeTokenContract {
 impl VaultBasedTransfer for StakeTokenContract {
     fn transfer_with_vault(
         &mut self,
-        receiver_id: ValidAccountId,
+        recipient: ValidAccountId,
         amount: U128,
         msg: Option<String>,
         memo: Option<String>,
@@ -96,14 +106,15 @@ impl VaultBasedTransfer for StakeTokenContract {
         let on_receive_with_vault_gas = env::prepaid_gas()
             .saturating_sub(self.transfer_with_vault_gas().value() + resolve_vault_gas.value());
 
-        if on_receive_with_vault_gas < self.min_gas_for_receiver().value() {
+        if on_receive_with_vault_gas < self.min_gas_for_vault_receiver().value() {
             panic!(
                 "Not enough gas attached. Attach at least {}",
-                on_receive_with_vault_gas
+                env::prepaid_gas()
+                    + (self.min_gas_for_vault_receiver().value() - on_receive_with_vault_gas)
             );
         }
 
-        let receiver_id: &str = receiver_id.as_ref();
+        let receiver_id: &str = recipient.as_ref();
         assert_receiver_is_not_sender(receiver_id);
 
         let (mut sender, sender_account_id) =
@@ -111,10 +122,9 @@ impl VaultBasedTransfer for StakeTokenContract {
         self.claim_receipt_funds(&mut sender);
 
         // check that sender balance has sufficient funds
-        let sender_balance = sender.stake.expect(ACCOUNT_INSUFFICIENT_STAKE_FUNDS);
         let transfer_amount = amount.into();
         assert!(
-            sender_balance.amount() >= transfer_amount,
+            sender.available_stake_balance() >= transfer_amount,
             ACCOUNT_INSUFFICIENT_STAKE_FUNDS
         );
         sender.apply_stake_debit(transfer_amount);
@@ -150,12 +160,7 @@ impl VaultBasedTransfer for StakeTokenContract {
         ))
     }
 
-    fn withdraw_from_vault(
-        &mut self,
-        vault_id: VaultId,
-        receiver_id: ValidAccountId,
-        amount: U128,
-    ) {
+    fn withdraw_from_vault(&mut self, vault_id: VaultId, recipient: ValidAccountId, amount: U128) {
         let vault_id = vault_id.into();
         let mut vault = self.vaults.get(&vault_id).expect(VAULT_DOES_NOT_EXIST);
 
@@ -166,7 +171,7 @@ impl VaultBasedTransfer for StakeTokenContract {
 
         // verifies that the receiver account is registered - panics if the account is not registered
         let (mut receiver_account, receiver_account_id) =
-            self.registered_account(receiver_id.as_ref());
+            self.registered_account(recipient.as_ref());
 
         // debit the vault
         let transfer_amount = amount.into();
@@ -198,6 +203,102 @@ impl ResolveVaultCallback for StakeTokenContract {
     }
 }
 
+#[near_bindgen]
+impl TransferAndNotify for StakeTokenContract {
+    fn transfer_call(
+        &mut self,
+        recipient: ValidAccountId,
+        amount: U128,
+        msg: Option<String>,
+        memo: Option<String>,
+    ) -> Promise {
+        // the amount of gas required for the `resolve_vault` callback
+        let finalize_ft_transfer_gas = self.finalize_ft_transfer_gas();
+
+        // compute how much gas to supply to the receiver on the `on_receive_with_vault` cross contract call
+        let transfer_call_receiver_gas = env::prepaid_gas()
+            .saturating_sub(self.transfer_call_gas().value() + finalize_ft_transfer_gas.value());
+
+        if transfer_call_receiver_gas < self.min_gas_for_transfer_call_receiver().value() {
+            panic!(
+                "Not enough gas attached. Attach at least {}",
+                env::prepaid_gas()
+                    + (self.min_gas_for_transfer_call_receiver().value()
+                        - transfer_call_receiver_gas)
+            );
+        }
+
+        let receiver_id: &str = recipient.as_ref();
+        assert_receiver_is_not_sender(receiver_id);
+
+        let (mut sender, sender_account_id) =
+            self.registered_account(&env::predecessor_account_id());
+        self.claim_receipt_funds(&mut sender);
+
+        // check that sender balance has sufficient funds
+        let transfer_amount = amount.into();
+        assert!(
+            sender.available_stake_balance() >= transfer_amount,
+            ACCOUNT_INSUFFICIENT_STAKE_FUNDS
+        );
+        sender.apply_stake_debit(transfer_amount);
+        self.save_account(&sender_account_id, &sender);
+
+        // verifies that the receiver account is registered
+        // - panics if the receiver account ID is not registered
+        let (mut receiver, receiver_account_id) = self.registered_account(receiver_id);
+        self.claim_receipt_funds(&mut receiver);
+        receiver.apply_stake_credit(transfer_amount);
+        receiver.lock_stake(transfer_amount);
+        self.save_account(&receiver_account_id, &receiver);
+
+        // Calling the receiver
+        ext_transfer_call_recipient::on_ft_receive(
+            ValidAccountId::try_from(env::predecessor_account_id()).unwrap(),
+            transfer_amount.into(),
+            msg,
+            memo,
+            &receiver_id.to_string(),
+            NO_DEPOSIT.value(),
+            transfer_call_receiver_gas,
+        )
+        .then(ext_self_finalize_transfer_callback::finalize_ft_transfer(
+            env::predecessor_account_id(),
+            receiver_id.to_string(),
+            transfer_amount.into(),
+            &env::current_account_id(),
+            NO_DEPOSIT.value(),
+            finalize_ft_transfer_gas.value(),
+        ))
+    }
+}
+
+#[near_bindgen]
+impl FinalizeTransferCallback for StakeTokenContract {
+    fn finalize_ft_transfer(&mut self, sender: AccountId, recipient: AccountId, amount: U128) {
+        assert_predecessor_is_self();
+
+        if self.promise_result_succeeded() {
+            // unlock the balance on the recipient account
+            let (mut receiver, receiver_id_hash) = self.registered_account(&recipient);
+            receiver.unlock_stake(amount.into());
+            self.save_account(&receiver_id_hash, &receiver);
+        } else {
+            // rollback the transfer
+            log("`transfer_call` failed: rolling back token transfer");
+
+            let (mut receiver, receiver_id_hash) = self.registered_account(&recipient);
+            receiver.unlock_stake(amount.into());
+            receiver.apply_stake_debit(amount.into());
+            self.save_account(&receiver_id_hash, &receiver);
+
+            let (mut sender, sender_id_hash) = self.registered_account(&sender);
+            sender.apply_stake_credit(amount.into());
+            self.save_account(&sender_id_hash, &sender);
+        }
+    }
+}
+
 impl StakeTokenContract {
     fn resolve_vault_gas(&self) -> Gas {
         self.config
@@ -213,10 +314,31 @@ impl StakeTokenContract {
             .transfer_with_vault()
     }
 
-    fn min_gas_for_receiver(&self) -> Gas {
+    fn min_gas_for_vault_receiver(&self) -> Gas {
         self.config
             .gas_config()
             .vault_fungible_token()
+            .min_gas_for_receiver()
+    }
+
+    fn finalize_ft_transfer_gas(&self) -> Gas {
+        self.config
+            .gas_config()
+            .transfer_call_fungible_token()
+            .finalize_ft_transfer()
+    }
+
+    fn transfer_call_gas(&self) -> Gas {
+        self.config
+            .gas_config()
+            .transfer_call_fungible_token()
+            .transfer_call()
+    }
+
+    fn min_gas_for_transfer_call_receiver(&self) -> Gas {
+        self.config
+            .gas_config()
+            .transfer_call_fungible_token()
             .min_gas_for_receiver()
     }
 }
@@ -263,6 +385,7 @@ mod test {
 
         let (mut account, account_id_hash) = contract.registered_account(sender_account_id);
         account.apply_stake_credit((100 * YOCTO).into());
+        assert_eq!(account.available_stake_balance(), (100 * YOCTO).into());
         contract.save_account(&account_id_hash, &account);
         contract.total_stake.credit(account.stake.unwrap().amount());
 

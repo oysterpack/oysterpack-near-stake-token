@@ -90,6 +90,7 @@ pub struct GasConfig {
     staking_pool: StakingPoolGasConfig,
     callbacks: CallBacksGasConfig,
     vault_ft: VaultFungibleTokenGasConfig,
+    transfer_call_ft: FungibleTokenTransferCallGasConfig,
 }
 
 impl GasConfig {
@@ -103,6 +104,10 @@ impl GasConfig {
 
     pub fn vault_fungible_token(&self) -> &VaultFungibleTokenGasConfig {
         &self.vault_ft
+    }
+
+    pub fn transfer_call_fungible_token(&self) -> &FungibleTokenTransferCallGasConfig {
+        &self.transfer_call_ft
     }
 
     /// if validate is true, then merge performs some sanity checks on the config to
@@ -155,6 +160,7 @@ impl Default for GasConfig {
             staking_pool: Default::default(),
             callbacks: Default::default(),
             vault_ft: Default::default(),
+            transfer_call_ft: Default::default(),
         }
     }
 }
@@ -398,6 +404,61 @@ impl Default for VaultFungibleTokenGasConfig {
             min_gas_for_receiver: GAS_FOR_PROMISE + GAS_BASE_COMPUTE,
             transfer_with_vault: (GAS_FOR_PROMISE * 2) + GAS_FOR_DATA_DEPENDENCY + GAS_BASE_COMPUTE,
             resolve_vault: GAS_BASE_COMPUTE,
+        }
+    }
+}
+
+#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, Copy)]
+#[serde(crate = "near_sdk::serde")]
+pub struct FungibleTokenTransferCallGasConfig {
+    min_gas_for_receiver: Gas,
+
+    /// We need to create 2 promises with dependencies and with some basic compute to write to the state.
+    transfer_call: Gas,
+    finalize_ft_transfer: Gas,
+}
+
+impl FungibleTokenTransferCallGasConfig {
+    pub fn merge(&mut self, config: interface::FungibleTokenTransferCallGasConfig, validate: bool) {
+        if let Some(gas) = config.min_gas_for_receiver {
+            if validate {
+                assert_gas_range(gas, 10, 20, "transfer_call::min_gas_for_receiver");
+            }
+            self.min_gas_for_receiver = gas;
+        }
+        if let Some(gas) = config.transfer_call {
+            if validate {
+                assert_gas_range(gas, 20, 30, "transfer_call::transfer_call");
+            }
+            self.transfer_call = gas;
+        }
+        if let Some(gas) = config.finalize_ft_transfer {
+            if validate {
+                assert_gas_range(gas, 5, 10, "transfer_call::finalize_ft_transfer");
+            }
+            self.finalize_ft_transfer = gas;
+        }
+    }
+
+    pub fn min_gas_for_receiver(&self) -> Gas {
+        self.min_gas_for_receiver
+    }
+
+    pub fn transfer_call(&self) -> Gas {
+        self.transfer_call
+    }
+
+    pub fn finalize_ft_transfer(&self) -> Gas {
+        self.finalize_ft_transfer
+    }
+}
+
+impl Default for FungibleTokenTransferCallGasConfig {
+    fn default() -> Self {
+        Self {
+            min_gas_for_receiver: GAS_BASE_COMPUTE,
+            transfer_call: (GAS_FOR_PROMISE * 2) + GAS_FOR_DATA_DEPENDENCY + GAS_BASE_COMPUTE,
+            finalize_ft_transfer: GAS_BASE_COMPUTE,
         }
     }
 }
