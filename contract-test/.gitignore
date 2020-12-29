@@ -29,3 +29,4 @@ yarn-error.log*
 /contract/res/
 /contract/target/
 /contract/neardev/
+/contract/temp/

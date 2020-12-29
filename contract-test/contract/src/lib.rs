@@ -31,14 +31,15 @@ impl TestHarness {
         &self,
         stake_token_contract: ValidAccountId,
     ) -> Promise {
-        log(format!(
+        log("test_account_registration_workflow");
+        log(&format!(
             "STAKE Token Contract: {}",
             stake_token_contract.as_ref()
         ));
 
         let callback_gas =
-            env::prepaid_gas().saturating_sub(env::used_gas().saturating_add(TGAS * 20));
-        // log(format!("callback_gas = {}", callback_gas));
+            env::prepaid_gas().saturating_sub(env::used_gas().saturating_add(TGAS * 25));
+        log(&format!("callback_gas = {}", callback_gas));
 
         account_management::account_registered(
             to_valid_account(env::current_account_id()),
@@ -50,7 +51,7 @@ impl TestHarness {
             to_account(&stake_token_contract),
             &env::current_account_id(),
             NO_DEPOSIT,
-            TGAS * 250,
+            callback_gas,
         ))
     }
 }
@@ -67,6 +68,8 @@ impl TestHarness {
     ) -> Promise {
         assert_predecessor_is_self();
 
+        log("on_account_registered");
+
         assert!(
             promise_result_succeeded(),
             "StakeTokenContract::on_account_registered failed: {}",
@@ -74,7 +77,7 @@ impl TestHarness {
         );
 
         if registered {
-            log(format!(
+            log(&format!(
                 "account is already registered: {}",
                 env::current_account_id()
             ));
@@ -85,20 +88,21 @@ impl TestHarness {
                 TGAS * 5,
             )
         } else {
-            log(format!(
+            log(&format!(
                 "account is not registered: {}",
                 env::current_account_id()
             ));
 
-            let callback_gas = env::prepaid_gas().saturating_sub(TGAS * 20);
-            log(format!("callback_gas = {}", callback_gas));
+            let callback_gas =
+                env::prepaid_gas().saturating_sub(env::used_gas().saturating_add(TGAS * 25));
+            log(&format!("callback_gas = {}", callback_gas));
 
             account_management::account_storage_fee(&stake_token_contract, NO_DEPOSIT, TGAS * 5)
                 .then(ext_self::on_account_storage_fee_self_register(
                     stake_token_contract,
                     &env::current_account_id(),
                     NO_DEPOSIT,
-                    TGAS * 100,
+                    callback_gas,
                 ))
         }
     }
@@ -111,31 +115,36 @@ impl TestHarness {
     ) -> Promise {
         assert_predecessor_is_self();
 
+        log("on_account_storage_fee_self_register");
+
         assert!(
             promise_result_succeeded(),
             "StakeTokenContract::account_storage_fee failed: {}",
             stake_token_contract
         );
 
-        log(format!(
+        log(&format!(
             "account storage fee is {} yoctoNEAR",
             storage_fee.0 .0
         ));
 
-        let callback_gas = env::prepaid_gas().saturating_sub(TGAS * 20);
-        // log(format!("callback_gas = {}", callback_gas));
+        let callback_gas =
+            env::prepaid_gas().saturating_sub(env::used_gas().saturating_add(TGAS * 25));
+        log(&format!("callback_gas = {}", callback_gas));
 
         account_management::register_account(&stake_token_contract, storage_fee.0 .0, TGAS * 5)
             .then(ext_self::on_register_account_lookup_account(
                 stake_token_contract,
                 &env::current_account_id(),
                 NO_DEPOSIT,
-                TGAS * 40,
+                callback_gas,
             ))
     }
 
     pub fn on_register_account_lookup_account(&self, stake_token_contract: AccountId) -> Promise {
         assert_predecessor_is_self();
+
+        log("on_register_account_lookup_account");
 
         assert!(
             promise_result_succeeded(),
@@ -143,7 +152,7 @@ impl TestHarness {
             stake_token_contract
         );
 
-        log(format!(
+        log(&format!(
             "successfully registered with: {}",
             stake_token_contract
         ));
@@ -360,7 +369,7 @@ fn assert_predecessor_is_self() {
 }
 
 /// wrapper around `near_sdk::env::log()` to make it simpler to use
-fn log(msg: String) {
+fn log(msg: &str) {
     env::log(msg.as_bytes());
 }
 
