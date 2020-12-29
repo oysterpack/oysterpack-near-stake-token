@@ -51,6 +51,12 @@ impl From<YoctoNear> for u128 {
     }
 }
 
+impl From<YoctoNear> for U128 {
+    fn from(value: YoctoNear) -> Self {
+        value.0.into()
+    }
+}
+
 impl Deref for YoctoNear {
     type Target = u128;
 

@@ -1,5 +1,6 @@
 use crate::{core::Hash, domain::YoctoStake, interface};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
+use near_sdk::json_types::U128;
 use std::ops::{Deref, DerefMut};
 
 #[derive(BorshDeserialize, BorshSerialize)]
@@ -33,6 +34,12 @@ impl VaultId {
 impl From<u128> for VaultId {
     fn from(value: u128) -> Self {
         Self(value.into())
+    }
+}
+
+impl From<U128> for VaultId {
+    fn from(value: U128) -> Self {
+        Self(value.0)
     }
 }
 

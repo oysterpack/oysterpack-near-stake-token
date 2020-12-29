@@ -1,9 +1,13 @@
 use crate::interface;
-use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::serde::export::Formatter;
+use near_sdk::{
+    borsh::{self, BorshDeserialize, BorshSerialize},
+    json_types::U128,
+};
 use primitive_types::U256;
-use std::fmt::{self, Display};
-use std::ops::{Add, AddAssign, Deref, DerefMut, Sub, SubAssign};
+use std::{
+    fmt::{self, Display, Formatter},
+    ops::{Add, AddAssign, Deref, DerefMut, Sub, SubAssign},
+};
 
 #[derive(
     BorshSerialize, BorshDeserialize, Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Default,
@@ -25,6 +29,18 @@ impl YoctoStake {
 impl From<YoctoStake> for u128 {
     fn from(value: YoctoStake) -> Self {
         value.0
+    }
+}
+
+impl From<YoctoStake> for U128 {
+    fn from(value: YoctoStake) -> Self {
+        value.0.into()
+    }
+}
+
+impl From<U128> for YoctoStake {
+    fn from(value: U128) -> Self {
+        Self(value.0)
     }
 }
 
