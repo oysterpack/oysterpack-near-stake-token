@@ -9,19 +9,10 @@ use near_sdk::{
     Promise,
 };
 
-/// The design intent is to decouple the token asset from the token transfer protocol.
-///
 /// - Fungible token supports 1 or more [TransferProtocol]s as specified per [MetaData]
 /// - Accounts must register with the token contract and pay for account storage fees.
 ///   - account storage fees are escrowed and refunded when the account unregisters
 ///   - account chooses the transfer protocol to use as transfer recipient
-/// - FT has generic [transfer] function interface
-/// - sender account does not choose the transfer protocol - the receiver account chooses how they
-///   want to receive the tokens
-///
-/// The key advantage of this design is that it decouples the protocol interface from the implementation.
-/// The problem with all of the "standard" interfaces is that they are too tightly coupled with implementation.
-/// We need decoupled interface that will allow transfer protocols to evolve.
 pub trait FungibleToken {
     fn metadata(&self) -> Metadata;
 
@@ -72,10 +63,10 @@ impl Metadata {
 #[serde(crate = "near_sdk::serde")]
 pub struct TransferProtocol {
     /// Suggested protocol names:
-    /// - SIMPLE - NEP-21
-    /// - ALLOWANCE - NEP 21
-    /// - VAULT_TRANSFER - NEP-122
-    /// - TRANSFER_AND_NOTIFY - NEP-136
+    /// - simple - NEP-21
+    /// - allowance - NEP 21
+    /// - vault_transfer - NEP-122
+    /// - transfer_and_notify - NEP-136
     pub name: String,
     /// - each protocol defines min amount of gas required, excluding gas required to cover `msg` `memo`
     pub gas: Gas,
@@ -205,6 +196,7 @@ pub trait ExtFinalizeTransferCallback {
 ///     are pre-registered
 ///   - eliminates transfers to non-existent accounts
 /// - `transfer_raw` has been moved to [`SimpleTransfer::transfer`]
+/// - `payload` has been replaced with `msg` and `memo` optional args
 pub trait VaultBasedTransfer {
     /// Transfer to a contract with payload
     /// Gas requirement: 40+ TGas or 40000000000000 Gas.
