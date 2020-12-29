@@ -131,21 +131,24 @@ pub trait TransferCall {
     /// The recipient contract MUST implement [TransferCallRecipient] interface. The tokens are
     /// deposited but locked in the recipient account until the transfer has been confirmed by the
     /// recipient contract and then finalized. The transfer workflow steps are:
-    /// 1. sender initiates the transfer via `transder_call`
+    /// 1. sender initiates the transfer via [`transfer_call`]
     /// 2. token transfers the funds from the sender's account to the recipient's account but locks
     ///    the transfer amount on the recipient account. The locked tokens cannot be used until
     ///    the recipient contract confirms the transfer.
-    /// 3. The recipient contract is then notified of the transfer via [`TransferCallRecipient::on_ft_receive`].
-    /// 4. Once the transfer notification call completes, then the [`TransferCallRecipient::on_ft_receive`]
+    /// 3. The recipient contract is then notified of the transfer via
+    ///    [on_ft_receive](crate::interface::ext_transfer_call_recipient::on_ft_receive).
+    /// 4. Once the transfer notification call completes, then the [`FinalizeTransferCallback::finalize_ft_transfer`]
     ///    callback on the token contract is invoked to finalize the transfer. If the recipient contract
     ///    successfully completed the transfer notification call, then the funds are unlocked
-    ///    via the [`FinalizeTransferCallback::finalize_ft_transfer`] callback. If the [`TransferCallRecipient::on_ft_receive`]
-    ///    call fails for any reason, then the fund transfer is rolled back in the finalize callback.
+    ///    via the [`FinalizeTransferCallback::finalize_ft_transfer`] callback. If the
+    ///    [on_ft_receive](crate::interface::ext_transfer_call_recipient::on_ft_receive) call fails
+    ///    for any reason, then the fund transfer is rolled back in the finalize callback.
     ///
-    /// `msg`: is a message sent to the recipient. It might be used to send additional call
-    //      instructions.
-    /// `memo`: arbitrary data with no specified format used to link the transaction with an
-    ///     external event. If referencing a binary data, it should use base64 serialization.
+    /// ## Transfer Reference Args
+    /// - `msg`: is a message sent to the recipient. It might be used to send additional call
+    //    instructions.
+    /// - `memo`: arbitrary data with no specified format used to link the transaction with an
+    ///   external event. If referencing a binary data, it should use base64 serialization.
     ///
     /// ## Panics
     /// - if accounts are not registered
@@ -159,12 +162,13 @@ pub trait TransferCall {
     ) -> Promise;
 }
 
+/// Token contract callback interface to finalize transfer-call based token transfer
 pub trait FinalizeTransferCallback {
     /// Finalizes the token transfer
     ///
     /// Actions:
-    /// - if the call `TransferCallRecipient::on_ft_receive` succeeds, then commit the transfer,
-    ///   i.e., unlock the balance on the recipient account
+    /// - if the call [on_ft_receive](crate::interface::ext_transfer_call_recipient::on_ft_receive)
+    ///    succeeds, then commit the transfer,i.e., unlock the balance on the recipient account
     /// - else rollback the transfer by returning the locked balance to the sender
     ///
     /// #[private]
@@ -172,9 +176,8 @@ pub trait FinalizeTransferCallback {
 }
 
 /// Interface for recipient call on fungible-token transfers.
-/// `token` is an account address of the token  - a smart-contract defining the token
-///     being transferred.
-/// `from` is an address of a previous holder of the tokens being sent
+/// - `token` is an account address of the token  - a smart-contract defining the token being transferred.
+/// - `from` is an address of a previous holder of the tokens being sent
 #[ext_contract(ext_transfer_call_recipient)]
 pub trait TransferCallRecipient {
     fn on_ft_receive(
@@ -191,8 +194,8 @@ pub trait ExtFinalizeTransferCallback {
     /// Finalizes the token transfer
     ///
     /// Actions:
-    /// - if the call `TransferCallRecipient::on_ft_receive` succeeds, then commit the transfer,
-    ///   i.e., unlock the balance on the recipient account
+    /// - if the call [on_ft_receive](crate::interface::ext_transfer_call_recipient::on_ft_receive)
+    ///    succeeds, then commit the transfer,i.e., unlock the balance on the recipient account
     /// - else rollback the transfer by returning the locked balance to the sender
     ///
     /// #[private]
