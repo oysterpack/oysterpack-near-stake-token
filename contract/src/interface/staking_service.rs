@@ -78,13 +78,6 @@ pub trait StakingService {
     ///   claimed (for valid batch IDs)
     fn redeem_stake_batch_receipt(&self, batch_id: BatchId) -> Option<RedeemStakeBatchReceipt>;
 
-    /// Used to deposit NEAR to stake. Deposits also help to provide liquidity for users that are
-    /// redeeming STAKE. If there is pending unstaked NEAR awaiting to be withdraw, then the the deposit
-    /// will provide liquidity towards the redeemed STAKE on a first come first use basis. Ths will
-    /// enable users to redeem STAKE sooner than the lockup period imposed by the staking pool. When
-    /// liquidity is added, instead of depositing funds into the staking pool, unstaked NEAR is simply
-    /// restaked.
-    ///
     /// Adds the attached deposit to the next [StakeBatch] scheduled to run.
     /// Returns the [BatchId] for the [StakeBatch] that the funds are deposited into.
     /// - deposits are committed for staking via [stake](StakingService::stake)
@@ -111,13 +104,24 @@ pub trait StakingService {
     /// GAS REQUIREMENTS: 10 TGas
     fn deposit(&mut self) -> BatchId;
 
+    /// If there is pending unstaked NEAR awaiting to become available for withdrawal, then the the
+    /// NEAR deposits stored in the [StakeBatch](crate::domain::StakeBatch] will provide liquidity
+    /// to enable NEAR funds to be withdrawn sooner than the lockup period imposed by the staking pool.
+    /// When liquidity is added, instead of depositing funds into the staking pool, unstaked NEAR is
+    /// simply restaked.
+    ///
     /// locks the contract to stake the batched NEAR funds and then kicks off the staking workflow
     /// 1. lock the contract
     /// 2. gets the account stake balance from the staking pool
     /// 3. updates STAKE token value
-    /// 4. deposits and stakes the NEAR funds with the staking pool
-    /// 5. creates the batch receipt
-    /// 6. releases the lock
+    /// 4. if there is a pending withdrawal, then add liquidity
+    ///    - if the amount being staked is less than the amount unstaked, then stake the batch amount
+    ///      from the unstaked balance
+    ///    - if the amount being staked is more than the unstaked amount, then deposit_and_stake the
+    ///      remainder and then stake the batch amount
+    /// 5. if there is not pending withdrawal, then deposits and stakes the NEAR funds with the staking pool
+    /// 6. creates the batch receipt
+    /// 7. releases the lock
     ///
     /// ## Notes
     /// [contract_state](crates::interface::Operator::contract_state) can be queried to check if the

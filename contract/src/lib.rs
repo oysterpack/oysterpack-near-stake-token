@@ -25,7 +25,19 @@
 //! With the current staking pool implementations, the problem is that unstaked NEAR is not immediately
 //! available for withdrawal from the staking pool contract. The unstaked NEAR is locked for 4 epoch
 //! time periods, which translates to ~48 hours in NEAR time. This makes it more difficult and complex
-//! to utilize NEAR as a digital asset, i.e., as a fungible token.
+//! to utilize NEAR as a digital asset, i.e., as a fungible token. The OyserPack STAKE Token Contract
+//! helps to bypass the lockup period by providing liquidity.
+//!
+//! ### How STAKE Token Contract Provides Liquidity To Bypass Staking Pool Contract NEAR Lockup
+//! When the contract runs a [StakeBatch](crate::domain::StakeBatch), the contract will check if
+//! there is a pending withdrawal for unstaked NEAR. The contract will then apply the unstaked NEAR
+//! to the transaction, and move NEAR funds from the [StakeBatch](crate::domain::StakeBatch) into the
+//! contract's NEAR liquidity pool. This makes the unstaked NEAR "liquid" and available for withdrawal
+//! immediately without waiting for the unstaked NEAR to become available for withdrawal from the staking
+//! pool. Users will be able to withdraw from the contract's NEAR liquidity pool on a first come first
+//! serve basis. The amount of liquidity is determined by contract activity, i.e., how much users are
+//! staking while there unstaked near is locked up in the staking pool awaiting to become available to
+//! be withdrawn.
 //!
 //! ## STAKE Token Benefits
 //! 1. NEAR token asset value is maximized through staking.

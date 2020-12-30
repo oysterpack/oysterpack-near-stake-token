@@ -281,7 +281,7 @@ impl StakingService for StakeTokenContract {
                 );
                 self.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
 
-                self.get_account_staked_balance_from_staking_pool()
+                self.get_account_from_staking_pool()
                     .then(self.invoke_on_run_redeem_stake_batch())
                     .then(self.invoke_release_run_redeem_stake_batch_unstaking_lock())
             }
@@ -349,19 +349,6 @@ impl StakeTokenContract {
                 .gas_config()
                 .staking_pool()
                 .get_account()
-                .value(),
-        )
-    }
-
-    pub(crate) fn get_account_staked_balance_from_staking_pool(&self) -> Promise {
-        ext_staking_pool::get_account_staked_balance(
-            env::current_account_id(),
-            &self.staking_pool_id,
-            NO_DEPOSIT.into(),
-            self.config
-                .gas_config()
-                .staking_pool()
-                .get_account_balance()
                 .value(),
         )
     }
@@ -708,6 +695,7 @@ impl StakeTokenContract {
             let near = receipt.stake_token_value().stake_to_near(redeemable_stake);
             account.apply_near_credit(near);
             contract.near_liquidity_pool -= near;
+            contract.total_near.credit(near);
 
             // track that the STAKE tokens were claimed
             receipt.stake_tokens_redeemed(redeemable_stake);
@@ -849,7 +837,13 @@ pub struct StakingPoolAccount {
 pub trait ExtStakingPool {
     fn get_account(&self, account_id: AccountId) -> StakingPoolAccount;
 
+    fn deposit(&mut self);
+
     fn deposit_and_stake(&mut self);
+
+    fn stake(&mut self, amount: near_sdk::json_types::U128);
+
+    fn unstake_all(&mut self);
 
     fn unstake(&mut self, amount: near_sdk::json_types::U128);
 
@@ -2171,7 +2165,7 @@ mod test {
                 Action::FunctionCall {
                     method_name, args, ..
                 } => {
-                    assert_eq!(method_name, "get_account_staked_balance");
+                    assert_eq!(method_name, "get_account");
                     let args: GetStakedAccountBalanceArgs =
                         near_sdk::serde_json::from_str(args).unwrap();
                     assert_eq!(args.account_id, context.current_account_id);
@@ -2251,7 +2245,7 @@ mod test {
                 Action::FunctionCall {
                     method_name, args, ..
                 } => {
-                    assert_eq!(method_name, "get_account_staked_balance");
+                    assert_eq!(method_name, "get_account");
                     let args: GetStakedAccountBalanceArgs =
                         near_sdk::serde_json::from_str(args).unwrap();
                     assert_eq!(args.account_id, context.current_account_id);
@@ -2689,6 +2683,7 @@ mod test {
             .unwrap();
         assert_eq!(receipt.redeemed_stake(), (10 * YOCTO).into());
         assert_eq!(contract.near_liquidity_pool, 0.into());
+        assert_eq!(contract.total_near.amount(), (10 * YOCTO).into());
     }
 
     /// Given an account has redeemed STAKE into the current and next batches

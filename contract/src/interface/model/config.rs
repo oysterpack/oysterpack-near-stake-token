@@ -22,7 +22,6 @@ pub struct StakingPoolGasConfig {
     pub deposit_and_stake: Option<Gas>,
     pub unstake: Option<Gas>,
     pub withdraw: Option<Gas>,
-    pub get_account_balance: Option<Gas>,
     pub get_account: Option<Gas>,
 }
 

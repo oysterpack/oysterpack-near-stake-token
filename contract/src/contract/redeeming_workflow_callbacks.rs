@@ -24,7 +24,7 @@ use near_sdk::{env, near_bindgen, Promise, PromiseOrValue};
 impl StakeTokenContract {
     pub fn on_run_redeem_stake_batch(
         &mut self,
-        #[callback] staked_balance: near_sdk::json_types::U128,
+        #[callback] staking_pool_account: StakingPoolAccount,
     ) -> Promise {
         assert_predecessor_is_self();
         // this callback should only be invoked when we are unstaking, i.e., when the RedeemStakeBatch
@@ -41,14 +41,18 @@ impl StakeTokenContract {
         assert!(self.promise_result_succeeded(), GET_STAKED_BALANCE_FAILURE);
 
         // update the cached STAKE token value
-        self.stake_token_value = self.stake_token_value(staked_balance.into());
+        self.stake_token_value = self.stake_token_value(staking_pool_account.staked_balance.into());
 
         let unstake_amount = self
             .stake_token_value
             .stake_to_near(batch.balance().amount());
 
-        self.invoke_unstake(unstake_amount)
-            .then(self.invoke_on_unstake())
+        if staking_pool_account.staked_balance.0 < unstake_amount.value() {
+            self.invoke_unstake_all().then(self.invoke_on_unstake())
+        } else {
+            self.invoke_unstake(unstake_amount)
+                .then(self.invoke_on_unstake())
+        }
     }
 
     pub fn on_unstake(&mut self) {
@@ -116,6 +120,14 @@ impl StakeTokenContract {
     fn invoke_unstake(&self, unstake_amount: domain::YoctoNear) -> Promise {
         ext_staking_pool::unstake(
             unstake_amount.value().into(),
+            &self.staking_pool_id,
+            NO_DEPOSIT.value(),
+            self.config.gas_config().staking_pool().unstake().value(),
+        )
+    }
+
+    fn invoke_unstake_all(&self) -> Promise {
+        ext_staking_pool::unstake_all(
             &self.staking_pool_id,
             NO_DEPOSIT.value(),
             self.config.gas_config().staking_pool().unstake().value(),
@@ -237,7 +249,13 @@ mod test {
         testing_env!(context.clone());
 
         let staked_balance: U128 = (1100 * YOCTO).into();
-        contract.on_run_redeem_stake_batch(staked_balance.clone());
+        let staking_pool_account = StakingPoolAccount {
+            account_id: context.current_account_id.to_string(),
+            unstaked_balance: 0.into(),
+            staked_balance,
+            can_withdraw: true,
+        };
+        contract.on_run_redeem_stake_batch(staking_pool_account.clone());
         let receipts = deserialize_receipts(&env::created_receipts());
         println!("{:#?}", receipts);
         assert_eq!(receipts.len(), 2);
@@ -323,7 +341,13 @@ mod test {
         testing_env!(context.clone());
 
         let staked_balance: U128 = (1100 * YOCTO).into();
-        contract.on_run_redeem_stake_batch(staked_balance);
+        let staking_pool_account = StakingPoolAccount {
+            account_id: context.current_account_id.to_string(),
+            unstaked_balance: 0.into(),
+            staked_balance: staked_balance.clone(),
+            can_withdraw: true,
+        };
+        contract.on_run_redeem_stake_batch(staking_pool_account);
         let receipts = deserialize_receipts(&env::created_receipts());
         println!("{:#?}", receipts);
         assert_eq!(receipts.len(), 2);
@@ -389,7 +413,12 @@ mod test {
         let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(None, contract_settings);
 
-        contract.on_run_redeem_stake_batch((YOCTO).into());
+        contract.on_run_redeem_stake_batch(StakingPoolAccount {
+            account_id: account_id.to_string(),
+            unstaked_balance: U128(0),
+            staked_balance: U128(0),
+            can_withdraw: false,
+        });
     }
 
     #[test]
@@ -407,7 +436,12 @@ mod test {
         testing_env!(context.clone());
 
         contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
-        contract.on_run_redeem_stake_batch(YOCTO.into());
+        contract.on_run_redeem_stake_batch(StakingPoolAccount {
+            account_id: account_id.to_string(),
+            unstaked_balance: U128(0),
+            staked_balance: U128(0),
+            can_withdraw: false,
+        });
     }
 
     #[test]

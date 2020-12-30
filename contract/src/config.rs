@@ -171,14 +171,12 @@ pub struct StakingPoolGasConfig {
     deposit_and_stake: Gas,
     unstake: Gas,
     withdraw: Gas,
-    get_account_balance: Gas,
     get_account: Gas,
 }
 
 impl Default for StakingPoolGasConfig {
     fn default() -> Self {
         Self {
-            get_account_balance: TGAS * 5,
             get_account: TGAS * 5,
 
             deposit_and_stake: TGAS * 50,
@@ -201,21 +199,11 @@ impl StakingPoolGasConfig {
         self.withdraw
     }
 
-    pub fn get_account_balance(&self) -> Gas {
-        self.get_account_balance
-    }
-
     pub fn get_account(&self) -> Gas {
         self.get_account
     }
 
     pub fn merge(&mut self, config: interface::StakingPoolGasConfig, validate: bool) {
-        if let Some(gas) = config.get_account_balance {
-            if validate {
-                assert_gas_range(gas, 5, 10, "staking_pool::get_account_balance");
-            }
-            self.get_account_balance = gas;
-        }
         if let Some(gas) = config.get_account {
             if validate {
                 assert_gas_range(gas, 5, 10, "staking_pool::get_account");
@@ -261,7 +249,7 @@ impl CallBacksGasConfig {
     pub fn merge(&mut self, config: interface::CallBacksGasConfig, validate: bool) {
         if let Some(gas) = config.on_run_stake_batch {
             if validate {
-                assert_gas_range(gas, 70, 100, "callbacks::on_run_stake_batch");
+                assert_gas_range(gas, 70, 150, "callbacks::on_run_stake_batch");
             }
             self.on_run_stake_batch = gas;
         }
@@ -517,7 +505,6 @@ mod test {
                 deposit_and_stake: Some(TGAS * 71),
                 unstake: Some(TGAS * 72),
                 withdraw: Some(TGAS * 73),
-                get_account_balance: Some(TGAS * 6),
                 get_account: Some(TGAS * 7),
             },
             true,
@@ -525,7 +512,6 @@ mod test {
         assert_eq!(config.deposit_and_stake, TGAS * 71);
         assert_eq!(config.unstake, TGAS * 72);
         assert_eq!(config.withdraw, TGAS * 73);
-        assert_eq!(config.get_account_balance, TGAS * 6);
         assert_eq!(config.get_account, TGAS * 7);
     }
 }
