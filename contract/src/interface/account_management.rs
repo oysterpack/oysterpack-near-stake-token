@@ -15,6 +15,8 @@ pub trait AccountManagement {
     ///   when the account is unregistered - use [account_storage_escrow_fee](crate::interface::AccountManagement::account_storage_fee)
     ///   to lookup the required storage fee amount. Overpayment of storage fee is refunded.
     ///
+    /// Gas Requirements: 4.5 TGas
+    ///
     /// ## Panics
     /// - if deposit is not enough to cover storage usage fees
     /// - if account is already registered
@@ -23,21 +25,29 @@ pub trait AccountManagement {
     /// In order to unregister the account all NEAR must be unstaked and withdrawn from the account.
     /// The escrowed storage fee will be refunded to the account.
     ///
+    /// Gas Requirements: 8 TGas
+    ///
     /// ## Panics
     /// - if account is not registered
     /// - if registered account has funds
     fn unregister_account(&mut self);
 
     /// Returns the required deposit amount that is required for account registration.
+    ///
+    /// Gas Requirements: 3.5 TGas
     fn account_storage_fee(&self) -> YoctoNear;
 
     /// returns true if the account is registered
+    ///
+    /// Gas Requirements: 4 TGas
     fn account_registered(&self, account_id: ValidAccountId) -> bool;
 
     /// returns the total number of accounts that are registered with this contract
     fn total_registered_accounts(&self) -> U128;
 
     /// looks up the registered account
+    ///
+    /// Gas Requirements: 4.5 TGas
     fn lookup_account(&self, account_id: ValidAccountId) -> Option<StakeAccount>;
 
     /// Withdraws the specified amount from the account's available NEAR balance and transfers the

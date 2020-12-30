@@ -14,6 +14,18 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 #[derive(Default, BorshDeserialize, BorshSerialize)]
 pub struct TestHarness {}
 
+pub use consts::*;
+
+mod consts {
+    use crate::TGAS;
+
+    pub const REGISTER_ACCOUNT_GAS: u64 = 4_500_000_000_000;
+    pub const UNREGISTER_ACCOUNT_GAS: u64 = 8 * TGAS;
+    pub const ACCOUNT_STORAGE_FEE_GAS: u64 = 3_500_000_000_000;
+    pub const ACCOUNT_REGISTERED_GAS: u64 = 4 * TGAS;
+    pub const LOOKUP_ACCOUNT_GAS: u64 = 4 * TGAS;
+}
+
 #[near_bindgen]
 impl TestHarness {
     pub fn ping() -> String {
@@ -45,7 +57,7 @@ impl TestHarness {
             to_valid_account(env::current_account_id()),
             &to_account(&stake_token_contract),
             NO_DEPOSIT,
-            TGAS * 5,
+            ACCOUNT_REGISTERED_GAS,
         )
         .then(ext_self::on_account_registered(
             to_account(&stake_token_contract),
@@ -85,7 +97,7 @@ impl TestHarness {
                 to_valid_account(env::current_account_id()),
                 &stake_token_contract,
                 NO_DEPOSIT,
-                TGAS * 5,
+                LOOKUP_ACCOUNT_GAS,
             )
         } else {
             log(&format!(
@@ -97,13 +109,17 @@ impl TestHarness {
                 env::prepaid_gas().saturating_sub(env::used_gas().saturating_add(TGAS * 25));
             log(&format!("callback_gas = {}", callback_gas));
 
-            account_management::account_storage_fee(&stake_token_contract, NO_DEPOSIT, TGAS * 5)
-                .then(ext_self::on_account_storage_fee_self_register(
-                    stake_token_contract,
-                    &env::current_account_id(),
-                    NO_DEPOSIT,
-                    callback_gas,
-                ))
+            account_management::account_storage_fee(
+                &stake_token_contract,
+                NO_DEPOSIT,
+                ACCOUNT_STORAGE_FEE_GAS,
+            )
+            .then(ext_self::on_account_storage_fee_self_register(
+                stake_token_contract,
+                &env::current_account_id(),
+                NO_DEPOSIT,
+                callback_gas,
+            ))
         }
     }
 
@@ -132,13 +148,17 @@ impl TestHarness {
             env::prepaid_gas().saturating_sub(env::used_gas().saturating_add(TGAS * 25));
         log(&format!("callback_gas = {}", callback_gas));
 
-        account_management::register_account(&stake_token_contract, storage_fee.0 .0, TGAS * 5)
-            .then(ext_self::on_register_account_lookup_account(
-                stake_token_contract,
-                &env::current_account_id(),
-                NO_DEPOSIT,
-                callback_gas,
-            ))
+        account_management::register_account(
+            &stake_token_contract,
+            storage_fee.0 .0,
+            REGISTER_ACCOUNT_GAS,
+        )
+        .then(ext_self::on_register_account_lookup_account(
+            stake_token_contract,
+            &env::current_account_id(),
+            NO_DEPOSIT,
+            callback_gas,
+        ))
     }
 
     pub fn on_register_account_lookup_account(&self, stake_token_contract: AccountId) -> Promise {
@@ -161,7 +181,7 @@ impl TestHarness {
             to_valid_account(env::current_account_id()),
             &stake_token_contract,
             NO_DEPOSIT,
-            TGAS * 5,
+            LOOKUP_ACCOUNT_GAS,
         )
     }
 }
