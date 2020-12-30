@@ -2,8 +2,6 @@
 ```bash
 near view stake.oysterpack.testnet staking_pool_id
 
-near view stake.oysterpack.testnet stake_token_value
-
 near view stake.oysterpack.testnet pending_withdrawal
 
 near view stake.oysterpack.testnet redeem_stake_batch_receipt --args '{"batch_id":"3"}'
