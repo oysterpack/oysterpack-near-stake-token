@@ -22,4 +22,5 @@ near call stake.oysterpack.testnet unregister_account --accountId alfio-zappala-
 near call stake.oysterpack.testnet withdraw --accountId alfio-zappala-oysterpack.testnet --args '{"amount":"200000000000000000000000"}'
 
 near call stake.oysterpack.testnet withdraw_all --accountId alfio-zappala-oysterpack.testnet
+near call stake.oysterpack.testnet withdraw_all --accountId oysterpack.testnet
 ```

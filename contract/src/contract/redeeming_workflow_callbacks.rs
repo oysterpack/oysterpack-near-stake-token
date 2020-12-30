@@ -145,7 +145,7 @@ impl StakeTokenContract {
     }
 
     /// moves the next batch into the current batch
-    fn pop_redeem_stake_batch(&mut self) {
+    pub(crate) fn pop_redeem_stake_batch(&mut self) {
         self.redeem_stake_batch = self.next_redeem_stake_batch.take();
     }
 }

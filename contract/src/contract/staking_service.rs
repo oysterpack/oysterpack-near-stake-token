@@ -702,6 +702,8 @@ impl StakeTokenContract {
             if receipt.all_claimed() {
                 // then delete the receipt and free the storage
                 contract.redeem_stake_batch_receipts.remove(&batch.id());
+                contract.run_redeem_stake_batch_lock = None;
+                contract.pop_redeem_stake_batch();
             } else {
                 contract
                     .redeem_stake_batch_receipts
@@ -2682,6 +2684,67 @@ mod test {
             .get(&contract.batch_id_sequence)
             .unwrap();
         assert_eq!(receipt.redeemed_stake(), (10 * YOCTO).into());
+        assert_eq!(contract.near_liquidity_pool, 0.into());
+        assert_eq!(contract.total_near.amount(), (10 * YOCTO).into());
+    }
+
+    /// Given an account has redeemed STAKE
+    /// And the batch receipt is pending withdrawal
+    /// And there is enough NEAR liquidity to fulfill the claim
+    /// And the receipt is fully claimed
+    /// Then the account can claim the NEAR funds from the NEAR liquidity pool
+    /// And the RedeemLock is set to None
+    /// And the receipt has been deleted
+    #[test]
+    fn claim_redeem_stake_batch_receipts_for_current_batch_pending_withdrawal_with_full_near_liquidity_available_and_receipt_fully_claimed(
+    ) {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.account_balance = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(None, contract_settings.clone());
+
+        contract.register_account();
+
+        let account_id_hash = Hash::from(account_id);
+        let mut account = contract.accounts.get(&account_id_hash).unwrap();
+        account.redeem_stake_batch = Some(domain::RedeemStakeBatch::new(
+            contract.batch_id_sequence,
+            (10 * YOCTO).into(),
+        ));
+        contract.save_account(&account_id_hash, &account);
+
+        contract.redeem_stake_batch = Some(domain::RedeemStakeBatch::new(
+            contract.batch_id_sequence,
+            (10 * YOCTO).into(),
+        ));
+        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+        contract.near_liquidity_pool = contract
+            .stake_token_value
+            .stake_to_near(account.redeem_stake_batch.unwrap().balance().amount());
+        contract.redeem_stake_batch_receipts.insert(
+            &contract.batch_id_sequence,
+            &domain::RedeemStakeBatchReceipt::new(
+                contract.redeem_stake_batch.unwrap().balance().amount(),
+                contract.stake_token_value,
+            ),
+        );
+
+        contract.claim_receipt_funds(&mut account);
+        contract.save_account(&account_id_hash, &account);
+        let account = contract.accounts.get(&account_id_hash).unwrap();
+        assert_eq!(account.near.unwrap().amount(), (10 * YOCTO).into());
+        assert!(account.redeem_stake_batch.is_none());
+
+        // Then there should be 10 STAKE left unclaimed on the receipt
+        assert!(contract
+            .redeem_stake_batch_receipts
+            .get(&contract.batch_id_sequence)
+            .is_none());
+        assert!(contract.run_redeem_stake_batch_lock.is_none());
         assert_eq!(contract.near_liquidity_pool, 0.into());
         assert_eq!(contract.total_near.amount(), (10 * YOCTO).into());
     }
