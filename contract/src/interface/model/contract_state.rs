@@ -1,9 +1,8 @@
-use crate::interface::YoctoNear;
 use crate::{
     domain::RedeemLock,
     interface::{
-        BatchId, RedeemStakeBatch, RedeemStakeBatchReceipt, StakeBatch, StakeTokenValue,
-        TimestampedNearBalance, TimestampedStakeBalance,
+        BatchId, BlockTimeHeight, RedeemStakeBatch, RedeemStakeBatchReceipt, StakeBatch,
+        StakeTokenValue, TimestampedNearBalance, TimestampedStakeBalance, YoctoNear,
     },
 };
 use near_sdk::{
@@ -15,6 +14,8 @@ use near_sdk::{
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct ContractState {
+    pub block: BlockTimeHeight,
+
     pub staking_pool_id: AccountId,
 
     pub registered_accounts_count: U128,

@@ -13,6 +13,7 @@ use near_sdk::{near_bindgen, Promise};
 impl Operator for StakeTokenContract {
     fn contract_state(&self) -> ContractState {
         ContractState {
+            block: domain::BlockTimeHeight::from_env().into(),
             staking_pool_id: self.staking_pool_id.clone(),
             registered_accounts_count: self.total_registered_accounts().clone(),
             total_unstaked_near: self.total_near.into(),

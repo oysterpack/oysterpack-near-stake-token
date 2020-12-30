@@ -1,6 +1,4 @@
 //required in order for near_bindgen macro to work outside of lib.rs
-use crate::interface::FinalizeTransferCallback;
-use crate::near::log;
 use crate::*;
 use crate::{
     domain::{Gas, Vault, TGAS},
@@ -10,10 +8,11 @@ use crate::{
     },
     interface::{
         ext_self_finalize_transfer_callback, ext_self_resolve_vault_callback, ext_token_receiver,
-        ext_transfer_call_recipient, FungibleToken, Metadata, ResolveVaultCallback, SimpleTransfer,
-        TransferCall, TransferProtocol, VaultBasedTransfer, VaultId,
+        ext_transfer_call_recipient, FinalizeTransferCallback, FungibleToken, Metadata,
+        ResolveVaultCallback, SimpleTransfer, TransferCall, TransferProtocol, VaultBasedTransfer,
+        VaultId,
     },
-    near::{assert_predecessor_is_self, NO_DEPOSIT},
+    near::{assert_predecessor_is_self, log, NO_DEPOSIT},
 };
 use near_sdk::{
     env, json_types::ValidAccountId, json_types::U128, near_bindgen, AccountId, Promise,

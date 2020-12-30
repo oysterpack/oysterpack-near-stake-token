@@ -29,6 +29,7 @@ near call stake.oysterpack.testnet redeem_and_unstake --accountId alfio-zappala-
 near call stake.oysterpack.testnet redeem_all_and_unstake --accountId alfio-zappala-oysterpack.testnet --gas 150000000000000
 
 near call stake.oysterpack.testnet redeem_all_and_unstake --accountId oysterpack.testnet --gas 150000000000000
+near call stake.oysterpack.testnet redeem_all_and_unstake --accountId alfio-zappala-oysterpack.testnet --gas 150000000000000
 
 near call stake.oysterpack.testnet cancel_uncommitted_redeem_stake_batch --accountId alfio-zappala-oysterpack.testnet
 

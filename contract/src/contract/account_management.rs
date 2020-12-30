@@ -81,25 +81,65 @@ impl AccountManagement for StakeTokenContract {
         self.accounts
             .get(&Hash::from(account_id))
             .map(|account| self.apply_receipt_funds_for_view(&account))
-            .map(|account| StakeAccount {
-                storage_escrow: account.storage_escrow.into(),
-                near: account.near.map(Into::into),
-                stake: account.stake.map(Into::into),
-                locked_stake: account.locked_stake.map(Into::into),
-                stake_batch: account.stake_batch.map(Into::into),
-                next_stake_batch: account.next_stake_batch.map(Into::into),
-                redeem_stake_batch: account.redeem_stake_batch.map(|batch| {
+            .map(|account| {
+                let redeem_stake_batch = account.redeem_stake_batch.map(|batch| {
                     interface::RedeemStakeBatch::from(
                         batch,
                         self.redeem_stake_batch_receipt(batch.id().into()),
                     )
-                }),
-                next_redeem_stake_batch: account.next_redeem_stake_batch.map(|batch| {
+                });
+
+                let next_redeem_stake_batch = account.next_redeem_stake_batch.map(|batch| {
                     interface::RedeemStakeBatch::from(
                         batch,
                         self.redeem_stake_batch_receipt(batch.id().into()),
                     )
-                }),
+                });
+
+                let contract_near_liquidity = if self.near_liquidity_pool.value() == 0 {
+                    None
+                } else {
+                    let mut total_unstaked_near = YoctoNear(0);
+
+                    let mut update_total_unstaked_near = |batch: &interface::RedeemStakeBatch| {
+                        if let Some(receipt) = batch.receipt.as_ref() {
+                            let stake_token_value: domain::StakeTokenValue =
+                                receipt.stake_token_value.clone().into();
+                            total_unstaked_near +=
+                                stake_token_value.stake_to_near(receipt.redeemed_stake.0 .0.into());
+                        }
+                    };
+
+                    if let Some(batch) = redeem_stake_batch.as_ref() {
+                        update_total_unstaked_near(batch);
+                    }
+
+                    if let Some(batch) = next_redeem_stake_batch.as_ref() {
+                        update_total_unstaked_near(batch);
+                    }
+
+                    if total_unstaked_near.value() > 0 {
+                        if self.near_liquidity_pool.value() >= total_unstaked_near.value() {
+                            Some(total_unstaked_near.into())
+                        } else {
+                            Some(self.near_liquidity_pool.into())
+                        }
+                    } else {
+                        None
+                    }
+                };
+
+                StakeAccount {
+                    storage_escrow: account.storage_escrow.into(),
+                    near: account.near.map(Into::into),
+                    stake: account.stake.map(Into::into),
+                    locked_stake: account.locked_stake.map(Into::into),
+                    stake_batch: account.stake_batch.map(Into::into),
+                    next_stake_batch: account.next_stake_batch.map(Into::into),
+                    redeem_stake_batch,
+                    next_redeem_stake_batch,
+                    contract_near_liquidity,
+                }
             })
     }
 

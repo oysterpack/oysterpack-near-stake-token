@@ -126,6 +126,7 @@ pub trait SimpleTransfer {
     );
 }
 
+/// implements a [NEP-136](https://github.com/near/NEPs/issues/136) transfer call protocol
 pub trait TransferCall {
     /// Transfer `amount` of tokens from the predecessor account to a `recipient` contract.
     /// The recipient contract MUST implement [TransferCallRecipient] interface. The tokens are

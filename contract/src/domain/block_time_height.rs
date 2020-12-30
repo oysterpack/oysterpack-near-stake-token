@@ -52,3 +52,13 @@ impl BlockTimeHeight {
         self.block_height = env::block_index().into();
     }
 }
+
+impl From<crate::interface::BlockTimeHeight> for BlockTimeHeight {
+    fn from(value: crate::interface::BlockTimeHeight) -> Self {
+        Self {
+            block_height: value.block_height.0 .0.into(),
+            block_timestamp: value.block_timestamp.0 .0.into(),
+            epoch_height: value.epoch_height.0 .0.into(),
+        }
+    }
+}

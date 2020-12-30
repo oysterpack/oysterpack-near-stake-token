@@ -1,5 +1,5 @@
 use crate::interface::{
-    RedeemStakeBatch, StakeBatch, TimestampedNearBalance, TimestampedStakeBalance,
+    RedeemStakeBatch, StakeBatch, TimestampedNearBalance, TimestampedStakeBalance, YoctoNear,
 };
 use near_sdk::serde::{Deserialize, Serialize};
 
@@ -16,7 +16,7 @@ pub struct StakeAccount {
     pub near: Option<TimestampedNearBalance>,
     /// account STAKE token balance
     pub stake: Option<TimestampedStakeBalance>,
-
+    /// STAKE is locked for a [transfer-call](crate::interface::fungible_token::TransferCall::transfer_call)
     pub locked_stake: Option<TimestampedStakeBalance>,
 
     /// NEAR funds that have been deposited to be staked when the batch is run
@@ -30,4 +30,13 @@ pub struct StakeAccount {
     /// While batches are running, the contract is locked. The account can still set submit requests
     /// to redeem STAKE tokens into the next batch while the contract is locked.
     pub next_redeem_stake_batch: Option<RedeemStakeBatch>,
+
+    /// only applies if the account has a [RedeemStakeBatch](crate::domain::RedeemStakeBatch) with a
+    /// [RedeemStakeBatchReceipt](crate::domain::RedeemStakeBatchReceipt) that is pending withdrawal
+    /// from the staking pool. If the contract has liquidity, then this returns the current liquidity
+    /// that is available to withdraw against the redeemed STAKE. The account is not guaranteed the
+    /// funds because other accounts might have withdrawn them first.
+    ///
+    /// returns None if there is currently no NEAR liquidity to withdraw against
+    pub contract_near_liquidity: Option<YoctoNear>,
 }
