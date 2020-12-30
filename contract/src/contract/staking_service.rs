@@ -57,7 +57,7 @@ impl StakingService for StakeTokenContract {
     ///
     /// logical workflow:
     /// 1. lock the contract
-    /// 2. get account stake balance
+    /// 2. get account from staking pool
     /// 3. deposit and stake NEAR funds
     /// 4. create stake batch receipt
     /// 5. update STAKE token supply
@@ -68,7 +68,7 @@ impl StakingService for StakeTokenContract {
 
         self.run_stake_batch_locked = true;
 
-        self.get_account_staked_balance_from_staking_pool() // 5 TGas
+        self.get_account_from_staking_pool() // 5 TGas
             .then(self.invoke_on_run_stake_batch()) // 85 TGas
             .then(self.invoke_release_run_stake_batch_lock()) // 5 TGas
     }
@@ -688,7 +688,7 @@ impl StakeTokenContract {
 
         match self.run_redeem_stake_batch_lock {
             Some(RedeemLock::PendingWithdrawal) => {
-                // NEAR funds cannot be claimed for a receipt that is pending withdrawal of unstaked NEAR from the stakin pool
+                // NEAR funds cannot be claimed for a receipt that is pending withdrawal of unstaked NEAR from the staking pool
                 let pending_batch_id = self.redeem_stake_batch.expect("illegal state - if redeem lock is pending withdrawal, then there must be a batch").id();
 
                 if let Some(batch) = account.redeem_stake_batch {
@@ -827,7 +827,10 @@ pub trait ExtStakingWokflowCallbacks {
     /// 1. update the stake token value
     /// 2. deposit and stake funds with staking pool
     /// 3. register [on_deposit_and_stake] callback on the deposit and stake action
-    fn on_run_stake_batch(&mut self, #[callback] staked_balance: Balance) -> Promise;
+    fn on_run_stake_batch(
+        &mut self,
+        #[callback] staking_pool_account: StakingPoolAccount,
+    ) -> Promise;
 
     /// ## Success Workflow
     /// 1. store the stake batch receipt
@@ -1537,7 +1540,7 @@ mod test {
                 {
                     if let Some(Action::FunctionCall { method_name, .. }) = receipt.actions.first()
                     {
-                        method_name == "get_account_staked_balance"
+                        method_name == "get_account"
                     } else {
                         false
                     }
@@ -1628,7 +1631,7 @@ mod test {
                 {
                     if let Some(Action::FunctionCall { method_name, .. }) = receipt.actions.first()
                     {
-                        method_name == "get_account_staked_balance"
+                        method_name == "get_account"
                     } else {
                         false
                     }
@@ -1714,7 +1717,13 @@ mod test {
                 {
                     context.predecessor_account_id = context.current_account_id.clone();
                     testing_env!(context.clone());
-                    contract.on_run_stake_batch(0.into()); // callback
+                    let staking_pool_account = StakingPoolAccount {
+                        account_id: context.predecessor_account_id,
+                        unstaked_balance: 0.into(),
+                        staked_balance: 0.into(),
+                        can_withdraw: true,
+                    };
+                    contract.on_run_stake_batch(staking_pool_account); // callback
 
                     {
                         context.predecessor_account_id = context.current_account_id.clone();

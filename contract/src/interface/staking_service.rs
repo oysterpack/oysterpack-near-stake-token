@@ -78,6 +78,13 @@ pub trait StakingService {
     ///   claimed (for valid batch IDs)
     fn redeem_stake_batch_receipt(&self, batch_id: BatchId) -> Option<RedeemStakeBatchReceipt>;
 
+    /// Used to deposit NEAR to stake. Deposits also help to provide liquidity for users that are
+    /// redeeming STAKE. If there is pending unstaked NEAR awaiting to be withdraw, then the the deposit
+    /// will provide liquidity towards the redeemed STAKE on a first come first use basis. Ths will
+    /// enable users to redeem STAKE sooner than the lockup period imposed by the staking pool. When
+    /// liquidity is added, instead of depositing funds into the staking pool, unstaked NEAR is simply
+    /// restaked.
+    ///
     /// Adds the attached deposit to the next [StakeBatch] scheduled to run.
     /// Returns the [BatchId] for the [StakeBatch] that the funds are deposited into.
     /// - deposits are committed for staking via [stake](StakingService::stake)
@@ -89,6 +96,15 @@ pub trait StakingService {
     /// ## Panics
     /// - if account is not registered
     /// - if no deposit is attached
+    ///
+    /// ## Notes
+    /// Users who have pending redeem STAKE requests claim the NEAR from the liquidity pool in the
+    /// following ways:
+    /// 1. explicitly via [claim_near](StakingService::claim_near)
+    /// 2. implicitly when withdrawing NEAR funds
+    ///    - [withdraw_all](crate::interface::AccountManagement::withdraw_all)
+    ///    - [withdraw](crate::interface::AccountManagement::withdraw_all)
+    /// 3. implicitly when the user who is depositing has pending redeem stake batches
     ///
     /// #\[payable\]
     ///

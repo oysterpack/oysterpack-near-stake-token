@@ -9,14 +9,15 @@ use crate::{
     ext_staking_pool, ext_staking_workflow_callbacks,
     near::{assert_predecessor_is_self, NO_DEPOSIT},
 };
-use near_sdk::{env, json_types::U128, near_bindgen, Promise};
-
-type Balance = U128;
+use near_sdk::{env, near_bindgen, Promise};
 
 #[near_bindgen]
 impl StakeTokenContract {
     /// part of the [run_stake_batch] workflow
-    pub fn on_run_stake_batch(&mut self, #[callback] staked_balance: Balance) -> Promise {
+    pub fn on_run_stake_batch(
+        &mut self,
+        #[callback] staking_pool_account: StakingPoolAccount,
+    ) -> Promise {
         assert_predecessor_is_self();
 
         // the batch should always be present because the purpose of this callback is a step
@@ -27,6 +28,7 @@ impl StakeTokenContract {
         assert!(self.promise_result_succeeded(), GET_STAKED_BALANCE_FAILURE);
 
         // update the cached STAKE token value
+        let staked_balance = staking_pool_account.staked_balance;
         self.stake_token_value = self.stake_token_value(staked_balance.into());
 
         self.invoke_deposit_and_stake(batch.balance().amount())
@@ -157,7 +159,13 @@ mod test {
         context.attached_deposit = 100 * YOCTO;
         context.epoch_height += 1;
         testing_env!(context.clone());
-        contract.on_run_stake_batch(0.into());
+        let staking_pool_account = StakingPoolAccount {
+            account_id: context.predecessor_account_id.clone(),
+            unstaked_balance: 0.into(),
+            staked_balance: 0.into(),
+            can_withdraw: true,
+        };
+        contract.on_run_stake_batch(staking_pool_account);
         let stake_token_value_after_callback = contract.stake_token_value;
         assert!(
             stake_token_value_after_callback
@@ -254,6 +262,12 @@ mod test {
         context.predecessor_account_id = context.current_account_id.clone();
         testing_env!(context.clone());
         set_env_with_failed_promise_result(&mut contract);
-        contract.on_run_stake_batch(0.into());
+        let staking_pool_account = StakingPoolAccount {
+            account_id: context.predecessor_account_id,
+            unstaked_balance: 0.into(),
+            staked_balance: 0.into(),
+            can_withdraw: true,
+        };
+        contract.on_run_stake_batch(staking_pool_account);
     }
 }
