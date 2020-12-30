@@ -665,7 +665,7 @@ impl StakeTokenContract {
             batch: domain::RedeemStakeBatch,
             mut receipt: domain::RedeemStakeBatchReceipt,
         ) {
-            // how much NEAR did the account stake in the batch
+            // how much STAKE did the account redeem in the batch
             let redeemed_stake = batch.balance().amount();
 
             // claim the STAKE tokens for the account
@@ -684,28 +684,94 @@ impl StakeTokenContract {
             }
         }
 
+        fn claim_redeemed_stake_for_batch_pending_withdrawal(
+            contract: &mut StakeTokenContract,
+            account: &mut Account,
+            batch: &mut domain::RedeemStakeBatch,
+            mut receipt: domain::RedeemStakeBatchReceipt,
+        ) {
+            // how much STAKE did the account redeem in the batch
+            let redeemed_stake = batch.balance().amount();
+            // compute STAKE liquidity
+            let stake_liquidity = receipt
+                .stake_token_value()
+                .near_to_stake(contract.near_liquidity_pool);
+            // compute ho much STAKE can be redeemed from liquidity pool
+            let redeemable_stake = if stake_liquidity >= redeemed_stake {
+                redeemed_stake
+            } else {
+                stake_liquidity
+            };
+            batch.remove(redeemable_stake);
+
+            // claim the STAKE tokens for the account
+            let near = receipt.stake_token_value().stake_to_near(redeemable_stake);
+            account.apply_near_credit(near);
+            contract.near_liquidity_pool -= near;
+
+            // track that the STAKE tokens were claimed
+            receipt.stake_tokens_redeemed(redeemable_stake);
+            if receipt.all_claimed() {
+                // then delete the receipt and free the storage
+                contract.redeem_stake_batch_receipts.remove(&batch.id());
+            } else {
+                contract
+                    .redeem_stake_batch_receipts
+                    .insert(&batch.id(), &receipt);
+            }
+        }
+
         let mut claimed_funds = false;
 
         match self.run_redeem_stake_batch_lock {
+            // NEAR funds can be claimed for receipts that are not pending on the unstaked NEAR withdrawal
+            // NEAR funds can also be claimed against the NEAR liquidity pool
             Some(RedeemLock::PendingWithdrawal) => {
                 // NEAR funds cannot be claimed for a receipt that is pending withdrawal of unstaked NEAR from the staking pool
-                let pending_batch_id = self.redeem_stake_batch.expect("illegal state - if redeem lock is pending withdrawal, then there must be a batch").id();
+                let pending_batch_id = self
+                    .redeem_stake_batch
+                    .expect(REDEEM_STAKE_BATCH_SHOULD_EXIST)
+                    .id();
 
-                if let Some(batch) = account.redeem_stake_batch {
+                if let Some(mut batch) = account.redeem_stake_batch {
                     if batch.id() != pending_batch_id {
                         if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
                             claim_redeemed_stake_for_batch(self, account, batch, receipt);
                             account.redeem_stake_batch = None;
                             claimed_funds = true;
                         }
+                    } else if self.near_liquidity_pool.value() > 0 {
+                        if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
+                            claim_redeemed_stake_for_batch_pending_withdrawal(
+                                self, account, &mut batch, receipt,
+                            );
+                            if batch.balance().amount().value() == 0 {
+                                account.redeem_stake_batch = None;
+                            } else {
+                                account.redeem_stake_batch = Some(batch);
+                            }
+                            claimed_funds = true;
+                        }
                     }
                 }
 
-                if let Some(batch) = account.next_redeem_stake_batch {
+                if let Some(mut batch) = account.next_redeem_stake_batch {
                     if batch.id() != pending_batch_id {
                         if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
                             claim_redeemed_stake_for_batch(self, account, batch, receipt);
                             account.next_redeem_stake_batch = None;
+                            claimed_funds = true;
+                        }
+                    } else if self.near_liquidity_pool.value() > 0 {
+                        if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
+                            claim_redeemed_stake_for_batch_pending_withdrawal(
+                                self, account, &mut batch, receipt,
+                            );
+                            if batch.balance().amount().value() == 0 {
+                                account.next_redeem_stake_batch = None;
+                            } else {
+                                account.next_redeem_stake_batch = Some(batch);
+                            }
                             claimed_funds = true;
                         }
                     }
@@ -2566,6 +2632,63 @@ mod test {
                 .redeemed_stake(),
             (5 * YOCTO).into()
         );
+    }
+
+    /// Given an account has redeemed STAKE
+    /// And the batch receipt is pending withdrawal
+    /// And there is enough NEAR liquidity to fulfill the claim
+    /// Then the account can claim the NEAR funds from the NEAR liquidity pool
+    #[test]
+    fn claim_redeem_stake_batch_receipts_for_current_batch_pending_withdrawal_with_full_near_liquidity_available(
+    ) {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.account_balance = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(None, contract_settings.clone());
+
+        contract.register_account();
+
+        let account_id_hash = Hash::from(account_id);
+        let mut account = contract.accounts.get(&account_id_hash).unwrap();
+        account.redeem_stake_batch = Some(domain::RedeemStakeBatch::new(
+            contract.batch_id_sequence,
+            (10 * YOCTO).into(),
+        ));
+        contract.save_account(&account_id_hash, &account);
+
+        contract.redeem_stake_batch = Some(domain::RedeemStakeBatch::new(
+            contract.batch_id_sequence,
+            (20 * YOCTO).into(),
+        ));
+        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+        contract.near_liquidity_pool = contract
+            .stake_token_value
+            .stake_to_near(account.redeem_stake_batch.unwrap().balance().amount());
+        contract.redeem_stake_batch_receipts.insert(
+            &contract.batch_id_sequence,
+            &domain::RedeemStakeBatchReceipt::new(
+                contract.redeem_stake_batch.unwrap().balance().amount(),
+                contract.stake_token_value,
+            ),
+        );
+
+        contract.claim_receipt_funds(&mut account);
+        contract.save_account(&account_id_hash, &account);
+        let account = contract.accounts.get(&account_id_hash).unwrap();
+        assert_eq!(account.near.unwrap().amount(), (10 * YOCTO).into());
+        assert!(account.redeem_stake_batch.is_none());
+
+        // Then there should be 10 STAKE left unclaimed on the receipt
+        let receipt = contract
+            .redeem_stake_batch_receipts
+            .get(&contract.batch_id_sequence)
+            .unwrap();
+        assert_eq!(receipt.redeemed_stake(), (10 * YOCTO).into());
+        assert_eq!(contract.near_liquidity_pool, 0.into());
     }
 
     /// Given an account has redeemed STAKE into the current and next batches

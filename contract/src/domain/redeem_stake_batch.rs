@@ -43,7 +43,7 @@
 use crate::domain::{BatchId, TimestampedStakeBalance, YoctoStake};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 
-#[derive(BorshSerialize, BorshDeserialize, Clone, Copy)]
+#[derive(BorshSerialize, BorshDeserialize, Clone, Copy, Debug)]
 pub struct RedeemStakeBatch {
     batch_id: BatchId,
     balance: TimestampedStakeBalance,

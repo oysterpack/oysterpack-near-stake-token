@@ -90,6 +90,7 @@ pub(crate) use errors::*;
 #[cfg(test)]
 pub(crate) mod test_utils;
 
+use crate::domain::YoctoNear;
 use crate::{
     config::Config,
     core::Hash,
@@ -142,6 +143,15 @@ pub struct StakeTokenContract {
     /// - credits are applied when [StakeBatchReceipt] is created
     /// - debits are applied when [RedeemStakeBatchReceipt] is created
     total_stake: TimestampedStakeBalance,
+
+    /// used to provide liquidity when accounts are redeeming stake
+    /// - funds will be drawn from the liquidity pool to fulfill requests to redeem STAKE
+    /// - when batch receipts are claimed, the liquidity pool will be checked if unstaked NEAR funds
+    ///   are still locked up in the staking pool
+    /// - liquidity is automatically added when accounts are staking - the NEAR deposits will be added
+    ///   to the liquidity pool if there are unstaked funds in the staking pool - the unstaked funds
+    ///   will simply be restaked
+    near_liquidity_pool: YoctoNear,
 
     /// cached value - if the epoch has changed, then the STAKE token value is out of date because
     /// stake rewars are issued every epoch.
@@ -225,6 +235,7 @@ impl StakeTokenContract {
             accounts_len: 0,
             total_near: TimestampedNearBalance::new(0.into()),
             total_stake: TimestampedStakeBalance::new(0.into()),
+            near_liquidity_pool: 0.into(),
             stake_token_value: StakeTokenValue::default(),
             batch_id_sequence: BatchId::default(),
             stake_batch: None,

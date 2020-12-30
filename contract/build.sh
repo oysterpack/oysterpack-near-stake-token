@@ -2,4 +2,4 @@
 set -e
 
 cargo build --target wasm32-unknown-unknown --release
-cp target/wasm32-unknown-unknown/release/oysterpack_near_stake_token.wasm ./res/
+wasm-opt target/wasm32-unknown-unknown/release/oysterpack_near_stake_token.wasm -Oz -o res/oysterpack_near_stake_token.wasm
