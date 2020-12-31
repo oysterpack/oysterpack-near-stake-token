@@ -3,7 +3,7 @@ use crate::*;
 use crate::{
     domain::{self, YoctoNear},
     errors::{
-        illegal_state::STAKE_BATCH_SHOULD_EXIST,
+        illegal_state::{REDEEM_STAKE_BATCH_RECEIPT_SHOULD_EXIST, STAKE_BATCH_SHOULD_EXIST},
         staking_pool_failures::{DEPOSIT_AND_STAKE_FAILURE, GET_STAKED_BALANCE_FAILURE},
     },
     ext_staking_pool, ext_staking_workflow_callbacks,
@@ -36,25 +36,16 @@ impl StakeTokenContract {
                 .then(self.invoke_on_deposit_and_stake())
         };
 
-        // if there is pending withdrawal, then add liquidity
         if let Some(RedeemLock::PendingWithdrawal) = self.run_redeem_stake_batch_lock {
             let unstaked_balance = staking_pool_account.unstaked_balance.0;
             if unstaked_balance > 0 {
-                // compute how much NEAR liquidity can be transferred from the unstaked NEAR to the liquidity pool
-                let near_liquidity = if unstaked_balance >= batch.balance().amount().value() {
-                    batch.balance().amount().value()
+                let pending_receipt = self
+                    .get_pending_withdrawal()
+                    .expect(REDEEM_STAKE_BATCH_RECEIPT_SHOULD_EXIST);
+                if self.near_liquidity_pool < pending_receipt.stake_near_value() {
+                    self.add_liquidity_then_deposit_and_stake(unstaked_balance, batch)
                 } else {
-                    unstaked_balance
-                };
-                *self.near_liquidity_pool += near_liquidity;
-                let deposit_amount = batch.balance().amount().value() - near_liquidity;
-                if deposit_amount > 0 {
-                    self.invoke_deposit(deposit_amount.into())
-                        .then(self.invoke_stake(batch.balance().amount()))
-                        .then(self.invoke_on_deposit_and_stake())
-                } else {
-                    self.invoke_stake(batch.balance().amount())
-                        .then(self.invoke_on_deposit_and_stake())
+                    deposit_and_stake()
                 }
             } else {
                 deposit_and_stake()
@@ -84,6 +75,29 @@ impl StakeTokenContract {
 }
 
 impl StakeTokenContract {
+    fn add_liquidity_then_deposit_and_stake(
+        &mut self,
+        unstaked_balance: u128,
+        batch: StakeBatch,
+    ) -> Promise {
+        // compute how much NEAR liquidity can be transferred from the unstaked NEAR to the liquidity pool
+        let near_liquidity = if unstaked_balance >= batch.balance().amount().value() {
+            batch.balance().amount().value()
+        } else {
+            unstaked_balance
+        };
+        *self.near_liquidity_pool += near_liquidity;
+        let deposit_amount = batch.balance().amount().value() - near_liquidity;
+        if deposit_amount > 0 {
+            self.invoke_deposit(deposit_amount.into())
+                .then(self.invoke_stake(batch.balance().amount()))
+                .then(self.invoke_on_deposit_and_stake())
+        } else {
+            self.invoke_stake(batch.balance().amount())
+                .then(self.invoke_on_deposit_and_stake())
+        }
+    }
+
     fn create_stake_batch_receipt(&mut self, batch: domain::StakeBatch) {
         let stake_batch_receipt =
             domain::StakeBatchReceipt::new(batch.balance().amount(), self.stake_token_value);
@@ -332,6 +346,15 @@ mod test {
         };
 
         contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+        *contract.batch_id_sequence += 1;
+        let redeem_stake_batch =
+            domain::RedeemStakeBatch::new(contract.batch_id_sequence, (10 * YOCTO).into());
+        let receipt =
+            domain::RedeemStakeBatchReceipt::from((redeem_stake_batch, contract.stake_token_value));
+        contract.redeem_stake_batch = Some(redeem_stake_batch);
+        contract
+            .redeem_stake_batch_receipts
+            .insert(&redeem_stake_batch.id(), &receipt);
         contract.on_run_stake_batch(staking_pool_account);
         assert_eq!(
             contract.near_liquidity_pool,
@@ -446,6 +469,15 @@ mod test {
         };
 
         contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+        *contract.batch_id_sequence += 1;
+        let redeem_stake_batch =
+            domain::RedeemStakeBatch::new(contract.batch_id_sequence, (10 * YOCTO).into());
+        let receipt =
+            domain::RedeemStakeBatchReceipt::from((redeem_stake_batch, contract.stake_token_value));
+        contract.redeem_stake_batch = Some(redeem_stake_batch);
+        contract
+            .redeem_stake_batch_receipts
+            .insert(&redeem_stake_batch.id(), &receipt);
         contract.on_run_stake_batch(staking_pool_account.clone());
         assert_eq!(
             contract.near_liquidity_pool,

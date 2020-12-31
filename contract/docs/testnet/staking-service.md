@@ -54,37 +54,19 @@ near call $STAKING_POOL stake --accountId stake.oysterpack.testnet --args '{"amo
 near call $STAKING_POOL withdraw_all --accountId stake.oysterpack.testnet --gas 300000000000000
 ```
 
-# 1000000000000000000000000     = 1 NEAR
-#  500000000000000000000000     = 0.5 NEAR
+1000000000000000000000000     = 1 NEAR
+ 500000000000000000000000     = 0.5 NEAR
+ 500000000000000000000000
+15499999999999999999999949
 
-   500000000000000000000000
-    68100000000000000000000
-   2504182481837150800772062
-   2497219431892304397903632
+1000000000000                 = 1 TGas
 
-# deposit_and_stake transaction (alfio-zappala-oysterpack.testnet:G7ahkVZGrcJZPJWghawh73qtNVDzPnYf6LZPbAaVxHoy)
-  2 427 963 482 746        StakingService::deposit_and_stake         G7ahkVZGrcJZPJWghawh73qtNVDzPnYf6LZPbAaVxHoy
- 32 328 258 227 662        StakingService::stake                     FkSZkV1pe25JMK9sLNs9MBJbnAcmLwMo9yuzfHLgEFQY
-  4 306 264 748 859        staking-pool::get_account_staked_balance  CwYK77QvyLf8r8oZP5ZuxzwGyLRVcw6t2M3hDv1ZW6na 
- 18 244 770 167 486        StakingService:on_run_stake_batch         BKAwaxs7cyZQU8XDrGdyVugNipNidzQJYpGgEnzYGe3E
- 22 721 733 350 873        staking-pool::deposit_and_stake           7ziED2YhMbDcYVYkapcWpHNgWdeQ6iQtqPq5D4sdcy7p
-  4 220 515 569 698        StakingService::on_deposit_and_stake      2eLh9Ds5MWSCF6kVVcGQHELvzDSX2KxFNzMm5pgx3BhB
-  3 790 483 214 956        StakingService::release_run_stake_batch   DXNKjJQW8GRZmzySiiKv7ZYypzGTjMZNC5mgK4B685wx
-
-100 000 000 000 000 
- 29 985 580 262 929
- 18 244 770 167 486
- 32 327 841 739 594
-    210 277 125 000
-  3 591 923 837 853
-110 000 000 000 000
-
-  2 427 974 662 416
-  4 307 213 416 125 'C5ZcCt4ytQ6u5BNVC4G7HkFSiFfdd5J89mkK2axuyQwC',
- 18 335 095 321 900 'B9cSUpFonwGyPKqQtZSegmPBXtsz7JrL2mpos6pFJezk',
- 18 678 677 812 567
-    210 277 125 000
-     99 607 375 000
-  3 790 483 214 956
-  '9AwVWP78wwD1JUewJuxTphbTLKmewHkvKB1xnYCvpWNY',
-  'Bh2aqj9tGn8uAwHH3QMrhimiepPRPhJzcGCh9ki4mRkt',
+ 2427963482746
+31997440503682
+ 4275169987303 
+12000000000000 
+11500000000000
+ 3890138375512
+ 4500000000000 
+30182346992725
+30182346992725 00 000 000

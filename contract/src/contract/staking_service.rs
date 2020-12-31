@@ -328,13 +328,8 @@ impl StakingService for StakeTokenContract {
     }
 
     fn pending_withdrawal(&self) -> Option<RedeemStakeBatchReceipt> {
-        match self.redeem_stake_batch {
-            Some(batch) => self
-                .redeem_stake_batch_receipts
-                .get(&batch.id())
-                .map(RedeemStakeBatchReceipt::from),
-            None => None,
-        }
+        self.get_pending_withdrawal()
+            .map(RedeemStakeBatchReceipt::from)
     }
 }
 
@@ -351,6 +346,12 @@ impl StakeTokenContract {
                 .get_account()
                 .value(),
         )
+    }
+
+    pub(crate) fn get_pending_withdrawal(&self) -> Option<domain::RedeemStakeBatchReceipt> {
+        self.redeem_stake_batch
+            .map(|batch| self.redeem_stake_batch_receipts.get(&batch.id()))
+            .flatten()
     }
 }
 
