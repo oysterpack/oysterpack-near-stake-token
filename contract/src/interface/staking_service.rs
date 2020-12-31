@@ -272,4 +272,12 @@ pub trait StakingService {
     ///
     /// NOTE: pending withdrawals blocks [RedeemStakeBatch] to run
     fn pending_withdrawal(&self) -> Option<RedeemStakeBatchReceipt>;
+
+    /// enables the user to claim receipts explicitly, which will also claim any available NEAR
+    /// liquidity to settle [RedeemStakeBatchReceipts](crate::domain::RedeemStakeBatchReceipt) that
+    /// have unstaked NEAR tokens locked in the staking pool and pending withdrawal
+    ///
+    /// ## Panics
+    /// if account is not registered
+    fn claim_receipts(&mut self);
 }

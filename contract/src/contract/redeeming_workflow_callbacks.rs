@@ -1,5 +1,6 @@
 //required in order for near_bindgen macro to work outside of lib.rs
 use crate::errors::illegal_state::STAKE_BATCH_SHOULD_EXIST;
+use crate::near::log;
 use crate::*;
 use crate::{
     domain::{self, RedeemLock},
@@ -9,9 +10,7 @@ use crate::{
             REDEEM_STAKE_BATCH_SHOULD_EXIST,
         },
         redeeming_stake_errors::UNSTAKED_FUNDS_NOT_AVAILABLE_FOR_WITHDRAWAL,
-        staking_pool_failures::{
-            GET_ACCOUNT_FAILURE, GET_STAKED_BALANCE_FAILURE, UNSTAKE_FAILURE, WITHDRAW_ALL_FAILURE,
-        },
+        staking_pool_failures::{GET_ACCOUNT_FAILURE, UNSTAKE_FAILURE, WITHDRAW_ALL_FAILURE},
     },
     ext_redeeming_workflow_callbacks, ext_staking_pool,
     interface::BatchId,
@@ -38,10 +37,11 @@ impl StakeTokenContract {
             .redeem_stake_batch
             .expect(REDEEM_STAKE_BATCH_SHOULD_EXIST);
 
-        assert!(self.promise_result_succeeded(), GET_STAKED_BALANCE_FAILURE);
+        assert!(self.promise_result_succeeded(), GET_ACCOUNT_FAILURE);
 
         // update the cached STAKE token value
         self.stake_token_value = self.stake_token_value(staking_pool_account.staked_balance.into());
+        self.stake_token_value.log_near_event();
 
         let unstake_amount = self
             .stake_token_value
@@ -142,6 +142,12 @@ impl StakeTokenContract {
 
         // update the total STAKE supply
         self.total_stake.debit(batch_receipt.redeemed_stake());
+
+        log(&format!(
+            "redeemed_stake={} stake_near_value={}",
+            batch_receipt.stake_near_value(),
+            batch_receipt.redeemed_stake()
+        ));
     }
 
     /// moves the next batch into the current batch

@@ -169,6 +169,8 @@ impl Default for GasConfig {
 #[serde(crate = "near_sdk::serde")]
 pub struct StakingPoolGasConfig {
     deposit_and_stake: Gas,
+    deposit: Gas,
+    stake: Gas,
     unstake: Gas,
     withdraw: Gas,
     get_account: Gas,
@@ -179,9 +181,11 @@ impl Default for StakingPoolGasConfig {
         Self {
             get_account: TGAS * 5,
 
-            deposit_and_stake: TGAS * 50,
-            unstake: TGAS * 50,
-            withdraw: TGAS * 50,
+            deposit_and_stake: TGAS * 45,
+            deposit: TGAS * 6,
+            stake: TGAS * 45,
+            unstake: TGAS * 45,
+            withdraw: TGAS * 45,
         }
     }
 }
@@ -189,6 +193,14 @@ impl Default for StakingPoolGasConfig {
 impl StakingPoolGasConfig {
     pub fn deposit_and_stake(&self) -> Gas {
         self.deposit_and_stake
+    }
+
+    pub fn deposit(&self) -> Gas {
+        self.deposit
+    }
+
+    pub fn stake(&self) -> Gas {
+        self.stake
     }
 
     pub fn unstake(&self) -> Gas {
@@ -215,6 +227,18 @@ impl StakingPoolGasConfig {
                 assert_gas_range(gas, 40, 75, "staking_pool::deposit_and_stake");
             }
             self.deposit_and_stake = gas;
+        }
+        if let Some(gas) = config.deposit {
+            if validate {
+                assert_gas_range(gas, 5, 20, "staking_pool::deposit");
+            }
+            self.deposit = gas;
+        }
+        if let Some(gas) = config.stake {
+            if validate {
+                assert_gas_range(gas, 40, 75, "staking_pool::stake");
+            }
+            self.stake = gas;
         }
         if let Some(gas) = config.unstake {
             if validate {
@@ -328,9 +352,9 @@ impl CallBacksGasConfig {
 impl Default for CallBacksGasConfig {
     fn default() -> Self {
         Self {
-            on_run_stake_batch: TGAS * 85,
+            on_run_stake_batch: TGAS * 125,
             on_deposit_and_stake: TGAS * 5,
-            unlock: TGAS * 5,
+            unlock: TGAS * 4,
 
             on_run_redeem_stake_batch: TGAS * 85,
             on_unstake: TGAS * 5,
@@ -503,6 +527,8 @@ mod test {
         config.merge(
             interface::StakingPoolGasConfig {
                 deposit_and_stake: Some(TGAS * 71),
+                deposit: None,
+                stake: None,
                 unstake: Some(TGAS * 72),
                 withdraw: Some(TGAS * 73),
                 get_account: Some(TGAS * 7),

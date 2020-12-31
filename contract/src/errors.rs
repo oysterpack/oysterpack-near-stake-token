@@ -13,7 +13,6 @@ pub mod asserts {
 }
 
 pub mod staking_pool_failures {
-    pub const GET_STAKED_BALANCE_FAILURE: &str = "failed to get staked balance from staking pool";
 
     pub const DEPOSIT_AND_STAKE_FAILURE: &str = "failed to deposit and stake into staking pool";
 

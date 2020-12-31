@@ -1,4 +1,5 @@
 use near_sdk::{json_types::U128, serde_json};
+use std::collections::HashMap;
 
 #[test]
 fn quick_test() {
@@ -14,4 +15,8 @@ fn quick_test() {
         Some(value) if value.is_empty() => println!("value is empty string"),
         Some(value) => println!("value is {}", value),
     }
+
+    let mut event = HashMap::<String, String>::new();
+    event.insert("a".to_string(), "b".to_string());
+    println!("{:?}", event);
 }

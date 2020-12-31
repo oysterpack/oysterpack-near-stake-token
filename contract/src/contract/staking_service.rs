@@ -68,9 +68,9 @@ impl StakingService for StakeTokenContract {
 
         self.run_stake_batch_locked = true;
 
-        self.get_account_from_staking_pool() // 5 TGas
-            .then(self.invoke_on_run_stake_batch()) // 85 TGas
-            .then(self.invoke_release_run_stake_batch_lock()) // 5 TGas
+        self.get_account_from_staking_pool()
+            .then(self.invoke_on_run_stake_batch())
+            .then(self.invoke_release_run_stake_batch_lock())
     }
 
     #[payable]
@@ -330,6 +330,13 @@ impl StakingService for StakeTokenContract {
     fn pending_withdrawal(&self) -> Option<RedeemStakeBatchReceipt> {
         self.get_pending_withdrawal()
             .map(RedeemStakeBatchReceipt::from)
+    }
+
+    fn claim_receipts(&mut self) {
+        let (mut account, account_id_hash) =
+            self.registered_account(&env::predecessor_account_id());
+        self.claim_receipt_funds(&mut account);
+        self.save_account(&account_id_hash, &account);
     }
 }
 

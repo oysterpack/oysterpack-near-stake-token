@@ -1,3 +1,4 @@
+use crate::near::{log, YOCTO};
 use crate::{
     domain::{BlockTimeHeight, YoctoNear, YoctoStake},
     interface,
@@ -83,6 +84,15 @@ impl StakeTokenValue {
         let value = U256::from(stake) * U256::from(self.total_staked_near_balance)
             / U256::from(self.total_stake_supply);
         value.as_u128().into()
+    }
+
+    pub fn log_near_event(&self) {
+        log(&format!(
+            "total_staked_near_balance={} total_stake_supply={} stake_token_value={}",
+            self.total_staked_near_balance(),
+            self.total_stake_supply(),
+            self.stake_to_near(YOCTO.into())
+        ));
     }
 }
 

@@ -4,16 +4,16 @@ use crate::{
     domain::{self, YoctoNear},
     errors::{
         illegal_state::{REDEEM_STAKE_BATCH_RECEIPT_SHOULD_EXIST, STAKE_BATCH_SHOULD_EXIST},
-        staking_pool_failures::{DEPOSIT_AND_STAKE_FAILURE, GET_STAKED_BALANCE_FAILURE},
+        staking_pool_failures::{DEPOSIT_AND_STAKE_FAILURE, GET_ACCOUNT_FAILURE},
     },
     ext_staking_pool, ext_staking_workflow_callbacks,
-    near::{assert_predecessor_is_self, NO_DEPOSIT},
+    near::{assert_predecessor_is_self, log, NO_DEPOSIT},
 };
 use near_sdk::{env, near_bindgen, Promise};
 
 #[near_bindgen]
 impl StakeTokenContract {
-    /// part of the [run_stake_batch] workflow
+    /// part of the [stake](crate::interface::StakingService::stake) workflow
     pub fn on_run_stake_batch(
         &mut self,
         #[callback] staking_pool_account: StakingPoolAccount,
@@ -25,11 +25,12 @@ impl StakeTokenContract {
         // - if the callback was called by itself, and the batch is not present, then there is a bug
         let batch = self.stake_batch.expect(STAKE_BATCH_SHOULD_EXIST);
 
-        assert!(self.promise_result_succeeded(), GET_STAKED_BALANCE_FAILURE);
+        assert!(self.promise_result_succeeded(), GET_ACCOUNT_FAILURE);
 
         // update the cached STAKE token value
         let staked_balance = staking_pool_account.staked_balance;
         self.stake_token_value = self.stake_token_value(staked_balance.into());
+        self.stake_token_value.log_near_event();
 
         let deposit_and_stake = || {
             self.invoke_deposit_and_stake(batch.balance().amount())
@@ -84,6 +85,10 @@ impl StakeTokenContract {
             unstaked_balance
         };
         *self.near_liquidity_pool += near_liquidity;
+        log(&format!(
+            "near_liquidity_added={} near_liquidity_pool={}",
+            near_liquidity, self.near_liquidity_pool
+        ));
         let deposit_amount = batch.balance().amount().value() - near_liquidity;
         if deposit_amount > 0 {
             self.invoke_deposit(deposit_amount.into())
@@ -106,6 +111,12 @@ impl StakeTokenContract {
             .stake_token_value
             .near_to_stake(batch.balance().amount());
         self.total_stake.credit(stake_amount);
+
+        log(&format!(
+            "staked_near={} stake_tokens_issued={}",
+            stake_batch_receipt.staked_near(),
+            stake_amount
+        ));
     }
 
     /// moves the next batch into the current batch
@@ -120,11 +131,7 @@ impl StakeTokenContract {
         ext_staking_pool::deposit(
             &self.staking_pool_id,
             amount.value(),
-            self.config
-                .gas_config()
-                .staking_pool()
-                .deposit_and_stake()
-                .value(),
+            self.config.gas_config().staking_pool().deposit().value(),
         )
     }
 
@@ -133,11 +140,7 @@ impl StakeTokenContract {
             amount.value().into(),
             &self.staking_pool_id,
             NO_DEPOSIT.value(),
-            self.config
-                .gas_config()
-                .staking_pool()
-                .deposit_and_stake()
-                .value(),
+            self.config.gas_config().staking_pool().stake().value(),
         )
     }
 
@@ -396,12 +399,7 @@ mod test {
                             method_name == "stake"
                                 && *deposit == 0
                                 && *gas
-                                    == contract
-                                        .config
-                                        .gas_config()
-                                        .staking_pool()
-                                        .deposit_and_stake()
-                                        .value()
+                                    == contract.config.gas_config().staking_pool().stake().value()
                         }
                         _ => false,
                     }
@@ -527,7 +525,7 @@ mod test {
                         .config
                         .gas_config()
                         .staking_pool()
-                        .deposit_and_stake()
+                        .deposit()
                         .value()
                 )
             } else {
@@ -548,12 +546,7 @@ mod test {
                             method_name == "stake"
                                 && *deposit == 0
                                 && *gas
-                                    == contract
-                                        .config
-                                        .gas_config()
-                                        .staking_pool()
-                                        .deposit_and_stake()
-                                        .value()
+                                    == contract.config.gas_config().staking_pool().stake().value()
                         }
                         _ => false,
                     }
@@ -583,7 +576,7 @@ mod test {
     /// Given the promise result failed for getting the staked balance
     /// Then the callback fails
     #[test]
-    #[should_panic(expected = "failed to get staked balance from staking pool")]
+    #[should_panic(expected = "failed to get account info from staking pool")]
     fn on_run_stake_batch_promise_result_fails() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);

@@ -1,0 +1,1 @@
+near tx-status --accountId oysterpack.testnet $1 > temp/txn.txt

@@ -50,11 +50,7 @@ impl ContractOwner for StakeTokenContract {
 
         self.owner_id = new_owner.into();
 
-        log(format!(
-            "contract ownership has been transferred to {}",
-            self.owner_id
-        )
-        .as_str());
+        log(format!("new_contract_owner={}", self.owner_id).as_str());
     }
 
     fn stake_all_owner_balance(&mut self) -> YoctoNear {
