@@ -36,9 +36,9 @@ impl StakeTokenContract {
                 .then(self.invoke_on_deposit_and_stake())
         };
 
-        if let Some(RedeemLock::PendingWithdrawal) = self.run_redeem_stake_batch_lock {
-            let unstaked_balance = staking_pool_account.unstaked_balance.0;
-            if unstaked_balance > 0 {
+        let unstaked_balance = staking_pool_account.unstaked_balance.0;
+        match self.run_redeem_stake_batch_lock {
+            Some(RedeemLock::PendingWithdrawal) if unstaked_balance > 0 => {
                 let pending_receipt = self
                     .get_pending_withdrawal()
                     .expect(REDEEM_STAKE_BATCH_RECEIPT_SHOULD_EXIST);
@@ -47,11 +47,8 @@ impl StakeTokenContract {
                 } else {
                     deposit_and_stake()
                 }
-            } else {
-                deposit_and_stake()
             }
-        } else {
-            deposit_and_stake()
+            _ => deposit_and_stake(),
         }
     }
 
