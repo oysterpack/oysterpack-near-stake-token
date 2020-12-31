@@ -3,7 +3,7 @@ use crate::*;
 use crate::{
     domain::{self, YoctoNear},
     errors::{
-        illegal_state::{REDEEM_STAKE_BATCH_RECEIPT_SHOULD_EXIST, STAKE_BATCH_SHOULD_EXIST},
+        illegal_state::STAKE_BATCH_SHOULD_EXIST,
         staking_pool_failures::{DEPOSIT_AND_STAKE_FAILURE, GET_ACCOUNT_FAILURE},
     },
     ext_staking_pool, ext_staking_workflow_callbacks,
@@ -40,14 +40,7 @@ impl StakeTokenContract {
         let unstaked_balance = staking_pool_account.unstaked_balance.0;
         match self.run_redeem_stake_batch_lock {
             Some(RedeemLock::PendingWithdrawal) if unstaked_balance > 0 => {
-                let pending_receipt = self
-                    .get_pending_withdrawal()
-                    .expect(REDEEM_STAKE_BATCH_RECEIPT_SHOULD_EXIST);
-                if self.near_liquidity_pool < pending_receipt.stake_near_value() {
-                    self.add_liquidity_then_deposit_and_stake(unstaked_balance, batch)
-                } else {
-                    deposit_and_stake()
-                }
+                self.add_liquidity_then_deposit_and_stake(unstaked_balance, batch)
             }
             _ => deposit_and_stake(),
         }

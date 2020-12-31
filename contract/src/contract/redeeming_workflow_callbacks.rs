@@ -145,8 +145,8 @@ impl StakeTokenContract {
 
         log(&format!(
             "redeemed_stake={} stake_near_value={}",
+            batch_receipt.redeemed_stake(),
             batch_receipt.stake_near_value(),
-            batch_receipt.redeemed_stake()
         ));
     }
 
