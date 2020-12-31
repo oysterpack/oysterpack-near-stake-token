@@ -1,54 +1,51 @@
 # OysterPack STAKE Token NEAR Smart Contract
-The OysterPack STAKE token is backed by staked NEAR. This contract enables you to delegate your
-NEAR to stake, and in return you are issued STAKE tokens. This enables you to trade your STAKE
-tokens while your NEAR is staked and earning staking rewards. The STAKE token transforms your
-staked NEAR into a tradeable asset.
 
-STAKE token value is pegged to NEAR token value and stake earnings. As staking rewards are earned,
-the STAKE token value increases. In other words, STAKE tokens appreciate in NEAR token value over
-time.
+> With the OysterPack NEAR STAKE token "You can have your STAKE and TRADE it too"
 
-## STAKE Token Vision
-Leverage NEAR as a digital currency beyond being a utility token for the NEAR network to pay for
-transaction gas and storage usage. NEAR is designed to be scalable and fast with very low and
-predictable transaction costs and pricing. NEAR tokenomics has built in inflation, with a 5%
-maximum inflation target. The inflation provides incentive to stake your NEAR, which helps to further
-secure the network. Transforming staked NEAR into a tradeable asset via the STAKE token enhances
-the value proposition. Since most of the NEAR token supply will be staked, we can get more value
-out of the staked NEAR by being able to use it as a tradeable digital asset.
+The OysterPack NEAR STAKE token contract enables you to stake your NEAR tokens and still be able to trade your staked
+tokens. The contract will stake your NEAR for you and in return you are issued a fungible token named **STAKE**. 
 
-The long term vision is to integrate the STAKE token with the NEAR wallet:
-- users would be able to stake their NEAR via this contract
-- users would be able to transfer STAKE tokens via the NEAR wallet
+The STAKE token transforms your staked NEAR into a tradeable asset. STAKE token value is pegged to NEAR token value and 
+stake earnings. As staking rewards are earned, the STAKE token value increases. STAKE tokens appreciate in NEAR token 
+value over time.
 
-## Problem With Current Unstaking Process
-With the current staking pool implementations, the problem is that unstaked NEAR is not immediately
-available for withdrawal from the staking pool contract. The unstaked NEAR is locked for 4 epoch
-time periods, which translates to ~48 hours in NEAR time. This makes it more difficult and complex
-to utilize NEAR as a digital asset, i.e., as a fungible token.
+When redeeming STAKE tokens for NEAR, the STAKE token contract also helps to add liquidity for withdrawing your unstaked 
+NEAR tokens (see below for more details)
 
-## STAKE Token Benefits
-1. NEAR token asset value is maximized through staking.
-2. Transforms staked NEAR into tradeable digital asset, i.e., into a fungible token.
-3. Provides more incentive to stake NEAR, which helps to further strengthen and secure the network
-   by providing more economic incentive to validators.
+## Problems with NEAR's core staking pool contract that the STAKE token solves
+Today, users can delegate the NEAR to be staked with validator pools through NEAR's [core staking pool contract](https://github.com/near/core-contracts/tree/master/staking-pool).
+When NEAR is transferred to the staking pool contract, the NEAR is effectively locked while being staked. When the user
+wants their NEAR tokens back, they need to unstake their tokens with the staking pool contract. However, the user's 
+NEAR tokens are not immediately available for withdrawal. The unstaked tokens are locked in the contract and not made
+available for withdrawal until 4 epochs later in NEAR blockchain time, which translates to ~48 hours.
 
-# Contract Key Features and High Level Design
-- Contract users must register with the account in order to use it. Users must pay an upfront
-  account storage usage fee because long term storage is not "free" on NEAR. When an account
-  unregisters, the storage usage fee will be refunded.
-- STAKE token contract is linked to a single staking pool contract that is specified as part of
-  contract deployment and becomes permanent for contract's lifetime. A STAKE token contract will
-  be deployed per staking pool contract.
-- Implements [NEP-122 vault based fungible token standard](https://github.com/near/NEPs/issues/122)
-  - NEAR community is currently trying to standardize fungible token interface. STAKE token implements
-    NEP-122 Vault Based Fungible Token (WIP), but waiting for NEP-122 standard to be finalized.
-- Has concept of contract ownership. The contract owner earns the contract rewards from transaction
-  fees.
-  - contract ownership can be transferred
-  - contract earning can be staked into the contract owner's account
-- Contract has an operator role which provides functions to support the contract, e.g., releasing
-  locks, config management, etc
+Thus, the staked NEAR token value is effectively locked in the staking pool contract and the user cannot leverage the
+value until 2 days after the NEAR tokens are unstaked. 
 
-## How is the STAKE token value computed?
-STAKE token value in NEAR = `total staked NEAR balance / total STAKE token supply`
+The STAKE token is the solution to the problem:
+1. It enables the token owner to leverage the staked NEAR value while it is locked by the staking pool contract.
+2. It adds liquidity to the unstaking and withdrawal process - staking provides the liquidity for unstaking
+
+# STAKE Token Vision
+> harness the Internet of value - everything on the internet can take on the proerties of money
+
+The above quote is cited from [NEAR's website](https://near.org/). This is the STAKE token visionby leveraging NEAR as a 
+digital currency beyond being a utility token for the NEAR network to pay for transaction gas and storage usage. 
+NEAR is designed to be scalable and fast with very low and predictable transaction costs and pricing. NEAR tokenomics has 
+built in inflation, with a 5% maximum inflation target. The inflation provides incentive to stake your NEAR, which helps 
+to further secure the network. Transforming staked NEAR into a tradeable asset via the STAKE token enhances the value proposition. 
+Since most of the NEAR token supply will be staked, we can get more value out of the staked NEAR by being able to use it as a tradeable digital asset.
+
+## How to make this vision a reality
+To make this vision a reality, we need to develop robust token standards to pave the way.
+[NEP-21 Fungible Token Standard](https://github.com/near/NEPs/issues/21) was NEAR's first attempt to introduce a fungible
+token standard modeled after ethereum ERC-20 tokens. NEP-21 is not robust enough to support the long term strategic vision.
+
+Alternative fungible token standards have been proposed through the [NEP](https://github.com/near/NEPs) process:
+- [NEP-122 Proposal: Allowance-free vault-based token standard](https://github.com/near/NEPs/issues/122)
+- [NEP-110 Advanced Fungible Token Standard](https://github.com/near/NEPs/issues/110)
+- [NEP-136 Interactive Fungible Token](https://github.com/near/NEPs/issues/136)
+- [NEP-102 Native Fungible Token](https://github.com/near/NEPs/issues/102)
+
+One of the goals of this project is to bring this all together and help drive the community forward towards a robust
+and scalable fungible token standard that can support and harness the Internet of value.

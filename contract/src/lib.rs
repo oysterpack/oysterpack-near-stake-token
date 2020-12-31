@@ -8,7 +8,10 @@
 //! the STAKE token value increases. In other words, STAKE tokens appreciate in NEAR token value over
 //! time.
 //!
-//! ## STAKE Token Vision
+//! When redeeming STAKE tokens for NEAR, the STAKE token contract also helps to add liquidity for withdrawing your unstaked
+//! NEAR tokens (see below for more details)
+//!
+//! # STAKE Token Vision
 //! Leverage NEAR as a digital currency beyond being a utility token for the NEAR network to pay for
 //! transaction gas and storage usage. NEAR is designed to be scalable and fast with very low and
 //! predictable transaction costs and pricing. NEAR tokenomics has built in inflation, with a 5%
@@ -52,9 +55,12 @@
 //! - STAKE token contract is linked to a single staking pool contract that is specified as part of
 //!   contract deployment and becomes permanent for contract's lifetime. A STAKE token contract will
 //!   be deployed per staking pool contract.
-//! - Implements [NEP-122 vault based fungible token standard](https://github.com/near/NEPs/issues/122)
-//!   - NEAR community is currently trying to standardize fungible token interface. STAKE token implements
-//!     NEP-122 Vault Based Fungible Token (WIP), but waiting for NEP-122 standard to be finalized.
+//! - STAKE token is a fungible token and supports multiple transfer protocols:
+//!   - simple token transfer between accounts - modeled after [NEP-21 Fungible Token](https://nomicon.io/Standards/Tokens/FungibleToken.html)
+//!   - more advanced token transfers between contracts:
+//!     - vault based token transfer modeled afer [NEP-122 vault based fungible token standard](https://github.com/near/NEPs/issues/122)
+//!     - transfer and notifiy modeled after [NEP-136 interactive Fungible Token](https://github.com/near/NEPs/issues/122) and
+//!       [NEP-110 Advanced Fungible Token Standard](https://github.com/near/NEPs/issues/110)
 //! - Has concept of contract ownership. The contract owner earns the contract rewards from transaction
 //!   fees.
 //!   - contract ownership can be transferred
