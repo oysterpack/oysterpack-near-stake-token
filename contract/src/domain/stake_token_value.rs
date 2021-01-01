@@ -62,9 +62,7 @@ impl StakeTokenValue {
         self.total_stake_supply
     }
 
-    /// converts NEAR to STAKE rounded down and then adds back the remainder
-    /// - the remainder is added back at a 1:1 ratio because i yoctoSTAKE is the smallest unit and is
-    ///   not further divisible
+    /// converts NEAR to STAKE rounded down
     pub fn near_to_stake(&self, near: YoctoNear) -> YoctoStake {
         if self.total_staked_near_balance.value() == 0 || self.total_stake_supply.value() == 0 {
             return near.value().into();
@@ -75,11 +73,7 @@ impl StakeTokenValue {
         let total_staked_near_balance = U256::from(self.total_staked_near_balance);
 
         let stake_value = near * total_stake_supply / total_staked_near_balance;
-
-        // convert back to check if we loss any precision
-        let near_value = stake_value * total_staked_near_balance / total_stake_supply;
-
-        (stake_value + (near - near_value)).as_u128().into()
+        stake_value.as_u128().into()
     }
 
     /// converts STAKE to NEAR rounded down and then adds back the remainder
@@ -128,7 +122,6 @@ mod test {
     use crate::near::YOCTO;
     use crate::test_utils::*;
     use near_sdk::{testing_env, MockedBlockchain};
-    use primitive_types::U512;
 
     #[test]
     fn when_total_stake_supply_is_zero() {
@@ -157,52 +150,18 @@ mod test {
     }
 
     #[test]
-    fn ctake_near_conversion() {
-        let total_staked_near_balance: u128 = 17206799984076953573143542;
-        let total_stake_supply: u128 = 16742879620291694593306687;
-        // let stake_value: u128 = 1027708516952066370722277;
+    fn conversion_should_symmetric() {
+        let account_id = "bob.near";
+        let context = new_context(account_id);
+        testing_env!(context);
 
-        let value = (U512::from(YOCTO) * U512::from(total_staked_near_balance))
-            / U512::from(total_stake_supply);
-        let remainder = (U512::from(YOCTO) * U512::from(total_staked_near_balance))
-            % U512::from(total_stake_supply);
+        let mut stake_token_value = StakeTokenValue::default();
+        stake_token_value.total_staked_near_balance = 17206799984076953573143542.into();
+        stake_token_value.total_stake_supply = 16742879620291694593306687.into();
 
-        println!("{} remainder = {}", value, remainder);
+        let near_value = stake_token_value.stake_to_near(YOCTO.into());
+        let stake_value = stake_token_value.near_to_stake(near_value);
 
-        let value = (U256::from(YOCTO) * U256::from(total_staked_near_balance))
-            / U256::from(total_stake_supply);
-        let remainder = (U256::from(YOCTO) * U256::from(total_staked_near_balance))
-            % U256::from(total_stake_supply);
-
-        let amount: u128 = (value * U256::from(total_stake_supply)
-            / U256::from(total_staked_near_balance))
-        .as_u128()
-        .into();
-
-        println!(
-            "{} remainder = {}, reverse = {} difference = {}",
-            value,
-            remainder,
-            amount,
-            YOCTO - amount
-        );
-
-        let remainder = YOCTO - amount;
-        let value = value + remainder;
-
-        println!("{}", value);
-
-        let amount: u128 = (value * U256::from(total_stake_supply)
-            / U256::from(total_staked_near_balance))
-        .as_u128()
-        .into();
-
-        println!(
-            "{} remainder = {}, reverse = {} difference = {}",
-            value,
-            remainder,
-            amount,
-            YOCTO - amount
-        );
+        assert_eq!(stake_value, YoctoStake(YOCTO));
     }
 }
