@@ -1,4 +1,5 @@
 //required in order for near_bindgen macro to work outside of lib.rs
+use crate::interface::staking_service::events::{NearLiquidityAdded, Staked};
 use crate::*;
 use crate::{
     domain::{self, YoctoNear},
@@ -78,10 +79,10 @@ impl StakeTokenContract {
             unstaked_balance
         };
         *self.near_liquidity_pool += near_liquidity;
-        log(&format!(
-            "near_liquidity_added={} near_liquidity_pool={}",
-            near_liquidity, self.near_liquidity_pool
-        ));
+        log(NearLiquidityAdded {
+            amount: near_liquidity,
+            balance: self.near_liquidity_pool.value(),
+        });
         let deposit_amount = batch.balance().amount().value() - near_liquidity;
         if deposit_amount > 0 {
             self.invoke_deposit(deposit_amount.into())
@@ -105,11 +106,7 @@ impl StakeTokenContract {
             .near_to_stake(batch.balance().amount());
         self.total_stake.credit(stake_amount);
 
-        log(&format!(
-            "staked_near={} stake_tokens_issued={}",
-            stake_batch_receipt.staked_near(),
-            stake_amount
-        ));
+        log(Staked::new(batch.id(), &stake_batch_receipt));
     }
 
     /// moves the next batch into the current batch
@@ -342,8 +339,7 @@ mod test {
         *contract.batch_id_sequence += 1;
         let redeem_stake_batch =
             domain::RedeemStakeBatch::new(contract.batch_id_sequence, (10 * YOCTO).into());
-        let receipt =
-            domain::RedeemStakeBatchReceipt::from((redeem_stake_batch, contract.stake_token_value));
+        let receipt = redeem_stake_batch.create_receipt(contract.stake_token_value);
         contract.redeem_stake_batch = Some(redeem_stake_batch);
         contract
             .redeem_stake_batch_receipts
@@ -460,8 +456,7 @@ mod test {
         *contract.batch_id_sequence += 1;
         let redeem_stake_batch =
             domain::RedeemStakeBatch::new(contract.batch_id_sequence, (10 * YOCTO).into());
-        let receipt =
-            domain::RedeemStakeBatchReceipt::from((redeem_stake_batch, contract.stake_token_value));
+        let receipt = redeem_stake_batch.create_receipt(contract.stake_token_value);
         contract.redeem_stake_batch = Some(redeem_stake_batch);
         contract
             .redeem_stake_batch_receipts

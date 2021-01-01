@@ -281,3 +281,111 @@ pub trait StakingService {
     /// if account is not registered
     fn claim_receipts(&mut self);
 }
+
+pub mod events {
+    use crate::domain::{self, BatchId, RedeemStakeBatchReceipt, StakeBatchReceipt};
+    use crate::near::YOCTO;
+
+    #[derive(Debug)]
+    pub struct StakeTokenValue {
+        pub total_staked_near_balance: u128,
+        pub total_stake_supply: u128,
+        /// the value of 1 STAKE token in NEAR
+        pub stake_value: u128,
+        /// blockchain point in time
+        pub block_height: u64,
+        pub block_timestamp: u64,
+        pub epoch_height: u64,
+    }
+
+    impl From<domain::StakeTokenValue> for StakeTokenValue {
+        fn from(value: domain::StakeTokenValue) -> Self {
+            Self {
+                total_staked_near_balance: value.total_staked_near_balance().value(),
+                total_stake_supply: value.total_stake_supply().value(),
+                stake_value: value.stake_to_near(YOCTO.into()).value(),
+                block_height: value.block_time_height().block_height().value(),
+                block_timestamp: value.block_time_height().block_timestamp().value(),
+                epoch_height: value.block_time_height().epoch_height().value(),
+            }
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct Unstaked {
+        /// corresponds to the [RedeemStakeBatch](crate::dommain::RedeemStakeBatch)
+        pub batch_id: u128,
+        /// how much STAKE was redeemed in the batch
+        pub stake: u128,
+        /// how much NEAR was unstaked for the redeemed STAKE
+        pub near: u128,
+        /// STAKE token value used to compute amount of NEAR to unstake for redeemed STAKE tokens
+        pub stake_token_value: StakeTokenValue,
+    }
+
+    impl Unstaked {
+        pub fn new(batch_id: BatchId, receipt: &RedeemStakeBatchReceipt) -> Self {
+            Self {
+                batch_id: batch_id.value(),
+
+                stake: receipt.redeemed_stake().value(),
+                near: receipt.stake_near_value().value(),
+                stake_token_value: receipt.stake_token_value().into(),
+            }
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct NearLiquidityAdded {
+        /// how liquidity was added
+        pub amount: u128,
+        /// updated liquidity balance
+        pub balance: u128,
+    }
+
+    #[derive(Debug)]
+    pub struct Staked {
+        /// corresponds to the [StakeBatch](crate::dommain::StakeBatch)
+        pub batch_id: u128,
+        /// how much NEAR was staked
+        pub near: u128,
+        /// how much STAKE was minted for the staked NEAR
+        pub stake: u128,
+        /// STAKE token value used to mint new STAKE
+        pub stake_token_value: StakeTokenValue,
+    }
+
+    impl Staked {
+        pub fn new(batch_id: BatchId, receipt: &StakeBatchReceipt) -> Self {
+            Self {
+                batch_id: batch_id.value(),
+
+                stake: receipt.near_stake_value().value(),
+                near: receipt.staked_near().value(),
+                stake_token_value: receipt.stake_token_value().into(),
+            }
+        }
+    }
+
+    #[cfg(test)]
+    mod test {
+
+        use super::*;
+        use crate::domain::{RedeemStakeBatch, StakeTokenValue};
+        use crate::near::YOCTO;
+        use crate::test_utils::*;
+        use near_sdk::{testing_env, MockedBlockchain};
+
+        #[test]
+        fn unstaked_near_log_fmt() {
+            let account_id = "alfio-zappala.near";
+            let context = new_context(account_id);
+            testing_env!(context.clone());
+
+            let batch = RedeemStakeBatch::new(1.into(), (10 * YOCTO).into());
+            let receipt = batch.create_receipt(StakeTokenValue::default());
+            let event = Unstaked::new(batch.id(), &receipt);
+            println!("{:#?}", event);
+        }
+    }
+}

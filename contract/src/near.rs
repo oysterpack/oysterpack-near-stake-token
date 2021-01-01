@@ -5,6 +5,7 @@ use crate::{
     domain::{EpochHeight, YoctoNear},
 };
 use near_sdk::env;
+use std::fmt::Debug;
 
 /// YOCTO = 10^24
 pub const YOCTO: u128 = 1_000_000_000_000_000_000_000_000;
@@ -30,10 +31,7 @@ pub fn assert_predecessor_is_self() {
     }
 }
 
-/// wrapper around `near_sdk::env::log()` to make it simpler to use
-///
-/// recommended log format is [logfmt](https://www.brandur.org/logfmt), e.g.,
-/// `at=info method=GET path=/ host=mutelight.org fwd="124.133.52.161" dyno=web.2 connect=4ms service=8ms status=200 bytes=1653`
-pub fn log(msg: &str) {
-    env::log(msg.as_bytes());
+/// wrapper around `near_sdk::env::log()` which supports structured logging
+pub fn log<T: Debug>(event: T) {
+    env::log(format!("{:#?}", event).as_bytes());
 }

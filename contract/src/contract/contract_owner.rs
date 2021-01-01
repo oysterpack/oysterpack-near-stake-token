@@ -4,6 +4,7 @@ use crate::errors::contract_owner::{
     INSUFFICIENT_FUNDS_FOR_OWNER_STAKING, INSUFFICIENT_FUNDS_FOR_OWNER_WITHDRAWAL,
     TRANSFER_TO_NON_REGISTERED_ACCOUNT,
 };
+use crate::interface::contract_owner::events::OwnershipTransferred;
 use crate::near::{log, YOCTO};
 use crate::*;
 use near_sdk::{json_types::ValidAccountId, near_bindgen, Promise};
@@ -48,9 +49,13 @@ impl ContractOwner for StakeTokenContract {
             TRANSFER_TO_NON_REGISTERED_ACCOUNT,
         );
 
+        let previous_owner = self.owner_id.clone();
         self.owner_id = new_owner.into();
 
-        log(format!("new_contract_owner={}", self.owner_id).as_str());
+        log(OwnershipTransferred {
+            from: &previous_owner,
+            to: &self.owner_id,
+        });
     }
 
     fn stake_all_owner_balance(&mut self) -> YoctoNear {

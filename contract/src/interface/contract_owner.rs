@@ -61,3 +61,11 @@ pub trait ContractOwner {
     /// - if the predecessor account is not the owner account
     fn withdraw_owner_balance(&mut self, amount: YoctoNear);
 }
+
+pub mod events {
+    #[derive(Debug)]
+    pub struct OwnershipTransferred<'a> {
+        pub from: &'a str,
+        pub to: &'a str,
+    }
+}

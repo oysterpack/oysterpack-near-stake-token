@@ -1,5 +1,6 @@
 //required in order for near_bindgen macro to work outside of lib.rs
 use crate::errors::illegal_state::STAKE_BATCH_SHOULD_EXIST;
+use crate::interface::staking_service::events::Unstaked;
 use crate::near::log;
 use crate::*;
 use crate::{
@@ -60,6 +61,7 @@ impl StakeTokenContract {
         assert!(self.promise_result_succeeded(), UNSTAKE_FAILURE);
 
         self.create_redeem_stake_batch_receipt();
+
         self.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal)
     }
 
@@ -136,18 +138,14 @@ impl StakeTokenContract {
 
     fn create_redeem_stake_batch_receipt(&mut self) {
         let batch = self.redeem_stake_batch.expect(STAKE_BATCH_SHOULD_EXIST);
-        let batch_receipt = (batch, self.stake_token_value).into();
+        let batch_receipt = batch.create_receipt(self.stake_token_value);
         self.redeem_stake_batch_receipts
             .insert(&batch.id(), &batch_receipt);
 
         // update the total STAKE supply
         self.total_stake.debit(batch_receipt.redeemed_stake());
 
-        log(&format!(
-            "redeemed_stake={} stake_near_value={}",
-            batch_receipt.redeemed_stake(),
-            batch_receipt.stake_near_value(),
-        ));
+        log(Unstaked::new(batch.id(), &batch_receipt));
     }
 
     /// moves the next batch into the current batch

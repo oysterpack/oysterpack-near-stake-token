@@ -1,6 +1,5 @@
-use crate::domain::{RedeemStakeBatch, YoctoNear};
 use crate::{
-    domain::{EpochHeight, StakeTokenValue, YoctoStake},
+    domain::{EpochHeight, StakeTokenValue, YoctoNear, YoctoStake},
     near::UNSTAKED_NEAR_FUNDS_NUM_EPOCHS_TO_UNLOCK,
 };
 use near_sdk::{
@@ -8,16 +7,10 @@ use near_sdk::{
     env,
 };
 
-#[derive(BorshSerialize, BorshDeserialize, Clone, Copy)]
+#[derive(BorshSerialize, BorshDeserialize, Clone, Copy, Debug)]
 pub struct RedeemStakeBatchReceipt {
     redeemed_stake: YoctoStake,
     stake_token_value: StakeTokenValue,
-}
-
-impl From<(RedeemStakeBatch, StakeTokenValue)> for RedeemStakeBatchReceipt {
-    fn from((batch, stake_token_value): (RedeemStakeBatch, StakeTokenValue)) -> Self {
-        RedeemStakeBatchReceipt::new(batch.balance().amount(), stake_token_value)
-    }
 }
 
 impl RedeemStakeBatchReceipt {

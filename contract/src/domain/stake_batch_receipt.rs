@@ -7,7 +7,7 @@
 //! on a scheduled basis. The contract is locked while STAKE tokens are being issued because the
 //! STAKE token value needs to be computed.
 
-use crate::domain::{StakeTokenValue, YoctoNear};
+use crate::domain::{StakeTokenValue, YoctoNear, YoctoStake};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 
 #[derive(BorshSerialize, BorshDeserialize, Copy, Clone, Debug)]
@@ -26,6 +26,11 @@ impl StakeBatchReceipt {
 
     pub fn staked_near(&self) -> YoctoNear {
         self.staked_near
+    }
+
+    /// converts the redeemed STAKE tokens into NEAR tokens based on the receipt's [stake_token_value](RedeemStakeBatchReceipt::stake_token_value)
+    pub fn near_stake_value(&self) -> YoctoStake {
+        self.stake_token_value.near_to_stake(self.staked_near)
     }
 
     pub fn stake_token_value(&self) -> StakeTokenValue {

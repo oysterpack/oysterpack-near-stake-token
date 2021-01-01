@@ -40,7 +40,9 @@
 //!
 //! [staking pool contract] = https://github.com/near/core-contracts/tree/master/staking-pool
 
-use crate::domain::{BatchId, TimestampedStakeBalance, YoctoStake};
+use crate::domain::{
+    BatchId, RedeemStakeBatchReceipt, StakeTokenValue, TimestampedStakeBalance, YoctoStake,
+};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 
 #[derive(BorshSerialize, BorshDeserialize, Clone, Copy, Debug)]
@@ -50,6 +52,8 @@ pub struct RedeemStakeBatch {
 }
 
 impl RedeemStakeBatch {
+    /// ## Panics
+    /// if NEAR runtime context is not available
     pub fn new(batch_id: BatchId, balance: YoctoStake) -> Self {
         Self {
             batch_id,
@@ -72,5 +76,9 @@ impl RedeemStakeBatch {
     /// returns updated balance
     pub fn remove(&mut self, amount: YoctoStake) -> YoctoStake {
         self.balance.debit(amount)
+    }
+
+    pub fn create_receipt(&self, stake_token_value: StakeTokenValue) -> RedeemStakeBatchReceipt {
+        RedeemStakeBatchReceipt::new(self.balance.amount(), stake_token_value)
     }
 }
