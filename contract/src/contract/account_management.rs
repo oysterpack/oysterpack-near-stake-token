@@ -1,5 +1,5 @@
 //required in order for near_bindgen macro to work outside of lib.rs
-use crate::errors::account_management::{ACCOUNT_NOT_REGISTERED, ZERO_NEAR_BALANCE_FOR_WITHDRAWAL};
+use crate::errors::account_management::ACCOUNT_NOT_REGISTERED;
 use crate::*;
 use crate::{
     core::Hash,
@@ -148,13 +148,14 @@ impl AccountManagement for StakeTokenContract {
         self.withdraw_near_funds(&mut account, &account_hash, amount.into());
     }
 
-    fn withdraw_all(&mut self) {
+    fn withdraw_all(&mut self) -> interface::YoctoNear {
         let (mut account, account_hash) = self.registered_account(&env::predecessor_account_id());
         self.claim_receipt_funds(&mut account);
         match account.near {
-            None => panic!(ZERO_NEAR_BALANCE_FOR_WITHDRAWAL),
+            None => 0.into(),
             Some(balance) => {
-                self.withdraw_near_funds(&mut account, &account_hash, balance.amount())
+                self.withdraw_near_funds(&mut account, &account_hash, balance.amount());
+                balance.amount().into()
             }
         }
     }
@@ -767,7 +768,6 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "there are no available NEAR funds to withdraw")]
     fn withdraw_all_with_no_near_funds() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
@@ -778,6 +778,6 @@ mod test {
         let mut contract = StakeTokenContract::new(None, contract_settings);
 
         contract.register_account();
-        contract.withdraw_all();
+        assert_eq!(contract.withdraw_all().value(), 0);
     }
 }

@@ -1,4 +1,5 @@
 //required in order for near_bindgen macro to work outside of lib.rs
+use crate::near::YOCTO;
 use crate::*;
 use crate::{
     domain::{self, Account, RedeemLock, RedeemStakeBatch, StakeBatch},
@@ -20,6 +21,7 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
     AccountId, Promise, PromiseOrValue,
 };
+use primitive_types::U256;
 
 #[near_bindgen]
 impl StakingService for StakeTokenContract {
@@ -204,14 +206,16 @@ impl StakingService for StakeTokenContract {
         batch_id
     }
 
-    fn redeem_all(&mut self) -> BatchId {
+    fn redeem_all(&mut self) -> Option<BatchId> {
         let (mut account, account_id_hash) =
             self.registered_account(&env::predecessor_account_id());
         self.claim_receipt_funds(&mut account);
-        let amount = account.stake.expect("account has no stake").amount();
-        let batch_id = self.redeem_stake_for_account(&mut account, amount);
-        self.save_account(&account_id_hash, &account);
-        batch_id
+        account.stake.map(|stake| {
+            let amount = stake.amount();
+            let batch_id = self.redeem_stake_for_account(&mut account, amount);
+            self.save_account(&account_id_hash, &account);
+            batch_id
+        })
     }
 
     fn cancel_uncommitted_redeem_stake_batch(&mut self) -> bool {
@@ -317,13 +321,16 @@ impl StakingService for StakeTokenContract {
         }
     }
 
-    fn redeem_all_and_unstake(&mut self) -> PromiseOrValue<BatchId> {
-        let batch_id = self.redeem_all();
-
-        if self.can_unstake() {
-            PromiseOrValue::Promise(self.unstake())
-        } else {
-            PromiseOrValue::Value(batch_id)
+    fn redeem_all_and_unstake(&mut self) -> PromiseOrValue<Option<BatchId>> {
+        match self.redeem_all() {
+            None => PromiseOrValue::Value(None),
+            Some(batch_id) => {
+                if self.can_unstake() {
+                    PromiseOrValue::Promise(self.unstake())
+                } else {
+                    PromiseOrValue::Value(Some(batch_id))
+                }
+            }
         }
     }
 
@@ -817,15 +824,52 @@ impl StakeTokenContract {
         }
     }
 
-    pub fn stake_token_value(
-        &self,
+    /// returns a new [StakeTokenValue](crate::domain::StakeTokenValue) updated with the new staked
+    /// NEAR balance.
+    pub(crate) fn update_stake_token_value(
+        &mut self,
         total_staked_near_balance: domain::YoctoNear,
-    ) -> domain::StakeTokenValue {
-        domain::StakeTokenValue::new(
+    ) {
+        let new_stake_token_value = domain::StakeTokenValue::new(
             domain::BlockTimeHeight::from_env(),
             total_staked_near_balance,
             self.total_stake.amount(),
-        )
+        );
+
+        // the new STAKE token value should never be less than the current STAKE token value, unless
+        // the total staked NEAR balance is zero
+        // - when NEAR is staked, the staking pool converts the NEAR into shares. Because of rounding,
+        //   not all staked NEAR gets converted into shares, and some is left behind as unstaked in
+        //   the staking pool. In the example below 0.25 NEAR was deposited to be staked, however
+        //   after converting the NEAR to shares, there were 5 yoctoNEAR left owver that remained
+        //   as unstaked:
+        //
+        // Log [stake.oysterpack.testnet]: @stake.oysterpack.testnet deposited 250000000000000000000000. New unstaked balance is 654566211093653841620326
+        // Log [stake.oysterpack.testnet]: @stake.oysterpack.testnet staking 249999999999999999999995. Received 13510178747482595266283 new staking shares. Total 404566211093653841620331 unstaked balance and 1146041341904922841152939 staking shares
+        //
+        // Thus, if we see that the STAKE value ticks down, we need to compensate the [total_staked_near_balance]
+        // because the STAKE value should never decrease.
+        let new_stake_near_value = new_stake_token_value.stake_to_near(YOCTO.into());
+        let current_stake_near_value = self.stake_token_value.stake_to_near(YOCTO.into());
+        self.stake_token_value = if new_stake_near_value >= current_stake_near_value
+            || total_staked_near_balance.value() == 0
+        {
+            new_stake_token_value
+        } else {
+            let current_stake_near_value: U256 = U256::from(current_stake_near_value);
+            let total_stake_supply: U256 = U256::from(self.total_stake.amount());
+            let total_staked_near_balance: U256 = U256::from(total_staked_near_balance.value());
+            let staked_near_compensation = (current_stake_near_value * total_stake_supply
+                / U256::from(YOCTO))
+                - total_staked_near_balance;
+            domain::StakeTokenValue::new(
+                new_stake_token_value.block_time_height(),
+                (total_staked_near_balance + staked_near_compensation)
+                    .as_u128()
+                    .into(),
+                self.total_stake.amount(),
+            )
+        }
     }
 }
 
@@ -915,6 +959,7 @@ pub trait ExtStakingWokflowCallbacks {
 mod test {
     use super::*;
 
+    use crate::domain::BlockTimeHeight;
     use crate::{
         core::Hash,
         interface::{AccountManagement, Operator},
@@ -2100,7 +2145,7 @@ mod test {
         account.apply_stake_credit(initial_account_stake);
         contract.save_account(&account_hash, &account);
 
-        let batch_id = contract.redeem_all();
+        let batch_id = contract.redeem_all().unwrap();
         contract.run_redeem_stake_batch_lock = Some(lock);
 
         let batch = contract
@@ -3588,4 +3633,68 @@ mod test {
             YOCTO.into()
         );
     }
+
+    #[test]
+    fn stake_token_value_compensation() {
+        // StakeTokenValue {
+        //     total_staked_near_balance: 18503502971096472900569337,
+        //     total_stake_supply: 18004621608054163628202638,
+        //     stake_value: 1027708516952066370722278,
+        //     block_height: 30530205,
+        //     block_timestamp: 1609529212770398556,
+        //     epoch_height: 128,
+        // }
+
+        // StakeTokenValue {
+        //     total_staked_near_balance: 13364960386336141046957933,
+        //     total_stake_supply: 13004621608054163628202638,
+        //     stake_value: 1027708516952066370722277,
+        //     block_height: 30530458,
+        //     block_timestamp: 1609529367402036318,
+        //     epoch_height: 128,
+        // },
+
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.is_view = false;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(None, contract_settings);
+
+        contract.total_stake = TimestampedStakeBalance::new(18004621608054163628202638.into());
+        contract.stake_token_value = StakeTokenValue::new(
+            BlockTimeHeight::from_env(),
+            18503502971096472900569337.into(),
+            contract.total_stake.amount(),
+        );
+        let old_stake_token_value = contract.stake_token_value;
+
+        contract.total_stake = TimestampedStakeBalance::new(13004621608054163628202638.into());
+        contract.update_stake_token_value(13364960386336141046957933.into());
+        let new_stake_token_value = contract.stake_token_value;
+        println!(
+            "current_stake_token_value: {:?} {:?}",
+            old_stake_token_value.total_staked_near_balance(),
+            old_stake_token_value.total_stake_supply()
+        );
+
+        println!(
+            "new_stake_token_value: {:?} {:?}",
+            new_stake_token_value.total_staked_near_balance(),
+            new_stake_token_value.total_stake_supply()
+        );
+        println!(
+            "compensation = {}",
+            new_stake_token_value.total_staked_near_balance().value() - 13364960386336141046957933
+        );
+        assert_eq!(
+            old_stake_token_value.stake_to_near(YOCTO.into()),
+            new_stake_token_value.stake_to_near(YOCTO.into())
+        );
+    }
+
+    #[test]
+    fn validate_sums() {}
 }

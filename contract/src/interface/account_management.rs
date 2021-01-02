@@ -61,8 +61,9 @@ pub trait AccountManagement {
     /// Withdraws all available NEAR funds from the account and transfers the
     /// funds to the account.
     ///
+    /// Returns the amount withdrawn.
+    ///
     /// ## Panics
     /// - if the account is not registered
-    /// - if there are no funds to withdraw
-    fn withdraw_all(&mut self);
+    fn withdraw_all(&mut self) -> YoctoNear;
 }

@@ -27,7 +27,6 @@ near call stake.oysterpack.testnet unstake --accountId oysterpack.testnet --gas 
 
 near call stake.oysterpack.testnet redeem_and_unstake --accountId alfio-zappala-oysterpack.testnet --args '{"amount":"1000000000000000000000000"}' --gas 150000000000000
 near call stake.oysterpack.testnet redeem_and_unstake --accountId oysterpack.testnet --args '{"amount":"5000000000000000000000000"}' --gas 150000000000000
-near call stake.oysterpack.testnet redeem_all_and_unstake --accountId alfio-zappala-oysterpack.testnet --gas 150000000000000
 
 near call stake.oysterpack.testnet redeem_all_and_unstake --accountId oysterpack.testnet --gas 150000000000000
 near call stake.oysterpack.testnet redeem_all_and_unstake --accountId alfio-zappala-oysterpack.testnet --gas 150000000000000
@@ -60,6 +59,8 @@ near call $STAKING_POOL withdraw_all --accountId stake.oysterpack.testnet --gas 
 
 1000000000000000000000000     = 1 NEAR
 1414753409460193462223230
+1000000000000000000000001
+1927763932416166602636020
 
 1000000000000                 = 1 TGas
 

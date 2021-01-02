@@ -194,10 +194,11 @@ pub trait StakingService {
 
     /// Redeems all available STAKE - see [redeem](StakingService::redeem)
     ///
+    /// Returns None if there are no STAKE funds to redeem
+    ///
     /// ## Panics
     /// - if account is not registered
-    /// - if the account has no STAKE to redeem
-    fn redeem_all(&mut self) -> BatchId;
+    fn redeem_all(&mut self) -> Option<BatchId>;
 
     /// Returns false if the account has no uncommitted redeem stake batch.
     /// - STAKE funds that were locked in the redeem stake batch are made available for transfer
@@ -266,7 +267,13 @@ pub trait StakingService {
     fn redeem_and_unstake(&mut self, amount: YoctoStake) -> PromiseOrValue<BatchId>;
 
     /// combines the [redeem_all](StakingService::redeem) and [unstake](StakingService::unstake) calls
-    fn redeem_all_and_unstake(&mut self) -> PromiseOrValue<BatchId>;
+    ///
+    /// If there are no STAKE funds to redeem, then None is returned.
+    /// If the contract is current locked, then the STAKE tokens are put into the next batch to redeem.
+    /// Otherwise it proceeds with the unstake workflow and returns a Promise.
+    ///
+    /// GAS REQUIREMENTS: 150 TGas
+    fn redeem_all_and_unstake(&mut self) -> PromiseOrValue<Option<BatchId>>;
 
     /// Returns the batch that is awaiting for funds to be available to be withdrawn.
     ///

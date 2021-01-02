@@ -30,7 +30,7 @@ impl StakeTokenContract {
 
         // update the cached STAKE token value
         let staked_balance = staking_pool_account.staked_balance;
-        self.stake_token_value = self.stake_token_value(staked_balance.into());
+        self.update_stake_token_value(staked_balance.into());
         self.stake_token_value.log_near_event();
 
         let deposit_and_stake = || {
@@ -39,11 +39,10 @@ impl StakeTokenContract {
         };
 
         let unstaked_balance = staking_pool_account.unstaked_balance.0;
-        match self.run_redeem_stake_batch_lock {
-            Some(RedeemLock::PendingWithdrawal) if unstaked_balance > 0 => {
-                self.add_liquidity_then_deposit_and_stake(unstaked_balance, batch)
-            }
-            _ => deposit_and_stake(),
+        if unstaked_balance > 0 && self.is_liquidity_needed() {
+            self.add_liquidity_then_deposit_and_stake(unstaked_balance, batch)
+        } else {
+            deposit_and_stake()
         }
     }
 
@@ -67,6 +66,13 @@ impl StakeTokenContract {
 }
 
 impl StakeTokenContract {
+    fn is_liquidity_needed(&self) -> bool {
+        match self.get_pending_withdrawal() {
+            None => false,
+            Some(receipt) => receipt.stake_near_value() > self.near_liquidity_pool,
+        }
+    }
+
     fn add_liquidity_then_deposit_and_stake(
         &mut self,
         unstaked_balance: u128,

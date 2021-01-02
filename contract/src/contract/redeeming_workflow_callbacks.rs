@@ -41,7 +41,7 @@ impl StakeTokenContract {
         assert!(self.promise_result_succeeded(), GET_ACCOUNT_FAILURE);
 
         // update the cached STAKE token value
-        self.stake_token_value = self.stake_token_value(staking_pool_account.staked_balance.into());
+        self.update_stake_token_value(staking_pool_account.staked_balance.into());
         self.stake_token_value.log_near_event();
 
         let unstake_amount = self
@@ -274,9 +274,9 @@ mod test {
                     ..
                 } => {
                     assert_eq!(method_name, "unstake");
-
+                    contract.update_stake_token_value(staked_balance.0.into());
                     let unstake_amount = contract
-                        .stake_token_value(staked_balance.0.into())
+                        .stake_token_value
                         .stake_to_near(contract.redeem_stake_batch.unwrap().balance().amount());
                     assert!(args.contains(&unstake_amount.value().to_string()));
                     assert_eq!(
@@ -482,7 +482,7 @@ mod test {
         contract.redeem_stake_batch = Some(redeem_stake_batch);
         contract.total_stake = TimestampedStakeBalance::new((1000 * YOCTO).into());
         let staked_near_balance = (1100 * YOCTO).into();
-        contract.stake_token_value = contract.stake_token_value(staked_near_balance);
+        contract.update_stake_token_value(staked_near_balance);
 
         context.predecessor_account_id = context.current_account_id.clone();
         context.epoch_height += 1;
