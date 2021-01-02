@@ -37,7 +37,10 @@ impl TestHarness {
         )
     }
 
-    /// - register the account if not already registered
+    /// - check if account is registered
+    /// - if account is not registered then
+    ///   - lookup account storage fee
+    ///   - and register the account
     /// - lookup the account info and return it
     pub fn test_account_registration_workflow(
         &self,
@@ -49,8 +52,11 @@ impl TestHarness {
             stake_token_contract.as_ref()
         ));
 
-        let callback_gas =
-            env::prepaid_gas().saturating_sub(env::used_gas().saturating_add(TGAS * 25));
+        let callback_gas = env::prepaid_gas().saturating_sub(
+            env::used_gas()
+                .saturating_sub(ACCOUNT_REGISTERED_GAS)
+                .saturating_add(25 * TGAS),
+        );
         log(&format!("callback_gas = {}", callback_gas));
 
         account_management::account_registered(
@@ -71,7 +77,7 @@ impl TestHarness {
 /// test_account_registration_workflow
 #[near_bindgen]
 impl TestHarness {
-    /// if registered, then unregister the account and restart test workflow
+    /// if registered, then lookup the account info and return it
     /// if not registered, then register the contract account and return the contract StakeAccount info
     pub fn on_account_registered(
         &self,

@@ -47,7 +47,7 @@ pub trait AccountManagement {
 
     /// looks up the registered account
     ///
-    /// Gas Requirements: 4.5 TGas
+    /// Gas Requirements: 4 TGas
     fn lookup_account(&self, account_id: ValidAccountId) -> Option<StakeAccount>;
 
     /// Withdraws the specified amount from the account's available NEAR balance and transfers the
