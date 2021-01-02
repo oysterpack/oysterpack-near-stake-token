@@ -1,4 +1,5 @@
 //required in order for near_bindgen macro to work outside of lib.rs
+use crate::domain::RegisteredAccount;
 use crate::errors::account_management::ACCOUNT_NOT_REGISTERED;
 use crate::*;
 use crate::{
@@ -144,17 +145,17 @@ impl AccountManagement for StakeTokenContract {
     }
 
     fn withdraw(&mut self, amount: interface::YoctoNear) {
-        let (mut account, account_hash) = self.registered_account(&env::predecessor_account_id());
-        self.withdraw_near_funds(&mut account, &account_hash, amount.into());
+        let mut account = self.registered_account(&env::predecessor_account_id());
+        self.withdraw_near_funds(&mut account, amount.into());
     }
 
     fn withdraw_all(&mut self) -> interface::YoctoNear {
-        let (mut account, account_hash) = self.registered_account(&env::predecessor_account_id());
+        let mut account = self.registered_account(&env::predecessor_account_id());
         self.claim_receipt_funds(&mut account);
         match account.near {
             None => 0.into(),
             Some(balance) => {
-                self.withdraw_near_funds(&mut account, &account_hash, balance.amount());
+                self.withdraw_near_funds(&mut account, balance.amount());
                 balance.amount().into()
             }
         }
@@ -162,37 +163,39 @@ impl AccountManagement for StakeTokenContract {
 }
 
 impl StakeTokenContract {
-    fn withdraw_near_funds(
-        &mut self,
-        account: &mut Account,
-        account_hash: &Hash,
-        amount: YoctoNear,
-    ) {
+    fn withdraw_near_funds(&mut self, account: &mut RegisteredAccount, amount: YoctoNear) {
         self.claim_receipt_funds(account);
         account.apply_near_debit(amount);
-        self.save_account(&account_hash, &account);
+        self.save_registered_account(&account);
         self.total_near.debit(amount);
         Promise::new(env::predecessor_account_id()).transfer(amount.value());
     }
 
     /// ## Panics
     /// if account is not registered
-    pub(crate) fn registered_account(&self, account_id: &str) -> (Account, Hash) {
+    pub(crate) fn registered_account(&self, account_id: &str) -> RegisteredAccount {
         let account_id_hash = Hash::from(account_id);
         match self.accounts.get(&Hash::from(account_id)) {
-            Some(account) => (account, account_id_hash),
+            Some(account) => RegisteredAccount {
+                account,
+                id: account_id_hash,
+            },
             None => panic!("{}: {}", ACCOUNT_NOT_REGISTERED, account_id),
         }
     }
 
     /// returns true if this was a new account
-    pub(crate) fn save_account(&mut self, account_id: &Hash, account: &Account) -> bool {
+    fn save_account(&mut self, account_id: &Hash, account: &Account) -> bool {
         if self.accounts.insert(account_id, account).is_none() {
             // new account was added
             self.accounts_len += 1;
             return true;
         }
         false
+    }
+
+    pub(crate) fn save_registered_account(&mut self, account: &RegisteredAccount) {
+        self.save_account(&account.id, &account.account);
     }
 
     /// returns the account that was deleted, or None if no account exists for specified account ID
@@ -279,9 +282,9 @@ mod test {
                 contract.stake_token_value,
             ),
         );
-        let (mut account, account_id_hash) = contract.registered_account(account_id);
+        let mut account = contract.registered_account(account_id);
         account.redeem_stake_batch = Some(redeem_stake_batch);
-        contract.save_account(&account_id_hash, &account);
+        contract.save_account(&account.id, &account);
 
         context.is_view = true;
         testing_env!(context.clone());
@@ -330,9 +333,9 @@ mod test {
             ),
         );
         contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
-        let (mut account, account_id_hash) = contract.registered_account(account_id);
+        let mut account = contract.registered_account(account_id);
         account.redeem_stake_batch = Some(redeem_stake_batch);
-        contract.save_account(&account_id_hash, &account);
+        contract.save_account(&account.id, &account);
 
         context.is_view = true;
         testing_env!(context.clone());

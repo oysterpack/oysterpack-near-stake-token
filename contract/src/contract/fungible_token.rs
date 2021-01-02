@@ -49,7 +49,7 @@ impl FungibleToken for StakeTokenContract {
     }
 
     fn balance(&self, account_id: ValidAccountId) -> U128 {
-        let (account, _) = self.registered_account(account_id.as_ref());
+        let account = self.registered_account(account_id.as_ref());
         let account = self.apply_receipt_funds_for_view(&account);
         account
             .stake
@@ -68,9 +68,8 @@ impl SimpleTransfer for StakeTokenContract {
         let receiver_id: &str = recipient.as_ref();
         assert_receiver_is_not_sender(receiver_id);
 
-        let (mut sender, sender_account_id) =
-            self.registered_account(&env::predecessor_account_id());
-        let (mut receiver, receiver_account_id) = self.registered_account(receiver_id.as_ref());
+        let mut sender = self.registered_account(&env::predecessor_account_id());
+        let mut receiver = self.registered_account(receiver_id.as_ref());
 
         self.claim_receipt_funds(&mut sender);
         self.claim_receipt_funds(&mut receiver);
@@ -81,11 +80,10 @@ impl SimpleTransfer for StakeTokenContract {
             ACCOUNT_INSUFFICIENT_STAKE_FUNDS
         );
         sender.apply_stake_debit(stake_amount);
-
         receiver.apply_stake_credit(stake_amount);
 
-        self.save_account(&sender_account_id, &sender);
-        self.save_account(&receiver_account_id, &receiver);
+        self.save_registered_account(&sender);
+        self.save_registered_account(&receiver);
 
         log(fungible_token_events::Transfer {
             from: &env::predecessor_account_id(),
@@ -122,8 +120,7 @@ impl VaultBasedTransfer for StakeTokenContract {
         let receiver_id: &str = recipient.as_ref();
         assert_receiver_is_not_sender(receiver_id);
 
-        let (mut sender, sender_account_id) =
-            self.registered_account(&env::predecessor_account_id());
+        let mut sender = self.registered_account(&env::predecessor_account_id());
         self.claim_receipt_funds(&mut sender);
 
         // check that sender balance has sufficient funds
@@ -133,16 +130,16 @@ impl VaultBasedTransfer for StakeTokenContract {
             ACCOUNT_INSUFFICIENT_STAKE_FUNDS
         );
         sender.apply_stake_debit(transfer_amount);
-        self.save_account(&sender_account_id, &sender);
+        self.save_registered_account(&sender);
 
         // verifies that the receiver account is registered
         // - panics if the receiver account ID is not registered
-        let (mut receiver, receiver_account_id) = self.registered_account(receiver_id);
+        let mut receiver = self.registered_account(receiver_id);
         self.claim_receipt_funds(&mut receiver);
 
         // Creating a new vault
         *self.vault_id_sequence += 1;
-        let vault = Vault(receiver_account_id, transfer_amount);
+        let vault = Vault(receiver.id, transfer_amount);
         self.vaults.insert(&self.vault_id_sequence, &vault);
 
         // Calling the receiver
@@ -168,14 +165,13 @@ impl VaultBasedTransfer for StakeTokenContract {
         let vault_id = vault_id.into();
         let mut vault = self.vaults.get(&vault_id).expect(VAULT_DOES_NOT_EXIST);
 
-        let (_, vault_owner_id) = self.registered_account(&env::predecessor_account_id());
-        if vault_owner_id != vault.owner_id_hash() {
+        let vault_owner = self.registered_account(&env::predecessor_account_id());
+        if vault_owner.id != vault.owner_id_hash() {
             panic!(VAULT_ACCESS_DENIED);
         }
 
         // verifies that the receiver account is registered - panics if the account is not registered
-        let (mut receiver_account, receiver_account_id) =
-            self.registered_account(recipient.as_ref());
+        let mut receiver_account = self.registered_account(recipient.as_ref());
 
         // debit the vault
         let transfer_amount = amount.into();
@@ -185,7 +181,7 @@ impl VaultBasedTransfer for StakeTokenContract {
 
         // credit the receiver account
         receiver_account.apply_stake_credit(transfer_amount);
-        self.save_account(&receiver_account_id, &receiver_account);
+        self.save_registered_account(&receiver_account);
     }
 }
 
@@ -199,9 +195,9 @@ impl ResolveVaultCallback for StakeTokenContract {
             .remove(&vault_id.into())
             .expect(VAULT_DOES_NOT_EXIST);
         if vault.balance().value() > 0 {
-            let (mut account, account_hash_id) = self.registered_account(&sender_id);
+            let mut account = self.registered_account(&sender_id);
             account.apply_stake_credit(vault.balance());
-            self.save_account(&account_hash_id, &account);
+            self.save_registered_account(&account);
         }
         vault.balance().into()
     }
@@ -234,8 +230,7 @@ impl TransferCall for StakeTokenContract {
         let receiver_id: &str = recipient.as_ref();
         assert_receiver_is_not_sender(receiver_id);
 
-        let (mut sender, sender_account_id) =
-            self.registered_account(&env::predecessor_account_id());
+        let mut sender = self.registered_account(&env::predecessor_account_id());
         self.claim_receipt_funds(&mut sender);
 
         // check that sender balance has sufficient funds
@@ -245,15 +240,15 @@ impl TransferCall for StakeTokenContract {
             ACCOUNT_INSUFFICIENT_STAKE_FUNDS
         );
         sender.apply_stake_debit(transfer_amount);
-        self.save_account(&sender_account_id, &sender);
+        self.save_registered_account(&sender);
 
         // verifies that the receiver account is registered
         // - panics if the receiver account ID is not registered
-        let (mut receiver, receiver_account_id) = self.registered_account(receiver_id);
+        let mut receiver = self.registered_account(receiver_id);
         self.claim_receipt_funds(&mut receiver);
         receiver.apply_stake_credit(transfer_amount);
         receiver.lock_stake(transfer_amount);
-        self.save_account(&receiver_account_id, &receiver);
+        self.save_registered_account(&receiver);
 
         // Calling the receiver
         ext_transfer_call_recipient::on_ft_receive(
@@ -282,21 +277,21 @@ impl FinalizeTransferCallback for StakeTokenContract {
 
         if self.promise_result_succeeded() {
             // unlock the balance on the recipient account
-            let (mut receiver, receiver_id_hash) = self.registered_account(&recipient);
+            let mut receiver = self.registered_account(&recipient);
             receiver.unlock_stake(amount.into());
-            self.save_account(&receiver_id_hash, &receiver);
+            self.save_registered_account(&receiver);
         } else {
             // rollback the transfer
             log("`transfer_call` failed: rolling back token transfer");
 
-            let (mut receiver, receiver_id_hash) = self.registered_account(&recipient);
+            let mut receiver = self.registered_account(&recipient);
             receiver.unlock_stake(amount.into());
             receiver.apply_stake_debit(amount.into());
-            self.save_account(&receiver_id_hash, &receiver);
+            self.save_registered_account(&receiver);
 
-            let (mut sender, sender_id_hash) = self.registered_account(&sender);
+            let mut sender = self.registered_account(&sender);
             sender.apply_stake_credit(amount.into());
-            self.save_account(&sender_id_hash, &sender);
+            self.save_registered_account(&sender);
         }
     }
 }
@@ -385,10 +380,10 @@ mod test {
         testing_env!(context.clone());
         contract.register_account();
 
-        let (mut account, account_id_hash) = contract.registered_account(sender_account_id);
+        let mut account = contract.registered_account(sender_account_id);
         account.apply_stake_credit((100 * YOCTO).into());
         assert_eq!(account.available_stake_balance(), (100 * YOCTO).into());
-        contract.save_account(&account_id_hash, &account);
+        contract.save_registered_account(&account);
         contract.total_stake.credit(account.stake.unwrap().amount());
 
         contract.transfer(
@@ -426,9 +421,9 @@ mod test {
         testing_env!(context.clone());
         contract.register_account();
 
-        let (mut account, account_id_hash) = contract.registered_account(sender_account_id);
+        let mut account = contract.registered_account(sender_account_id);
         account.apply_stake_credit((100 * YOCTO).into());
-        contract.save_account(&account_id_hash, &account);
+        contract.save_registered_account(&account);
         contract.total_stake.credit(account.stake.unwrap().amount());
 
         contract.transfer(
@@ -522,9 +517,9 @@ mod test {
         testing_env!(context.clone());
         contract.register_account();
 
-        let (mut account, account_id_hash) = contract.registered_account(sender_account_id);
+        let mut account = contract.registered_account(sender_account_id);
         account.apply_stake_credit((100 * YOCTO).into());
-        contract.save_account(&account_id_hash, &account);
+        contract.save_registered_account(&account);
         contract.total_stake.credit(account.stake.unwrap().amount());
 
         let transfer_amount = 10 * YOCTO;
@@ -597,9 +592,9 @@ mod test {
         testing_env!(context.clone());
         contract.register_account();
 
-        let (mut account, account_id_hash) = contract.registered_account(sender_account_id);
+        let mut account = contract.registered_account(sender_account_id);
         account.apply_stake_credit((100 * YOCTO).into());
-        contract.save_account(&account_id_hash, &account);
+        contract.save_registered_account(&account);
         contract.total_stake.credit(account.stake.unwrap().amount());
 
         contract.transfer_with_vault(
@@ -661,9 +656,9 @@ mod test {
         let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
-        let (mut account, account_id_hash) = contract.registered_account(account_id);
+        let mut account = contract.registered_account(account_id);
         account.apply_stake_credit((100 * YOCTO).into());
-        contract.save_account(&account_id_hash, &account);
+        contract.save_registered_account(&account);
         contract.total_stake.credit(account.stake.unwrap().amount());
 
         contract.transfer_with_vault(
@@ -693,9 +688,9 @@ mod test {
         testing_env!(context.clone());
         contract.register_account();
 
-        let (mut account, account_id_hash) = contract.registered_account(sender_account_id);
+        let mut account = contract.registered_account(sender_account_id);
         account.apply_stake_credit((100 * YOCTO).into());
-        contract.save_account(&account_id_hash, &account);
+        contract.save_registered_account(&account);
         contract.total_stake.credit(account.stake.unwrap().amount());
 
         let transfer_amount = 10 * YOCTO;
@@ -745,9 +740,9 @@ mod test {
         testing_env!(context.clone());
         contract.register_account();
 
-        let (mut account, account_id_hash) = contract.registered_account(sender_account_id);
+        let mut account = contract.registered_account(sender_account_id);
         account.apply_stake_credit((100 * YOCTO).into());
-        contract.save_account(&account_id_hash, &account);
+        contract.save_registered_account(&account);
         contract.total_stake.credit(account.stake.unwrap().amount());
 
         let transfer_amount = 10 * YOCTO;
@@ -785,9 +780,9 @@ mod test {
         testing_env!(context.clone());
         contract.register_account();
 
-        let (mut account, account_id_hash) = contract.registered_account(sender_account_id);
+        let mut account = contract.registered_account(sender_account_id);
         account.apply_stake_credit((100 * YOCTO).into());
-        contract.save_account(&account_id_hash, &account);
+        contract.save_registered_account(&account);
         contract.total_stake.credit(account.stake.unwrap().amount());
 
         let transfer_amount = 10 * YOCTO;
@@ -826,9 +821,9 @@ mod test {
         testing_env!(context.clone());
         contract.register_account();
 
-        let (mut account, account_id_hash) = contract.registered_account(sender_account_id);
+        let mut account = contract.registered_account(sender_account_id);
         account.apply_stake_credit((100 * YOCTO).into());
-        contract.save_account(&account_id_hash, &account);
+        contract.save_registered_account(&account);
         contract.total_stake.credit(account.stake.unwrap().amount());
 
         let transfer_amount = 10 * YOCTO;
@@ -867,9 +862,9 @@ mod test {
         testing_env!(context.clone());
         contract.register_account();
 
-        let (mut account, account_id_hash) = contract.registered_account(sender_account_id);
+        let mut account = contract.registered_account(sender_account_id);
         account.apply_stake_credit((100 * YOCTO).into());
-        contract.save_account(&account_id_hash, &account);
+        contract.save_registered_account(&account);
         contract.total_stake.credit(account.stake.unwrap().amount());
 
         let transfer_amount = 10 * YOCTO;
@@ -908,9 +903,9 @@ mod test {
         testing_env!(context.clone());
         contract.register_account();
 
-        let (mut account, account_id_hash) = contract.registered_account(sender_account_id);
+        let mut account = contract.registered_account(sender_account_id);
         account.apply_stake_credit((100 * YOCTO).into());
-        contract.save_account(&account_id_hash, &account);
+        contract.save_registered_account(&account);
         contract.total_stake.credit(account.stake.unwrap().amount());
 
         let transfer_amount = 10 * YOCTO;
@@ -948,9 +943,9 @@ mod test {
         testing_env!(context.clone());
         contract.register_account();
 
-        let (mut account, account_id_hash) = contract.registered_account(sender_account_id);
+        let mut account = contract.registered_account(sender_account_id);
         account.apply_stake_credit((100 * YOCTO).into());
-        contract.save_account(&account_id_hash, &account);
+        contract.save_registered_account(&account);
         contract.total_stake.credit(account.stake.unwrap().amount());
 
         let transfer_amount = 10 * YOCTO;
@@ -1025,9 +1020,9 @@ mod test {
                 contract.stake_token_value,
             ),
         );
-        let (mut account, account_id_hash) = contract.registered_account(account_id);
+        let mut account = contract.registered_account(account_id);
         account.redeem_stake_batch = Some(redeem_stake_batch);
-        contract.save_account(&account_id_hash, &account);
+        contract.save_registered_account(&account);
 
         context.is_view = true;
         testing_env!(context.clone());

@@ -1,3 +1,4 @@
+use crate::core::Hash;
 use crate::domain::stake_batch::StakeBatch;
 use crate::domain::{
     RedeemStakeBatch, TimestampedNearBalance, TimestampedStakeBalance, YoctoNear, YoctoStake,
@@ -6,6 +7,7 @@ use crate::errors::vault_fungible_token::{
     ACCOUNT_INSUFFICIENT_NEAR_FUNDS, ACCOUNT_INSUFFICIENT_STAKE_FUNDS,
 };
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
+use std::ops::{Deref, DerefMut};
 
 #[derive(BorshSerialize, BorshDeserialize, Clone)]
 pub struct Account {
@@ -168,5 +170,24 @@ impl Account {
             }
             None => self.stake.map_or(YoctoStake(0), |stake| stake.amount()),
         }
+    }
+}
+
+pub struct RegisteredAccount {
+    pub account: Account,
+    pub id: Hash,
+}
+
+impl Deref for RegisteredAccount {
+    type Target = Account;
+
+    fn deref(&self) -> &Self::Target {
+        &self.account
+    }
+}
+
+impl DerefMut for RegisteredAccount {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.account
     }
 }

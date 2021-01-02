@@ -73,24 +73,21 @@ impl StakeTokenContract {
         assert!(self.promise_result_succeeded(), GET_ACCOUNT_FAILURE);
 
         let unstaked_balance = staking_pool_account.unstaked_balance.0;
-        // if unstaked balance is zero, then it means the unstaked NEAR funds were withdrawn, but the
-        // workflow failed downstream, e.g., if not enough gas was supplied.
-        //
-        // When [run_redeem_stake_batch](crate::interface::StakingService::run_redeem_stake_batch] is
-        // retried, then it can skip the fund withdrawal step
+        // if unstaked balance is zero, then it means the unstaked NEAR funds were withdrawn
+        // - unstaked NEAR is restaked to add liquidity, which effectively reduces the unstaked NEAR
+        //   balance in the staking pool contract
         if unstaked_balance > 0 {
             assert!(
                 staking_pool_account.can_withdraw,
                 UNSTAKED_FUNDS_NOT_AVAILABLE_FOR_WITHDRAWAL
             );
 
-            return self
-                .withdraw_all_funds_from_staking_pool()
+            self.withdraw_all_funds_from_staking_pool()
                 .then(self.invoke_on_redeeming_stake_post_withdrawal())
-                .into();
+                .into()
+        } else {
+            PromiseOrValue::Value(self.finalize_redeem_batch())
         }
-
-        PromiseOrValue::Value(self.finalize_redeem_batch())
     }
 
     pub fn on_redeeming_stake_post_withdrawal(&mut self) -> BatchId {

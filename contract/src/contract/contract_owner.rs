@@ -60,24 +60,24 @@ impl ContractOwner for StakeTokenContract {
 
     fn stake_all_owner_balance(&mut self) -> YoctoNear {
         self.assert_predecessor_is_owner();
-        let (mut account, account_id_hash) = self.registered_account(&self.owner_id);
+        let mut account = self.registered_account(&self.owner_id);
         let owner_balance = self.owner_balance();
         assert!(owner_balance.value() > 0, "owner balance is zero");
         self.deposit_near_for_account_to_stake(&mut account, owner_balance.value().into());
-        self.save_account(&account_id_hash, &account);
+        self.save_registered_account(&account);
         owner_balance
     }
 
     fn stake_owner_balance(&mut self, amount: YoctoNear) {
         self.assert_predecessor_is_owner();
-        let (mut account, account_id_hash) = self.registered_account(&self.owner_id);
+        let mut account = self.registered_account(&self.owner_id);
         let owner_balance = self.owner_balance();
         assert!(
             owner_balance.value() >= amount.value(),
             INSUFFICIENT_FUNDS_FOR_OWNER_STAKING
         );
         self.deposit_near_for_account_to_stake(&mut account, amount.into());
-        self.save_account(&account_id_hash, &account);
+        self.save_registered_account(&account);
     }
 
     fn withdraw_all_owner_balance(&mut self) -> YoctoNear {

@@ -3,20 +3,14 @@ use std::collections::HashMap;
 
 #[test]
 fn quick_test() {
-    let optional_num: Option<U128> = Some(100.into());
+    let pending_withdrawal = 11946810934771951073054235u128;
+    let unstaked_near = 1010187198366539620603257;
 
-    println!("{}", serde_json::to_string(&optional_num).unwrap());
+    let alfio_zappala_redeem_batch_value = 12956998133138490693657492u128;
 
-    let optional_num: Option<U128> = serde_json::from_str(r#"null"#).unwrap();
-
-    let value: Option<String> = Some("".to_string());
-    match value {
-        None => println!("value is None"),
-        Some(value) if value.is_empty() => println!("value is empty string"),
-        Some(value) => println!("value is {}", value),
-    }
-
-    let mut event = HashMap::<String, String>::new();
-    event.insert("a".to_string(), "b".to_string());
-    println!("{:?}", event);
+    println!("{}", pending_withdrawal + unstaked_near);
+    println!(
+        "{}",
+        alfio_zappala_redeem_batch_value - pending_withdrawal - unstaked_near
+    );
 }

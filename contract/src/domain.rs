@@ -24,7 +24,7 @@ mod yocto_near;
 mod yocto_stake;
 
 pub use crate::interface::contract_state::ContractState;
-pub use account::Account;
+pub use account::{Account, RegisteredAccount};
 pub use batch_id::BatchId;
 pub use block_height::BlockHeight;
 pub use block_time_height::BlockTimeHeight;
