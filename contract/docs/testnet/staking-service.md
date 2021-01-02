@@ -10,9 +10,12 @@ near view stake.oysterpack.testnet redeem_stake_batch_receipt --args '{"batch_id
 ### Stateful Func Calls
 ```shell
 near call stake.oysterpack.testnet deposit --accountId alfio-zappala-oysterpack.testnet --amount 1
+near call stake.oysterpack.testnet deposit --accountId oysterpack.testnet --amount 1
 near call stake.oysterpack.testnet deposit --accountId 1.alfio-zappala-oysterpack.testnet --amount 2
 
 near call stake.oysterpack.testnet stake --accountId alfio-zappala-oysterpack.testnet --gas 150000000000000
+
+near call stake.oysterpack.testnet stake --accountId alfio-zappala-oysterpack.testnet --gas 130000000000000
 
 near call stake.oysterpack.testnet deposit_and_stake --accountId alfio-zappala-oysterpack.testnet --amount 1 --gas 150000000000000
 near call stake.oysterpack.testnet deposit_and_stake --accountId oysterpack.testnet --amount 1 --gas 150000000000000
@@ -58,10 +61,8 @@ near call $STAKING_POOL withdraw_all --accountId stake.oysterpack.testnet --gas 
 ```
 
 1000000000000000000000000     = 1 NEAR
-1414753409460193462223230
-1000000000000000000000001
-1927763932416166602636020
 
 1000000000000                 = 1 TGas
+
 
 

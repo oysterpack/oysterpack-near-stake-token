@@ -8,6 +8,7 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
     Promise,
 };
+use std::collections::HashMap;
 
 /// - Fungible token supports 1 or more [TransferProtocol]s as specified per [MetaData]
 /// - Accounts must register with the token contract and pay for account storage fees.
@@ -112,6 +113,18 @@ pub trait SimpleTransfer {
     /// Actions:
     /// - Transfers `amount` of tokens from `predecessor_id` to `recipient`.
     ///
+    /// ## Transfer Headers
+    /// - used to add context to the transfer
+    /// - standard headers will be defined, but this also enables the protocol to be extended
+    ///   with custom headers
+    /// - proposed standard headers:
+    ///   - `msg`: is a message sent to the recipient. It might be used to send additional call
+    //      instructions.
+    ///   - `memo`: arbitrary data with no specified format used to link the transaction with an
+    ///     external event. If referencing a binary data, it should use base64 serialization.
+    /// - for simple transfer, the headers are logged as part of the [Transfer](crate::interface::fungible_token::events::Transfer]
+    ///   event
+    ///
     /// ## Panics
     /// - if predecessor account is not registered - sender account
     /// - if [recipient] account is not registered
@@ -121,8 +134,7 @@ pub trait SimpleTransfer {
         &mut self,
         recipient: ValidAccountId,
         amount: U128,
-        msg: Option<String>,
-        memo: Option<String>,
+        headers: Option<HashMap<String, String>>,
     );
 }
 
@@ -145,11 +157,15 @@ pub trait TransferCall {
     ///    [on_ft_receive](crate::interface::ext_transfer_call_recipient::on_ft_receive) call fails
     ///    for any reason, then the fund transfer is rolled back in the finalize callback.
     ///
-    /// ## Transfer Reference Args
-    /// - `msg`: is a message sent to the recipient. It might be used to send additional call
-    //    instructions.
-    /// - `memo`: arbitrary data with no specified format used to link the transaction with an
-    ///   external event. If referencing a binary data, it should use base64 serialization.
+    /// ## Transfer Headers
+    /// - used to add context to the transfer
+    /// - standard headers will be defined, but this also enables the protocol to be extended
+    ///   with custom headers
+    /// - proposed standard headers:
+    ///   - `msg`: is a message sent to the recipient. It might be used to send additional call
+    //      instructions.
+    ///   - `memo`: arbitrary data with no specified format used to link the transaction with an
+    ///     external event. If referencing a binary data, it should use base64 serialization.
     ///
     /// ## Panics
     /// - if accounts are not registered
@@ -158,8 +174,7 @@ pub trait TransferCall {
         &mut self,
         recipient: ValidAccountId,
         amount: U128,
-        msg: Option<String>,
-        memo: Option<String>,
+        headers: Option<HashMap<String, String>>,
     ) -> Promise;
 }
 
@@ -185,8 +200,7 @@ pub trait TransferCallRecipient {
         &mut self,
         from: ValidAccountId,
         amount: U128,
-        msg: Option<String>,
-        memo: Option<String>,
+        headers: Option<HashMap<String, String>>,
     );
 }
 
@@ -236,8 +250,7 @@ pub trait VaultBasedTransfer {
         &mut self,
         recipient: ValidAccountId,
         amount: U128,
-        msg: Option<String>,
-        memo: Option<String>,
+        headers: Option<HashMap<String, String>>,
     ) -> Promise;
 
     /// Withdraws from a given vault and transfers the funds to the specified receiver account ID.
@@ -311,8 +324,7 @@ pub trait ExtTokenVaultReceiver {
         sender_id: AccountId,
         amount: U128,
         vault_id: VaultId,
-        msg: Option<String>,
-        memo: Option<String>,
+        headers: Option<HashMap<String, String>>,
     );
 }
 
@@ -347,5 +359,17 @@ impl From<u128> for VaultId {
 impl From<domain::VaultId> for VaultId {
     fn from(id: domain::VaultId) -> Self {
         Self(id.0.into())
+    }
+}
+
+pub mod events {
+    use std::collections::HashMap;
+
+    #[derive(Debug)]
+    pub struct Transfer<'a> {
+        pub from: &'a str,
+        pub to: &'a str,
+        pub amount: u128,
+        pub headers: Option<&'a HashMap<String, String>>,
     }
 }

@@ -10,6 +10,8 @@ near view stake.oysterpack.testnet metadata
 ### Stateful Calls
 ```shell
 near call stake.oysterpack.testnet transfer --accountId alfio-zappala-oysterpack.testnet --args '{"recipient":"oysterpack.testnet", "amount":"1000000000000"}'
+
+near call stake.oysterpack.testnet transfer --accountId oysterpack.testnet --args '{"recipient":"alfio-zappala-oysterpack.testnet", "amount":"1000000000000", "headers":{"msg":"merry christmas"}}'
 ```
 
 1000000000000000000000000
