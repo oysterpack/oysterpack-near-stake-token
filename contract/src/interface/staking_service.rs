@@ -166,13 +166,14 @@ pub trait StakingService {
     fn withdraw_funds_from_stake_batch(&mut self, amount: YoctoNear);
 
     /// withdraws all NEAR from uncommitted stake batch and refunds the account
+    /// - returns NEAR amount that was withdrawn from the [StakeBatch](crate::domain::StakeBatch)
     ///
     /// NOTE: all batch receipts are first claimed
     ///
     /// ## Panics
     /// - if the account is not registered
     /// - if the contract is locked
-    fn withdraw_all_funds_from_stake_batch(&mut self);
+    fn withdraw_all_funds_from_stake_batch(&mut self) -> YoctoNear;
 
     /// Submits request to redeem STAKE tokens, which are put into a [RedeemStakeBatch](crate::interface::RedeemStakeBatch).
     /// In effect, this locks up STAKE in the [RedeemStakeBatch](crate::interface::RedeemStakeBatch),
@@ -291,9 +292,7 @@ pub trait StakingService {
 }
 
 pub mod events {
-    use crate::domain::{
-        self, BatchId, RedeemStakeBatch, RedeemStakeBatchReceipt, StakeBatchReceipt,
-    };
+    use crate::domain::{self, BatchId, RedeemStakeBatchReceipt, StakeBatchReceipt};
     use crate::near::YOCTO;
 
     #[derive(Debug)]
@@ -389,7 +388,7 @@ pub mod events {
     }
 
     impl PendingWithdrawalCleared {
-        pub fn new(batch: &RedeemStakeBatch, receipt: &RedeemStakeBatchReceipt) -> Self {
+        pub fn new(batch: &domain::RedeemStakeBatch, receipt: &RedeemStakeBatchReceipt) -> Self {
             Self {
                 batch_id: batch.id().value(),
                 stake: batch.balance().amount().value(),
@@ -406,8 +405,28 @@ pub mod events {
     pub struct StakeBatch {
         /// corresponds to the [StakeBatch](crate::dommain::StakeBatch)
         pub batch_id: u128,
-        /// how much NEAR was staked
+        /// how much NEAR to staked is in the batch
         pub near: u128,
+    }
+
+    /// batch is cancelled if all funds are withdrawn
+    #[derive(Debug)]
+    pub struct StakeBatchCancelled {
+        pub batch_id: u128,
+    }
+
+    #[derive(Debug)]
+    pub struct RedeemStakeBatch {
+        /// corresponds to the [RedeemStakeBatch](crate::dommain::RedeemStakeBatch)
+        pub batch_id: u128,
+        /// how much STAKE to redeem is in the batch
+        pub stake: u128,
+    }
+
+    /// batch is cancelled if all funds are withdrawn
+    #[derive(Debug)]
+    pub struct RedeemStakeBatchCancelled {
+        pub batch_id: u128,
     }
 
     #[cfg(test)]

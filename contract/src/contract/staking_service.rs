@@ -51,14 +51,7 @@ impl StakingService for StakeTokenContract {
         let batch_id =
             self.deposit_near_for_account_to_stake(&mut account, env::attached_deposit().into());
         self.save_registered_account(&account);
-
-        if let Some(batch) = self.stake_batch {
-            log(interface::staking_service::events::StakeBatch {
-                batch_id: batch_id.0 .0,
-                near: batch.balance().amount().value(),
-            });
-        }
-
+        self.log_stake_batch(batch_id.clone().into());
         batch_id
     }
 
@@ -109,6 +102,7 @@ impl StakingService for StakeTokenContract {
 
         if let Some(mut batch) = account.next_stake_batch {
             let amount = amount.into();
+            let batch_id = batch.id();
 
             // remove funds from contract level batch
             {
@@ -130,6 +124,7 @@ impl StakingService for StakeTokenContract {
             }
             self.save_registered_account(&account);
             Promise::new(env::predecessor_account_id()).transfer(amount.value());
+            self.log_stake_batch(batch_id);
             return;
         }
 
@@ -137,6 +132,7 @@ impl StakingService for StakeTokenContract {
             assert!(self.can_run_batch(), BLOCKED_BY_BATCH_RUNNING);
 
             let amount = amount.into();
+            let batch_id = batch.id();
 
             // remove funds from contract level batch
             {
@@ -157,18 +153,20 @@ impl StakingService for StakeTokenContract {
             }
             self.save_registered_account(&account);
             Promise::new(env::predecessor_account_id()).transfer(amount.value());
+            self.log_stake_batch(batch_id);
             return;
         }
 
         panic!(NO_FUNDS_IN_STAKE_BATCH_TO_WITHDRAW);
     }
 
-    fn withdraw_all_funds_from_stake_batch(&mut self) {
+    fn withdraw_all_funds_from_stake_batch(&mut self) -> YoctoNear {
         let mut account = self.registered_account(&env::predecessor_account_id());
         self.claim_receipt_funds(&mut account);
 
         if let Some(batch) = account.next_stake_batch {
             let amount = batch.balance().amount();
+            let batch_id = batch.id();
 
             // remove funds from contract level batch
             {
@@ -185,13 +183,15 @@ impl StakingService for StakeTokenContract {
             account.next_stake_batch = None;
             self.save_registered_account(&account);
             Promise::new(env::predecessor_account_id()).transfer(amount.value());
-            return;
+            self.log_stake_batch(batch_id);
+            return amount.into();
         }
 
         if let Some(batch) = account.stake_batch {
             assert!(self.can_run_batch(), BLOCKED_BY_BATCH_RUNNING);
 
             let amount = batch.balance().amount();
+            let batch_id = batch.id();
 
             // remove funds from contract level batch
             {
@@ -208,16 +208,18 @@ impl StakingService for StakeTokenContract {
             account.stake_batch = None;
             self.save_registered_account(&account);
             Promise::new(env::predecessor_account_id()).transfer(amount.value());
-            return;
+            self.log_stake_batch(batch_id);
+            return amount.into();
         }
 
-        panic!(NO_FUNDS_IN_STAKE_BATCH_TO_WITHDRAW);
+        0.into()
     }
 
     fn redeem(&mut self, amount: YoctoStake) -> BatchId {
         let mut account = self.registered_account(&env::predecessor_account_id());
         let batch_id = self.redeem_stake_for_account(&mut account, amount.into());
         self.save_registered_account(&account);
+        self.log_redeem_stake_batch(batch_id.clone().into());
         batch_id
     }
 
@@ -228,6 +230,7 @@ impl StakingService for StakeTokenContract {
             let amount = stake.amount();
             let batch_id = self.redeem_stake_for_account(&mut account, amount);
             self.save_registered_account(&account);
+            self.log_redeem_stake_batch(batch_id.clone().into());
             batch_id
         })
     }
@@ -239,6 +242,7 @@ impl StakingService for StakeTokenContract {
         if self.run_redeem_stake_batch_lock.is_none() {
             if let Some(batch) = account.redeem_stake_batch {
                 let amount = batch.balance().amount();
+                let batch_id = batch.id();
 
                 // remove funds from contract level batch
                 {
@@ -255,6 +259,7 @@ impl StakingService for StakeTokenContract {
                 account.apply_stake_credit(amount);
                 account.redeem_stake_batch = None;
                 self.save_registered_account(&account);
+                self.log_redeem_stake_batch(batch_id);
                 return true;
             }
 
@@ -263,6 +268,7 @@ impl StakingService for StakeTokenContract {
         } else {
             if let Some(batch) = account.next_redeem_stake_batch {
                 let amount = batch.balance().amount();
+                let batch_id = batch.id();
 
                 // remove funds from contract level batch
                 {
@@ -279,6 +285,7 @@ impl StakingService for StakeTokenContract {
                 account.apply_stake_credit(amount);
                 account.next_redeem_stake_batch = None;
                 self.save_registered_account(&account);
+                self.log_redeem_stake_batch(batch_id);
                 return true;
             }
 
@@ -347,6 +354,52 @@ impl StakingService for StakeTokenContract {
 
 // staking pool func call invocations
 impl StakeTokenContract {
+    fn log_stake_batch(&self, batch_id: domain::BatchId) {
+        if let Some(batch) = self.stake_batch {
+            if batch_id == batch.id() {
+                log(interface::staking_service::events::StakeBatch {
+                    batch_id: batch_id.value(),
+                    near: batch.balance().amount().value(),
+                });
+            }
+        } else if let Some(batch) = self.next_stake_batch {
+            if batch_id == batch.id() {
+                log(interface::staking_service::events::StakeBatch {
+                    batch_id: batch_id.value(),
+                    near: batch.balance().amount().value(),
+                });
+            }
+        } else {
+            log(interface::staking_service::events::StakeBatchCancelled {
+                batch_id: batch_id.value(),
+            });
+        }
+    }
+
+    fn log_redeem_stake_batch(&self, batch_id: domain::BatchId) {
+        if let Some(batch) = self.redeem_stake_batch {
+            if batch_id == batch.id() {
+                log(interface::staking_service::events::RedeemStakeBatch {
+                    batch_id: batch_id.value(),
+                    stake: batch.balance().amount().value(),
+                });
+            }
+        } else if let Some(batch) = self.next_redeem_stake_batch {
+            if batch_id == batch.id() {
+                log(interface::staking_service::events::RedeemStakeBatch {
+                    batch_id: batch_id.value(),
+                    stake: batch.balance().amount().value(),
+                });
+            }
+        } else {
+            log(
+                interface::staking_service::events::RedeemStakeBatchCancelled {
+                    batch_id: batch_id.value(),
+                },
+            );
+        }
+    }
+
     pub(crate) fn get_account_from_staking_pool(&self) -> Promise {
         ext_staking_pool::get_account(
             env::current_account_id(),
@@ -3278,7 +3331,6 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "there are no funds in stake batch")]
     fn withdraw_all_funds_from_stake_batch_no_stake_batch() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
@@ -3291,7 +3343,7 @@ mod test {
         contract.register_account();
 
         testing_env!(context.clone());
-        contract.withdraw_all_funds_from_stake_batch();
+        assert_eq!(contract.withdraw_all_funds_from_stake_batch().value(), 0);
     }
 
     #[test]
