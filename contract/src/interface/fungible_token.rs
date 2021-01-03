@@ -153,17 +153,9 @@ pub trait TransferCall {
     /// transferred to the recipient account before calling the recipient to notify them of the transfer.
     /// The notification is async, i.e., the transfer is committed when `transfer_call` completes.
     /// 1. sender initiates the transfer via [`transfer_call`]
-    /// 2. token transfers the funds from the sender's account to the recipient's account but locks
-    ///    the transfer amount on the recipient account. The locked tokens cannot be used until
-    ///    the recipient contract confirms the transfer.
+    /// 2. token transfers the funds from the sender's account to the recipient's account.
     /// 3. The recipient contract is then notified of the transfer via
     ///    [on_ft_receive](crate::interface::ext_transfer_call_recipient::on_ft_receive).
-    /// 4. Once the transfer notification call completes, then the [`FinalizeTransferCallback::finalize_ft_transfer`]
-    ///    callback on the token contract is invoked to finalize the transfer. If the recipient contract
-    ///    successfully completed the transfer notification call, then the funds are unlocked
-    ///    via the [`FinalizeTransferCallback::finalize_ft_transfer`] callback. If the
-    ///    [on_ft_receive](crate::interface::ext_transfer_call_recipient::on_ft_receive) call fails
-    ///    for any reason, then the fund transfer is rolled back in the finalize callback.
     ///
     /// ## Transfer Headers
     /// - used to add context to the transfer
