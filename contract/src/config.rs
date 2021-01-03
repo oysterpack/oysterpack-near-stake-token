@@ -180,9 +180,8 @@ impl Default for StakingPoolGasConfig {
     fn default() -> Self {
         Self {
             get_account: TGAS * 5,
-
             deposit_and_stake: TGAS * 45,
-            deposit: TGAS * 6,
+            deposit: TGAS * 45,
             stake: TGAS * 45,
             unstake: TGAS * 45,
             withdraw: TGAS * 45,
@@ -352,7 +351,7 @@ impl CallBacksGasConfig {
 impl Default for CallBacksGasConfig {
     fn default() -> Self {
         Self {
-            on_run_stake_batch: TGAS * 100,
+            on_run_stake_batch: TGAS * 175,
             on_deposit_and_stake: TGAS * 5,
             unlock: TGAS * 4,
 

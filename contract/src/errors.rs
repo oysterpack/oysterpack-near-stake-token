@@ -14,20 +14,18 @@ pub mod asserts {
 
 pub mod staking_pool_failures {
 
-    pub const DEPOSIT_AND_STAKE_FAILURE: &str = "failed to deposit and stake into staking pool";
-
     pub const UNSTAKE_FAILURE: &str = "failed to unstake NEAR with staking pool";
 
     pub const GET_ACCOUNT_FAILURE: &str = "failed to get account info from staking pool";
 
     pub const WITHDRAW_ALL_FAILURE: &str =
         "failed to withdraw all unstaked funds from staking pool";
+
+    pub const STAKING_POOL_CALL_FAILED: &str = "staking pool contract call failed";
 }
 
 pub mod staking_errors {
     pub const BLOCKED_BY_BATCH_RUNNING: &str = "action is blocked because a batch is running";
-
-    pub const NO_STAKE_BATCH_TO_RUN: &str = "there is no stake batch to run";
 
     pub const NO_FUNDS_IN_STAKE_BATCH_TO_WITHDRAW: &str = "there are no funds in stake batch";
 }
@@ -38,9 +36,6 @@ pub mod redeeming_stake_errors {
         "RedeemStakeBatch is blocked by StakeBatch run";
 
     pub const NO_REDEEM_STAKE_BATCH_TO_RUN: &str = "there is no redeem stake batch";
-
-    pub const UNSTAKED_FUNDS_PENDING_WITHDRAWAL: &str =
-        "unstaked funds are not yet available for withdrawal";
 
     pub const UNSTAKING_BLOCKED_BY_PENDING_WITHDRAWAL: &str =
         "unstaking is blocked until all unstaked NEAR can be withdrawn";

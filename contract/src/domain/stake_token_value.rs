@@ -1,7 +1,6 @@
 use crate::{
     domain::{BlockTimeHeight, YoctoNear, YoctoStake},
-    interface::{self, staking_service::events},
-    near::log,
+    interface,
 };
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use primitive_types::U256;
@@ -98,10 +97,6 @@ impl StakeTokenValue {
         let stake_value = near_value * total_stake_supply / total_staked_near_balance;
 
         (near_value + (stake - stake_value)).as_u128().into()
-    }
-
-    pub fn log_near_event(&self) {
-        log(events::StakeTokenValue::from(*self));
     }
 }
 

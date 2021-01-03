@@ -1,15 +1,14 @@
 //required in order for near_bindgen macro to work outside of lib.rs
 use crate::domain::RegisteredAccount;
-use crate::near::YOCTO;
+use crate::errors::illegal_state::STAKE_BATCH_SHOULD_EXIST;
+use crate::near::{log, YOCTO};
 use crate::*;
 use crate::{
     domain::{self, Account, RedeemLock, RedeemStakeBatch, StakeBatch},
     errors::{
         illegal_state::{REDEEM_STAKE_BATCH_RECEIPT_SHOULD_EXIST, REDEEM_STAKE_BATCH_SHOULD_EXIST},
-        redeeming_stake_errors::{NO_REDEEM_STAKE_BATCH_TO_RUN, UNSTAKED_FUNDS_PENDING_WITHDRAWAL},
-        staking_errors::{
-            BLOCKED_BY_BATCH_RUNNING, NO_FUNDS_IN_STAKE_BATCH_TO_WITHDRAW, NO_STAKE_BATCH_TO_RUN,
-        },
+        redeeming_stake_errors::NO_REDEEM_STAKE_BATCH_TO_RUN,
+        staking_errors::{BLOCKED_BY_BATCH_RUNNING, NO_FUNDS_IN_STAKE_BATCH_TO_WITHDRAW},
         staking_service::{
             DEPOSIT_REQUIRED_FOR_STAKE, INSUFFICIENT_STAKE_FOR_REDEEM_REQUEST, ZERO_REDEEM_AMOUNT,
         },
@@ -52,6 +51,14 @@ impl StakingService for StakeTokenContract {
         let batch_id =
             self.deposit_near_for_account_to_stake(&mut account, env::attached_deposit().into());
         self.save_registered_account(&account);
+
+        if let Some(batch) = self.stake_batch {
+            log(interface::staking_service::events::StakeBatch {
+                batch_id: batch_id.0 .0,
+                near: batch.balance().amount().value(),
+            });
+        }
+
         batch_id
     }
 
@@ -66,13 +73,23 @@ impl StakingService for StakeTokenContract {
     /// 6. unlock contract
     fn stake(&mut self) -> Promise {
         assert!(self.can_run_batch(), BLOCKED_BY_BATCH_RUNNING);
-        assert!(self.stake_batch.is_some(), NO_STAKE_BATCH_TO_RUN);
+        let batch = self.stake_batch.expect(STAKE_BATCH_SHOULD_EXIST);
 
         self.run_stake_batch_locked = true;
 
-        self.get_account_from_staking_pool()
-            .then(self.invoke_on_run_stake_batch())
-            .then(self.invoke_release_run_stake_batch_lock())
+        if self.is_liquidity_needed() {
+            self.get_account_from_staking_pool()
+                .then(self.invoke_on_run_stake_batch())
+                .then(self.invoke_release_run_stake_batch_lock())
+        } else {
+            // stake any liquidity that is not needed
+            let stake_amount = batch.balance().amount() + self.near_liquidity_pool;
+            self.near_liquidity_pool = 0.into();
+            self.invoke_deposit_and_stake(stake_amount)
+                .then(self.get_account_from_staking_pool())
+                .then(self.invoke_on_deposit_and_stake(None))
+                .then(self.invoke_release_run_stake_batch_lock())
+        }
     }
 
     #[payable]
@@ -285,22 +302,9 @@ impl StakingService for StakeTokenContract {
                     .then(self.invoke_on_run_redeem_stake_batch())
                     .then(self.invoke_release_run_redeem_stake_batch_unstaking_lock())
             }
-            Some(RedeemLock::PendingWithdrawal) => {
-                let batch = self
-                    .redeem_stake_batch
-                    .expect(REDEEM_STAKE_BATCH_SHOULD_EXIST);
-                let batch_receipt = self
-                    .redeem_stake_batch_receipts
-                    .get(&batch.id())
-                    .expect(REDEEM_STAKE_BATCH_RECEIPT_SHOULD_EXIST);
-                assert!(
-                    batch_receipt.unstaked_funds_available_for_withdrawal(),
-                    UNSTAKED_FUNDS_PENDING_WITHDRAWAL
-                );
-
-                self.get_account_from_staking_pool()
-                    .then(self.invoke_on_redeeming_stake_pending_withdrawal())
-            }
+            Some(RedeemLock::PendingWithdrawal) => self
+                .get_account_from_staking_pool()
+                .then(self.invoke_on_redeeming_stake_pending_withdrawal()),
             // this should already be handled by above assert and should never be hit
             // but it was added to satisfy the match clause for completeness
             Some(RedeemLock::Unstaking) => panic!(BLOCKED_BY_BATCH_RUNNING),
@@ -356,14 +360,43 @@ impl StakeTokenContract {
         )
     }
 
+    pub(crate) fn invoke_deposit(&self, amount: domain::YoctoNear) -> Promise {
+        ext_staking_pool::deposit(
+            &self.staking_pool_id,
+            amount.value(),
+            self.config.gas_config().staking_pool().deposit().value(),
+        )
+    }
+
+    pub(crate) fn invoke_stake(&self, amount: domain::YoctoNear) -> Promise {
+        ext_staking_pool::stake(
+            amount.value().into(),
+            &self.staking_pool_id,
+            NO_DEPOSIT.value(),
+            self.config.gas_config().staking_pool().stake().value(),
+        )
+    }
+
+    pub(crate) fn invoke_deposit_and_stake(&self, amount: domain::YoctoNear) -> Promise {
+        ext_staking_pool::deposit_and_stake(
+            &self.staking_pool_id,
+            amount.value(),
+            self.config
+                .gas_config()
+                .staking_pool()
+                .deposit_and_stake()
+                .value(),
+        )
+    }
+}
+
+impl StakeTokenContract {
     pub(crate) fn get_pending_withdrawal(&self) -> Option<domain::RedeemStakeBatchReceipt> {
         self.redeem_stake_batch
             .map(|batch| self.redeem_stake_batch_receipts.get(&batch.id()))
             .flatten()
     }
-}
 
-impl StakeTokenContract {
     fn can_run_batch(&self) -> bool {
         !self.run_stake_batch_locked && !self.is_unstaking()
     }
@@ -667,11 +700,11 @@ impl StakeTokenContract {
         fn claim_redeemed_stake_for_batch(
             contract: &mut StakeTokenContract,
             account: &mut Account,
-            batch: domain::RedeemStakeBatch,
+            account_batch: domain::RedeemStakeBatch,
             mut receipt: domain::RedeemStakeBatchReceipt,
         ) {
             // how much STAKE did the account redeem in the batch
-            let redeemed_stake = batch.balance().amount();
+            let redeemed_stake = account_batch.balance().amount();
 
             // claim the STAKE tokens for the account
             let near = receipt.stake_token_value().stake_to_near(redeemed_stake);
@@ -681,22 +714,24 @@ impl StakeTokenContract {
             receipt.stake_tokens_redeemed(redeemed_stake);
             if receipt.all_claimed() {
                 // then delete the receipt and free the storage
-                contract.redeem_stake_batch_receipts.remove(&batch.id());
+                contract
+                    .redeem_stake_batch_receipts
+                    .remove(&account_batch.id());
             } else {
                 contract
                     .redeem_stake_batch_receipts
-                    .insert(&batch.id(), &receipt);
+                    .insert(&account_batch.id(), &receipt);
             }
         }
 
         fn claim_redeemed_stake_for_batch_pending_withdrawal(
             contract: &mut StakeTokenContract,
             account: &mut Account,
-            batch: &mut domain::RedeemStakeBatch,
+            account_batch: &mut domain::RedeemStakeBatch,
             mut receipt: domain::RedeemStakeBatchReceipt,
         ) {
             // how much STAKE did the account redeem in the batch
-            let redeemed_stake = batch.balance().amount();
+            let redeemed_stake = account_batch.balance().amount();
             // compute STAKE liquidity
             let stake_liquidity = receipt
                 .stake_token_value()
@@ -707,7 +742,7 @@ impl StakeTokenContract {
             } else {
                 stake_liquidity
             };
-            batch.remove(redeemable_stake);
+            account_batch.remove(redeemable_stake);
 
             // claim the STAKE tokens for the account
             let near = receipt.stake_token_value().stake_to_near(redeemable_stake);
@@ -720,13 +755,15 @@ impl StakeTokenContract {
             if receipt.all_claimed() {
                 // this means that effectively all funds have been withdrawn
                 // which means we need to finalize the redeem workflow
-                contract.redeem_stake_batch_receipts.remove(&batch.id());
+                contract
+                    .redeem_stake_batch_receipts
+                    .remove(&account_batch.id());
                 contract.run_redeem_stake_batch_lock = None;
                 contract.pop_redeem_stake_batch();
             } else {
                 contract
                     .redeem_stake_batch_receipts
-                    .insert(&batch.id(), &receipt);
+                    .insert(&account_batch.id(), &receipt);
             }
         }
 
@@ -895,6 +932,8 @@ pub struct StakingPoolAccount {
 pub trait ExtStakingPool {
     fn get_account(&self, account_id: AccountId) -> StakingPoolAccount;
 
+    fn ping(&mut self);
+
     fn deposit(&mut self);
 
     fn deposit_and_stake(&mut self);
@@ -905,11 +944,7 @@ pub trait ExtStakingPool {
 
     fn unstake(&mut self, amount: near_sdk::json_types::U128);
 
-    fn get_account_staked_balance(&self, account_id: AccountId) -> near_sdk::json_types::U128;
-
-    fn get_account_unstaked_balance(&self, account_id: AccountId) -> near_sdk::json_types::U128;
-
-    fn is_account_unstaked_balance_available(&self, account_id: AccountId) -> bool;
+    fn get_account_total_balance(&self, account_id: AccountId) -> near_sdk::json_types::U128;
 
     fn withdraw_all(&mut self);
 }
@@ -938,22 +973,28 @@ pub trait ExtRedeemingWokflowCallbacks {
 }
 
 #[ext_contract(ext_staking_workflow_callbacks)]
-pub trait ExtStakingWokflowCallbacks {
+pub trait ExtStakingWorkflowCallbacks {
     /// callback for getting staked balance from staking pool as part of stake batch processing workflow
     ///
     /// ## Success Workflow
-    /// 1. update the stake token value
+    /// 1. Check if liquidity is needed
     /// 2. deposit and stake funds with staking pool
-    /// 3. register [on_deposit_and_stake] callback on the deposit and stake action
+    /// 3. then get account from staking pool
+    /// 4. then invoke [on_deposit_and_stake] callback
     fn on_run_stake_batch(
         &mut self,
         #[callback] staking_pool_account: StakingPoolAccount,
     ) -> Promise;
 
     /// ## Success Workflow
-    /// 1. store the stake batch receipt
-    /// 2. update the STAKE token supply with the new STAKE tokens that were issued
-    fn on_deposit_and_stake(&mut self);
+    /// 1. update the stake token value
+    /// 2. store the stake batch receipt
+    /// 4. update the STAKE token supply with the new STAKE tokens that were issued
+    fn on_deposit_and_stake(
+        &mut self,
+        near_liquidity: Option<interface::YoctoNear>,
+        #[callback] staking_pool_account: StakingPoolAccount,
+    );
 
     /// defined on [Operator] interface
     fn release_run_stake_batch_lock(&mut self);
@@ -1421,7 +1462,7 @@ mod test {
     /// Given there is no stake batch to run
     /// Then the call fails
     #[test]
-    #[should_panic(expected = "there is no stake batch to run")]
+    #[should_panic(expected = "ILLEGAL STATE : stake batch should exist")]
     fn stake_no_stake_batch() {
         let account_id = "alfio-zappala.near";
         let context = new_context(account_id);
@@ -1644,69 +1685,50 @@ mod test {
         );
 
         let receipts: Vec<Receipt> = deserialize_receipts(&env::created_receipts());
-        assert_eq!(receipts.len(), 3);
+        assert_eq!(receipts.len(), 4);
+        println!("{:#?}", receipts);
 
-        // there should be a `get_account_staked_balance` func call on the staking pool
-        let _get_staked_balance_func_call = receipts
-            .iter()
-            .find(|receipt| {
-                if receipt.receiver_id.as_str()
-                    == contract_settings.staking_pool_id.as_ref().as_str()
-                {
-                    if let Some(Action::FunctionCall { method_name, .. }) = receipt.actions.first()
-                    {
-                        method_name == "get_account"
-                    } else {
-                        false
-                    }
-                } else {
-                    false
+        {
+            let receipt = &receipts[0];
+            let action = &receipt.actions[0];
+            match action {
+                Action::FunctionCall { method_name, .. } => {
+                    assert_eq!(method_name, "deposit_and_stake")
                 }
-            })
-            .unwrap();
+                _ => panic!("expected `deposit_and_stake` func call on staking pool"),
+            }
+        }
 
-        // and a callback - `on_run_stake_batch`
-        let on_run_stake_batch_func_call = receipts
-            .iter()
-            .find(|receipt| {
-                if receipt.receiver_id == context.current_account_id {
-                    if let Some(Action::FunctionCall { method_name, .. }) = receipt.actions.first()
-                    {
-                        method_name == "on_run_stake_batch"
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                }
-            })
-            .unwrap();
-        // and the callback requires a data receipt, i.e., the staked balance
-        assert_eq!(on_run_stake_batch_func_call.receipt_indices.len(), 1);
-        assert_eq!(
-            *on_run_stake_batch_func_call
-                .receipt_indices
-                .first()
-                .unwrap(),
-            0
-        );
+        {
+            let receipt = &receipts[1];
+            let action = &receipt.actions[0];
+            match action {
+                Action::FunctionCall { method_name, .. } => assert_eq!(method_name, "get_account"),
+                _ => panic!("expected `get_account` func call on staking pool"),
+            }
+        }
 
-        // and a callback - `unlock`
-        let _unlock = receipts
-            .iter()
-            .find(|receipt| {
-                if receipt.receiver_id == context.current_account_id {
-                    if let Some(Action::FunctionCall { method_name, .. }) = receipt.actions.first()
-                    {
-                        method_name == "release_run_stake_batch_lock"
-                    } else {
-                        false
-                    }
-                } else {
-                    false
+        {
+            let receipt = &receipts[2];
+            let action = &receipt.actions[0];
+            match action {
+                Action::FunctionCall { method_name, .. } => {
+                    assert_eq!(method_name, "on_deposit_and_stake")
                 }
-            })
-            .unwrap();
+                _ => panic!("expected `on_deposit_and_stake` callback"),
+            }
+        }
+
+        {
+            let receipt = &receipts[3];
+            let action = &receipt.actions[0];
+            match action {
+                Action::FunctionCall { method_name, .. } => {
+                    assert_eq!(method_name, "release_run_stake_batch_lock")
+                }
+                _ => panic!("expected `release_run_stake_batch_lock` callback"),
+            }
+        }
     }
 
     #[test]
@@ -1735,69 +1757,50 @@ mod test {
         );
 
         let receipts: Vec<Receipt> = deserialize_receipts(&env::created_receipts());
-        assert_eq!(receipts.len(), 3);
+        assert_eq!(receipts.len(), 4);
+        println!("{:#?}", receipts);
 
-        // there should be a `get_account_staked_balance` func call on the staking pool
-        let _get_staked_balance_func_call = receipts
-            .iter()
-            .find(|receipt| {
-                if receipt.receiver_id.as_str()
-                    == contract_settings.staking_pool_id.as_ref().as_str()
-                {
-                    if let Some(Action::FunctionCall { method_name, .. }) = receipt.actions.first()
-                    {
-                        method_name == "get_account"
-                    } else {
-                        false
-                    }
-                } else {
-                    false
+        {
+            let receipt = &receipts[0];
+            let action = &receipt.actions[0];
+            match action {
+                Action::FunctionCall { method_name, .. } => {
+                    assert_eq!(method_name, "deposit_and_stake")
                 }
-            })
-            .unwrap();
+                _ => panic!("expected `deposit_and_stake` func call on staking pool"),
+            }
+        }
 
-        // and a callback - `on_run_stake_batch`
-        let on_run_stake_batch_func_call = receipts
-            .iter()
-            .find(|receipt| {
-                if receipt.receiver_id == context.current_account_id {
-                    if let Some(Action::FunctionCall { method_name, .. }) = receipt.actions.first()
-                    {
-                        method_name == "on_run_stake_batch"
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                }
-            })
-            .unwrap();
-        // and the callback requires a data receipt, i.e., the staked balance
-        assert_eq!(on_run_stake_batch_func_call.receipt_indices.len(), 1);
-        assert_eq!(
-            *on_run_stake_batch_func_call
-                .receipt_indices
-                .first()
-                .unwrap(),
-            0
-        );
+        {
+            let receipt = &receipts[1];
+            let action = &receipt.actions[0];
+            match action {
+                Action::FunctionCall { method_name, .. } => assert_eq!(method_name, "get_account"),
+                _ => panic!("expected `get_account` func call on staking pool"),
+            }
+        }
 
-        // and a callback - `unlock`
-        let _unlock = receipts
-            .iter()
-            .find(|receipt| {
-                if receipt.receiver_id == context.current_account_id {
-                    if let Some(Action::FunctionCall { method_name, .. }) = receipt.actions.first()
-                    {
-                        method_name == "release_run_stake_batch_lock"
-                    } else {
-                        false
-                    }
-                } else {
-                    false
+        {
+            let receipt = &receipts[2];
+            let action = &receipt.actions[0];
+            match action {
+                Action::FunctionCall { method_name, .. } => {
+                    assert_eq!(method_name, "on_deposit_and_stake")
                 }
-            })
-            .unwrap();
+                _ => panic!("expected `on_deposit_and_stake` callback"),
+            }
+        }
+
+        {
+            let receipt = &receipts[3];
+            let action = &receipt.actions[0];
+            match action {
+                Action::FunctionCall { method_name, .. } => {
+                    assert_eq!(method_name, "release_run_stake_batch_lock")
+                }
+                _ => panic!("expected `release_run_stake_batch_lock` callback"),
+            }
+        }
     }
 
     /// Given the funds were successfully deposited and staked into the staking pool
@@ -1838,12 +1841,12 @@ mod test {
                         staked_balance: 0.into(),
                         can_withdraw: true,
                     };
-                    contract.on_run_stake_batch(staking_pool_account); // callback
+                    contract.on_run_stake_batch(staking_pool_account.clone()); // callback
 
                     {
                         context.predecessor_account_id = context.current_account_id.clone();
                         testing_env!(context.clone());
-                        contract.on_deposit_and_stake(); // callback
+                        contract.on_deposit_and_stake(None, staking_pool_account); // callback
 
                         let _receipt = contract.stake_batch_receipts.get(&batch_id).expect(
                             "receipt should have been created by `on_deposit_and_stake` callback",
@@ -2508,78 +2511,6 @@ mod test {
                 _ => panic!("expected func call action"),
             }
         }
-    }
-
-    //     Some(RedeemLock::PendingWithdrawal) => {
-    // let batch = self
-    // .redeem_stake_batch
-    // .expect("illegal state - batch does not exist");
-    // let batch_id = batch.id();
-    // let batch_receipt = self
-    // .redeem_stake_batch_receipts
-    // .get(&batch_id)
-    // .expect("illegal state - batch receipt does not exist");
-
-    #[test]
-    #[should_panic(expected = "ILLEGAL STATE : redeem stake batch should exist")]
-    fn unstake_pending_withdrawal_with_batch_not_exists() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = YOCTO;
-        context.account_balance = 100 * YOCTO;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings.clone());
-
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
-        contract.unstake();
-    }
-
-    #[test]
-    #[should_panic(expected = "ILLEGAL STATE : redeem stake batch receipt should exist")]
-    fn unstake_pending_withdrawal_with_batch_receipt_not_exists() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = YOCTO;
-        context.account_balance = 100 * YOCTO;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings.clone());
-
-        *contract.batch_id_sequence += 1;
-        contract.redeem_stake_batch = Some(RedeemStakeBatch::new(
-            contract.batch_id_sequence,
-            (10 * YOCTO).into(),
-        ));
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
-        contract.unstake();
-    }
-
-    #[test]
-    #[should_panic(expected = "unstaked funds are not yet available for withdrawal")]
-    fn unstake_pending_withdrawal_cannot_withdraw() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = YOCTO;
-        context.account_balance = 100 * YOCTO;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings.clone());
-
-        *contract.batch_id_sequence += 1;
-        contract.redeem_stake_batch = Some(RedeemStakeBatch::new(
-            contract.batch_id_sequence,
-            (10 * YOCTO).into(),
-        ));
-        contract.redeem_stake_batch_receipts.insert(
-            &contract.batch_id_sequence,
-            &domain::RedeemStakeBatchReceipt::new((10 * YOCTO).into(), contract.stake_token_value),
-        );
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
-        contract.unstake();
     }
 
     /// Given an account has redeemed STAKE

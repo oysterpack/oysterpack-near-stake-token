@@ -41,14 +41,16 @@ impl StakeTokenContract {
         assert!(self.promise_result_succeeded(), GET_ACCOUNT_FAILURE);
 
         // update the cached STAKE token value
-        self.update_stake_token_value(staking_pool_account.staked_balance.into());
-        self.stake_token_value.log_near_event();
+        let staked_balance = self.staked_near_balance(&staking_pool_account);
+        self.update_stake_token_value(staked_balance);
 
         let unstake_amount = self
             .stake_token_value
             .stake_to_near(batch.balance().amount());
 
         if staking_pool_account.staked_balance.0 < unstake_amount.value() {
+            // when unstaking the remaining balance, there will probably be some NEAR that is already
+            // unstaked because of the rounding issues when the staking pool issued shares
             self.invoke_unstake_all().then(self.invoke_on_unstake())
         } else {
             self.invoke_unstake(unstake_amount)

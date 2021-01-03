@@ -108,14 +108,13 @@ pub(crate) use errors::*;
 #[cfg(test)]
 pub(crate) mod test_utils;
 
-use crate::domain::YoctoNear;
 use crate::{
     config::Config,
     core::Hash,
     domain::{
         Account, BatchId, BlockHeight, RedeemLock, RedeemStakeBatch, RedeemStakeBatchReceipt,
         StakeBatch, StakeBatchReceipt, StakeTokenValue, StorageUsage, TimestampedNearBalance,
-        TimestampedStakeBalance, Vault, VaultId,
+        TimestampedStakeBalance, Vault, VaultId, YoctoNear,
     },
     near::storage_keys::{
         ACCOUNTS_KEY_PREFIX, REDEEM_STAKE_BATCH_RECEIPTS_KEY_PREFIX,

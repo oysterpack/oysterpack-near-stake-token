@@ -112,16 +112,17 @@ pub trait StakingService {
     ///
     /// locks the contract to stake the batched NEAR funds and then kicks off the staking workflow
     /// 1. lock the contract
-    /// 2. gets the account stake balance from the staking pool
-    /// 3. updates STAKE token value
-    /// 4. if there is a pending withdrawal, then add liquidity
+    /// 2. get the account from the staking pool
+    /// 3. if there is a pending withdrawal, then add liquidity
     ///    - if the amount being staked is less than the amount unstaked, then stake the batch amount
     ///      from the unstaked balance
     ///    - if the amount being staked is more than the unstaked amount, then deposit_and_stake the
     ///      remainder and then stake the batch amount
-    /// 5. if there is not pending withdrawal, then deposits and stakes the NEAR funds with the staking pool
-    /// 6. creates the batch receipt
-    /// 7. releases the lock
+    /// 4. if there is no pending withdrawal, then deposits and stakes the NEAR funds with the staking pool
+    /// 5. update STAKE token value
+    /// 6. update liquidity and check if liquidity can clear pending withdrawal
+    /// 7. create the batch receipt
+    /// 8. release the lock
     ///
     /// ## Notes
     /// [contract_state](crates::interface::Operator::contract_state) can be queried to check if the
@@ -133,7 +134,7 @@ pub trait StakingService {
     ///   - unstaking is in progress
     /// - if there is no stake batch to run
     ///
-    /// GAS REQUIREMENTS: 150 TGas
+    /// GAS REQUIREMENTS: 225 TGas
     fn stake(&mut self) -> Promise;
 
     /// Combines [deposit](StakingService::deposit) and [stake](StakingService::stake) calls together.
@@ -151,7 +152,7 @@ pub trait StakingService {
     ///
     /// #\[payable\]
     ///
-    /// GAS REQUIREMENTS: 150 TGas
+    /// GAS REQUIREMENTS: 225 TGas
     fn deposit_and_stake(&mut self) -> PromiseOrValue<BatchId>;
 
     /// withdraws specified amount from uncommitted stake batch and refunds the account
@@ -290,7 +291,9 @@ pub trait StakingService {
 }
 
 pub mod events {
-    use crate::domain::{self, BatchId, RedeemStakeBatchReceipt, StakeBatchReceipt};
+    use crate::domain::{
+        self, BatchId, RedeemStakeBatch, RedeemStakeBatchReceipt, StakeBatchReceipt,
+    };
     use crate::near::YOCTO;
 
     #[derive(Debug)]
@@ -366,12 +369,45 @@ pub mod events {
         pub fn new(batch_id: BatchId, receipt: &StakeBatchReceipt) -> Self {
             Self {
                 batch_id: batch_id.value(),
-
                 stake: receipt.near_stake_value().value(),
                 near: receipt.staked_near().value(),
                 stake_token_value: receipt.stake_token_value().into(),
             }
         }
+    }
+
+    #[derive(Debug)]
+    pub struct PendingWithdrawalCleared {
+        /// corresponds to the [RedeemStakeBatch](crate::dommain::RedeemStakeBatch)
+        pub batch_id: u128,
+        /// how much STAKE was redeemed in the batch
+        pub stake: u128,
+        /// how much NEAR was unstaked for the redeemed STAKE
+        pub near: u128,
+        /// STAKE token value used to compute amount of NEAR to unstake for redeemed STAKE tokens
+        pub stake_token_value: StakeTokenValue,
+    }
+
+    impl PendingWithdrawalCleared {
+        pub fn new(batch: &RedeemStakeBatch, receipt: &RedeemStakeBatchReceipt) -> Self {
+            Self {
+                batch_id: batch.id().value(),
+                stake: batch.balance().amount().value(),
+                near: receipt
+                    .stake_token_value()
+                    .stake_to_near(batch.balance().amount())
+                    .value(),
+                stake_token_value: receipt.stake_token_value().into(),
+            }
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct StakeBatch {
+        /// corresponds to the [StakeBatch](crate::dommain::StakeBatch)
+        pub batch_id: u128,
+        /// how much NEAR was staked
+        pub near: u128,
     }
 
     #[cfg(test)]

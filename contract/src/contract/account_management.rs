@@ -167,6 +167,15 @@ impl StakeTokenContract {
         self.claim_receipt_funds(account);
         account.apply_near_debit(amount);
         self.save_registered_account(&account);
+        // check if there are enough funds to fulfill the request - if not then draw from liquidity
+        if self.total_near.amount() < amount {
+            // access liquidity
+            // NOTE: will panic if there are not enough funds in liquidity pool
+            //       - should never panic unless there is a bug
+            let difference = amount - self.total_near.amount();
+            self.near_liquidity_pool -= difference;
+            self.total_near.credit(difference);
+        }
         self.total_near.debit(amount);
         Promise::new(env::predecessor_account_id()).transfer(amount.value());
     }
