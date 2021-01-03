@@ -95,14 +95,22 @@ impl TransferProtocol {
         }
     }
 
-    pub fn transfer_and_notify(gas: Gas) -> Self {
+    pub fn confirm_transfer(gas: Gas) -> Self {
         Self {
-            name: "transfer_and_notify".to_string(),
+            name: "confirm_transfer".to_string(),
+            gas,
+        }
+    }
+
+    pub fn transfer_call(gas: Gas) -> Self {
+        Self {
+            name: "transfer_call".to_string(),
             gas,
         }
     }
 }
 
+/// modeled after [NEP-21](https://github.com/near/NEPs/issues/21)
 pub trait SimpleTransfer {
     /// Simple direct transfers between registered accounts.
     ///
@@ -138,12 +146,12 @@ pub trait SimpleTransfer {
     );
 }
 
-/// implements a [NEP-136](https://github.com/near/NEPs/issues/136) transfer call protocol
+/// modeled after [NEP-136](https://github.com/near/NEPs/issues/136)
 pub trait TransferCall {
     /// Transfer `amount` of tokens from the predecessor account to a `recipient` contract.
     /// The recipient contract MUST implement [TransferCallRecipient] interface. The tokens are
-    /// deposited but locked in the recipient account until the transfer has been confirmed by the
-    /// recipient contract and then finalized. The transfer workflow steps are:
+    /// transferred to the recipient account before calling the recipient to notify them of the transfer.
+    /// The notification is async, i.e., the transfer is committed when `transfer_call` completes.
     /// 1. sender initiates the transfer via [`transfer_call`]
     /// 2. token transfers the funds from the sender's account to the recipient's account but locks
     ///    the transfer amount on the recipient account. The locked tokens cannot be used until
@@ -178,6 +186,59 @@ pub trait TransferCall {
     ) -> Promise;
 }
 
+/// Interface for recipient call on fungible-token transfers.
+/// - `token` is an account address of the token  - a smart-contract defining the token being transferred.
+/// - `from` is an address of a previous holder of the tokens being sent
+#[ext_contract(ext_transfer_call_recipient)]
+pub trait TransferCallRecipient {
+    fn on_transfer_call(
+        &mut self,
+        from: ValidAccountId,
+        amount: U128,
+        headers: Option<HashMap<String, String>>,
+    );
+}
+
+/// modeled after [NEP-110](https://github.com/near/NEPs/issues/110)
+pub trait ConfirmTransfer {
+    /// Transfer `amount` of tokens from the predecessor account to a `recipient` contract.
+    /// The recipient contract MUST implement [TransferCallRecipient] interface. The tokens are
+    /// deposited but locked in the recipient account until the transfer has been confirmed by the
+    /// recipient contract and then finalized. The transfer workflow steps are:
+    /// 1. sender initiates the transfer via [`transfer_call`]
+    /// 2. token transfers the funds from the sender's account to the recipient's account but locks
+    ///    the transfer amount on the recipient account. The locked tokens cannot be used until
+    ///    the recipient contract confirms the transfer.
+    /// 3. The recipient contract is then notified of the transfer via
+    ///    [on_ft_receive](crate::interface::ext_transfer_call_recipient::on_ft_receive).
+    /// 4. Once the transfer notification call completes, then the [`FinalizeTransferCallback::finalize_ft_transfer`]
+    ///    callback on the token contract is invoked to finalize the transfer. If the recipient contract
+    ///    successfully completed the transfer notification call, then the funds are unlocked
+    ///    via the [`FinalizeTransferCallback::finalize_ft_transfer`] callback. If the
+    ///    [on_ft_receive](crate::interface::ext_transfer_call_recipient::on_ft_receive) call fails
+    ///    for any reason, then the fund transfer is rolled back in the finalize callback.
+    ///
+    /// ## Transfer Headers
+    /// - used to add context to the transfer
+    /// - standard headers will be defined, but this also enables the protocol to be extended
+    ///   with custom headers
+    /// - proposed standard headers:
+    ///   - `msg`: is a message sent to the recipient. It might be used to send additional call
+    //      instructions.
+    ///   - `memo`: arbitrary data with no specified format used to link the transaction with an
+    ///     external event. If referencing a binary data, it should use base64 serialization.
+    ///
+    /// ## Panics
+    /// - if accounts are not registered
+    /// - insufficient funds
+    fn confirm_transfer(
+        &mut self,
+        recipient: ValidAccountId,
+        amount: U128,
+        headers: Option<HashMap<String, String>>,
+    ) -> Promise;
+}
+
 /// Token contract callback interface to finalize transfer-call based token transfer
 pub trait FinalizeTransferCallback {
     /// Finalizes the token transfer
@@ -194,9 +255,9 @@ pub trait FinalizeTransferCallback {
 /// Interface for recipient call on fungible-token transfers.
 /// - `token` is an account address of the token  - a smart-contract defining the token being transferred.
 /// - `from` is an address of a previous holder of the tokens being sent
-#[ext_contract(ext_transfer_call_recipient)]
-pub trait TransferCallRecipient {
-    fn on_ft_receive(
+#[ext_contract(ext_confirm_transfer_recipient)]
+pub trait ConfirmTransferRecipient {
+    fn on_confirm_transfer(
         &mut self,
         from: ValidAccountId,
         amount: U128,
@@ -217,8 +278,7 @@ pub trait ExtFinalizeTransferCallback {
     fn finalize_ft_transfer(&mut self, sender: AccountId, recipient: AccountId, amount: U128);
 }
 
-/// Implements [NEP-122 vault based fungible token standard](https://github.com/near/NEPs/issues/122)
-/// with the following modifications:
+/// modeled after [NEP-122 vault based fungible token standard](https://github.com/near/NEPs/issues/122)
 /// - all token owners must be registered with the contract, which implies that token transfers can
 ///   only be between registered accounts
 ///   - this removes the need to require an attached deposit on each transfer because the accounts

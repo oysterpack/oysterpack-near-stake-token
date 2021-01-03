@@ -1,4 +1,5 @@
 //required in order for near_bindgen macro to work outside of lib.rs
+use crate::interface::TransferCall;
 use crate::*;
 use crate::{
     domain::{Gas, Vault, TGAS},
@@ -7,16 +8,18 @@ use crate::{
         VAULT_DOES_NOT_EXIST, VAULT_INSUFFICIENT_FUNDS,
     },
     interface::{
-        ext_self_finalize_transfer_callback, ext_self_resolve_vault_callback, ext_token_receiver,
-        ext_transfer_call_recipient, fungible_token::events as fungible_token_events,
-        FinalizeTransferCallback, FungibleToken, Metadata, ResolveVaultCallback, SimpleTransfer,
-        TransferCall, TransferProtocol, VaultBasedTransfer, VaultId,
+        ext_confirm_transfer_recipient, ext_self_finalize_transfer_callback,
+        ext_self_resolve_vault_callback, ext_token_receiver, ext_transfer_call_recipient,
+        fungible_token::events as fungible_token_events, ConfirmTransfer, FinalizeTransferCallback,
+        FungibleToken, Metadata, ResolveVaultCallback, SimpleTransfer, TransferProtocol,
+        VaultBasedTransfer, VaultId,
     },
     near::{assert_predecessor_is_self, log, NO_DEPOSIT},
 };
 use near_sdk::{
     env, json_types::ValidAccountId, json_types::U128, near_bindgen, AccountId, Promise,
 };
+use std::collections::hash_map::RandomState;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 
@@ -35,7 +38,7 @@ impl FungibleToken for StakeTokenContract {
                         + self.min_gas_for_vault_receiver()
                         + self.resolve_vault_gas(),
                 ),
-                TransferProtocol::transfer_and_notify(
+                TransferProtocol::confirm_transfer(
                     self.transfer_call_gas()
                         + self.min_gas_for_transfer_call_receiver()
                         + self.finalize_ft_transfer_gas(),
@@ -209,14 +212,11 @@ impl TransferCall for StakeTokenContract {
         &mut self,
         recipient: ValidAccountId,
         amount: U128,
-        headers: Option<HashMap<String, String>>,
+        headers: Option<HashMap<String, String, RandomState>>,
     ) -> Promise {
-        // the amount of gas required for the `resolve_vault` callback
-        let finalize_ft_transfer_gas = self.finalize_ft_transfer_gas();
-
         // compute how much gas to supply to the receiver on the `on_receive_with_vault` cross contract call
-        let transfer_call_receiver_gas = env::prepaid_gas()
-            .saturating_sub(self.transfer_call_gas().value() + finalize_ft_transfer_gas.value());
+        let transfer_call_receiver_gas =
+            env::prepaid_gas().saturating_sub(self.transfer_call_gas().value());
 
         if transfer_call_receiver_gas < self.min_gas_for_transfer_call_receiver().value() {
             panic!(
@@ -247,17 +247,74 @@ impl TransferCall for StakeTokenContract {
         let mut receiver = self.registered_account(receiver_id);
         self.claim_receipt_funds(&mut receiver);
         receiver.apply_stake_credit(transfer_amount);
-        receiver.lock_stake(transfer_amount);
         self.save_registered_account(&receiver);
 
         // Calling the receiver
-        ext_transfer_call_recipient::on_ft_receive(
+        ext_transfer_call_recipient::on_transfer_call(
             ValidAccountId::try_from(env::predecessor_account_id()).unwrap(),
             transfer_amount.into(),
             headers,
             &receiver_id.to_string(),
             NO_DEPOSIT.value(),
             transfer_call_receiver_gas,
+        )
+    }
+}
+
+#[near_bindgen]
+impl ConfirmTransfer for StakeTokenContract {
+    fn confirm_transfer(
+        &mut self,
+        recipient: ValidAccountId,
+        amount: U128,
+        headers: Option<HashMap<String, String>>,
+    ) -> Promise {
+        // the amount of gas required for the `resolve_vault` callback
+        let finalize_ft_transfer_gas = self.finalize_ft_transfer_gas();
+
+        // compute how much gas to supply to the receiver on the `on_receive_with_vault` cross contract call
+        let receiver_gas = env::prepaid_gas()
+            .saturating_sub(self.transfer_call_gas().value() + finalize_ft_transfer_gas.value());
+
+        if receiver_gas < self.min_gas_for_transfer_call_receiver().value() {
+            panic!(
+                "Not enough gas attached. Attach at least {}",
+                env::prepaid_gas()
+                    + (self.min_gas_for_transfer_call_receiver().value() - receiver_gas)
+            );
+        }
+
+        let receiver_id: &str = recipient.as_ref();
+        assert_receiver_is_not_sender(receiver_id);
+
+        let mut sender = self.registered_account(&env::predecessor_account_id());
+        self.claim_receipt_funds(&mut sender);
+
+        // check that sender balance has sufficient funds
+        let transfer_amount = amount.into();
+        assert!(
+            sender.available_stake_balance() >= transfer_amount,
+            ACCOUNT_INSUFFICIENT_STAKE_FUNDS
+        );
+        sender.apply_stake_debit(transfer_amount);
+        self.save_registered_account(&sender);
+
+        // verifies that the receiver account is registered
+        // - panics if the receiver account ID is not registered
+        let mut receiver = self.registered_account(receiver_id);
+        self.claim_receipt_funds(&mut receiver);
+        receiver.apply_stake_credit(transfer_amount);
+        receiver.lock_stake(transfer_amount);
+        self.save_registered_account(&receiver);
+
+        // Calling the receiver
+        ext_confirm_transfer_recipient::on_confirm_transfer(
+            ValidAccountId::try_from(env::predecessor_account_id()).unwrap(),
+            transfer_amount.into(),
+            headers,
+            &receiver_id.to_string(),
+            NO_DEPOSIT.value(),
+            receiver_gas,
         )
         .then(ext_self_finalize_transfer_callback::finalize_ft_transfer(
             env::predecessor_account_id(),
