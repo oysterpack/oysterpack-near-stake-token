@@ -18,6 +18,7 @@ pub trait ContractOwner {
     ///   - customer_batched_stake_deposits
     ///   - total_account_storage_escrow
     ///   - contract_storage_usage_cost
+    ///   - liquidity added for pending withdrawal
     ///   - 1 NEAR
     /// </pre>
     fn owner_balance(&self) -> YoctoNear;

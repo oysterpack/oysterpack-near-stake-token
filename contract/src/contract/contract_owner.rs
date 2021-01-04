@@ -16,13 +16,13 @@ impl ContractOwner for StakeTokenContract {
     }
 
     fn owner_balance(&self) -> YoctoNear {
-        let total_customer_accounts_unstaked_balance = self.total_near.amount().value();
         let customer_batched_stake_deposits = self
             .stake_batch
             .map_or(0, |batch| batch.balance().amount().value())
             + self
                 .next_stake_batch
                 .map_or(0, |batch| batch.balance().amount().value());
+
         let total_account_storage_escrow =
             self.total_registered_accounts().0 * self.account_storage_fee().value();
 
@@ -30,7 +30,8 @@ impl ContractOwner for StakeTokenContract {
             env::storage_usage() as u128 * self.config.storage_cost_per_byte().value();
 
         let owner_balance = env::account_balance()
-            - total_customer_accounts_unstaked_balance
+            - self.total_near.amount().value()
+            - self.near_liquidity_pool.value()
             - customer_batched_stake_deposits
             - total_account_storage_escrow
             - contract_storage_usage_cost;
@@ -135,7 +136,7 @@ mod test {
     }
 
     #[test]
-    fn owner_balance_has_funds_with_pending_stake_batches() {
+    fn owner_balance_has_funds_with_pending_stake_batches_and_near_balance_and_liquidity() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
         context.account_balance = 100 * YOCTO;
@@ -159,12 +160,16 @@ mod test {
             (2 * YOCTO).into(),
         ));
 
+        context.storage_usage = 400 * 1000; // 400 KB
         testing_env!(context.clone());
         assert_eq!(contract.owner_balance(), (56 * YOCTO).into());
 
         contract.total_near.credit((10 * YOCTO).into());
         testing_env!(context.clone());
         assert_eq!(contract.owner_balance(), (46 * YOCTO).into());
+
+        contract.near_liquidity_pool = YOCTO.into();
+        assert_eq!(contract.owner_balance(), (45 * YOCTO).into());
     }
 
     #[test]
