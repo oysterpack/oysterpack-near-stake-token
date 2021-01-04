@@ -4,6 +4,8 @@ near view stake.oysterpack.testnet staking_pool_id
 
 near view stake.oysterpack.testnet pending_withdrawal
 
+near view stake.oysterpack.testnet stake_batch_receipt --args '{"batch_id":"15"}'
+
 near view stake.oysterpack.testnet redeem_stake_batch_receipt --args '{"batch_id":"3"}'
 ```
 
@@ -17,7 +19,7 @@ near call stake.oysterpack.testnet withdraw_funds_from_stake_batch --accountId o
 near call stake.oysterpack.testnet withdraw_all_funds_from_stake_batch --accountId oysterpack.testnet
 
 near call stake.oysterpack.testnet stake --accountId alfio-zappala-oysterpack.testnet --gas 225000000000000
-near call stake.oysterpack.testnet stake --accountId alfio-zappala-oysterpack.testnet --gas 225000000000000
+near call stake.oysterpack.testnet stake --accountId oysterpack.testnet --gas 225000000000000
 
 near call stake.oysterpack.testnet deposit_and_stake --accountId alfio-zappala-oysterpack.testnet --amount 1 --gas 225000000000000
 near call stake.oysterpack.testnet deposit_and_stake --accountId oysterpack.testnet --amount 1 --gas 225000000000000

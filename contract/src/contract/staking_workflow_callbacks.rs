@@ -134,6 +134,7 @@ impl StakeTokenContract {
         if batch_stake_value != stake_minted_amount {
             self.total_stake.debit(stake_minted_amount);
             self.total_stake.credit(batch_stake_value);
+            self.update_stake_token_value(staked_balance.into());
         }
     }
 

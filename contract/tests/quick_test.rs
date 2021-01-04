@@ -1,16 +1,26 @@
-use near_sdk::{json_types::U128, serde_json};
-use std::collections::HashMap;
+use oysterpack_near_stake_token::near::YOCTO;
+use primitive_types::U256;
 
 #[test]
 fn quick_test() {
-    let pending_withdrawal = 11946810934771951073054235u128;
-    let unstaked_near = 1010187198366539620603257;
+    let stake_near_value_1 = U256::from(YOCTO) * U256::from(4658063269802878999370714u128)
+        / U256::from(4579943328412471962879774u128);
 
-    let alfio_zappala_redeem_batch_value = 12956998133138490693657492u128;
+    let stake_near_value_2 = U256::from(YOCTO) * U256::from(5658063269802878999370750u128)
+        / U256::from(5552942966614588265320892u128);
 
-    println!("{}", pending_withdrawal + unstaked_near);
+    println!("{} {}", stake_near_value_1, stake_near_value_1.as_u128());
+    println!("{} {} ", stake_near_value_2, stake_near_value_2.as_u128());
+    println!("{}", stake_near_value_2 - stake_near_value_1);
+
     println!(
         "{}",
-        alfio_zappala_redeem_batch_value - pending_withdrawal - unstaked_near
+        11714552390223756084520808u128 + 4561381032228832906175206u128
+    );
+    println!("{}", 16275933422887777550639874u128);
+    println!(
+        "{}",
+        17250829676437407219328088u128
+            - (11714552390223756084520808u128 + 5536277286213651134807280u128)
     );
 }
