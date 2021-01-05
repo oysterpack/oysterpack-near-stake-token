@@ -1,3 +1,4 @@
+use crate::interface::BlockHeight;
 use crate::{
     domain::RedeemLock,
     interface::{
@@ -15,6 +16,7 @@ use near_sdk::{
 #[serde(crate = "near_sdk::serde")]
 pub struct ContractState {
     pub block: BlockTimeHeight,
+    pub config_change_block_height: BlockHeight,
 
     pub staking_pool_id: AccountId,
 

@@ -14,6 +14,7 @@ impl Operator for StakeTokenContract {
     fn contract_state(&self) -> ContractState {
         ContractState {
             block: domain::BlockTimeHeight::from_env().into(),
+            config_change_block_height: self.config_change_block_height.into(),
             staking_pool_id: self.staking_pool_id.clone(),
             registered_accounts_count: self.total_registered_accounts().clone(),
             total_unstaked_near: self.total_near.into(),
@@ -54,12 +55,14 @@ impl Operator for StakeTokenContract {
     fn update_config(&mut self, config: interface::Config) -> Config {
         self.assert_predecessor_is_operator();
         self.config.merge(config);
+        self.config_change_block_height = env::block_index().into();
         self.config.clone()
     }
 
     fn force_update_config(&mut self, config: interface::Config) -> Config {
         self.assert_predecessor_is_operator();
         self.config.force_merge(config);
+        self.config_change_block_height = env::block_index().into();
         self.config.clone()
     }
 
