@@ -1,4 +1,6 @@
 //! # OysterPack STAKE Token NEAR Smart Contract
+//! > With the OysterPack NEAR STAKE token "You can have your STAKE and TRADE it too"
+//!
 //! The OysterPack STAKE token is backed by staked NEAR. This contract enables you to delegate your
 //! NEAR to stake, and in return you are issued STAKE tokens. This enables you to trade your STAKE
 //! tokens while your NEAR is staked and earning staking rewards. The STAKE token transforms your
@@ -12,6 +14,8 @@
 //! NEAR tokens (see below for more details)
 //!
 //! # STAKE Token Vision
+//! > harness the Internet of value - everything on the internet can take on the proerties of money
+//!
 //! Leverage NEAR as a digital currency beyond being a utility token for the NEAR network to pay for
 //! transaction gas and storage usage. NEAR is designed to be scalable and fast with very low and
 //! predictable transaction costs and pricing. NEAR tokenomics has built in inflation, with a 5%
@@ -39,7 +43,7 @@
 //! immediately without waiting for the unstaked NEAR to become available for withdrawal from the staking
 //! pool. Users will be able to withdraw from the contract's NEAR liquidity pool on a first come first
 //! serve basis. The amount of liquidity is determined by contract activity, i.e., how much users are
-//! staking while there unstaked near is locked up in the staking pool awaiting to become available to
+//! staking while unstaked near is locked up in the staking pool awaiting to become available to
 //! be withdrawn.
 //!
 //! ## STAKE Token Benefits
@@ -77,6 +81,7 @@
 //!     - [simple](crate::interface::SimpleTransfer)
 //!     - [vault based](crate::interface::VaultBasedTransfer)
 //!     - [transfer-call](crate::interface::TransferCall)
+//!     - [confirm-transfer](crate::interface::ConfirmTransfer)
 //! - [Operator](crate::interface::Operator)
 //! - [ContractOwner](crate::interface::ContractOwner)
 //!
@@ -184,8 +189,8 @@ pub struct StakeTokenContract {
     stake_batch: Option<StakeBatch>,
     /// when the contract is locked, i.e., a batch is being run, then NEAR funds are deposited
     /// into the next batch to be staked
-    /// - when the current [stake_batch] has completed processing, then this batch is "promoted"
-    ///   to the current [stake_batch]
+    /// - when the current `stake_batch` has completed processing, then this batch is "promoted"
+    ///   to the current `stake_batch`
     next_stake_batch: Option<StakeBatch>,
 
     redeem_stake_batch: Option<RedeemStakeBatch>,

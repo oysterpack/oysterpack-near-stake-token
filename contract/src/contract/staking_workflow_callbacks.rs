@@ -16,12 +16,12 @@ use near_sdk::{env, near_bindgen, Promise};
 #[near_bindgen]
 impl StakeTokenContract {
     /// if unstaked balance is non-zero and liquidity is needed for pending withdrawal, then
-    /// [add_liquidity_then_deposit_and_stake](StakeTokenContract::StakeTokenContract)
+    /// [add_liquidity_then_deposit_and_stake](StakeTokenContract::add_liquidity_then_deposit_and_stake)
     ///
     /// else kickoff the following promise chain:
     /// 1. deposit and stake funds into staking pool
     /// 2. get account from staking pool
-    /// 3. invoke [on_deposit_and_stake](StakingService::on_deposit_and_stake) callback
+    /// 3. invoke `on_deposit_and_stake` callback
     ///
     /// ## Panics
     /// - if not called by self

@@ -19,7 +19,8 @@ impl PartialOrd for BlockTimeHeight {
 }
 
 impl BlockTimeHeight {
-    /// [block_height], [block_timestamp], and [epoch_height] are initialized from the NEAR runtime
+    /// [block_height](BlockTimeHeight::block_height), [block_timestamp](BlockTimeHeight::block_timestamp),
+    /// and [epoch_height](BlockTimeHeight::epoch_height) are initialized from the NEAR runtime
     /// environment
     ///
     /// ## Panics

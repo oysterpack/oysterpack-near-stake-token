@@ -44,7 +44,7 @@ pub trait Operator {
     /// if not invoked by self as callback or the operator account
     fn release_run_stake_batch_lock(&mut self);
 
-    /// if the [RedeemLock] state is unstaking, then clear it
+    /// if the [RedeemLock](crate::domain::RedeemLock) state is unstaking, then clear it
     ///
     /// ## Panics
     /// if not invoked by self as callback or the operator account

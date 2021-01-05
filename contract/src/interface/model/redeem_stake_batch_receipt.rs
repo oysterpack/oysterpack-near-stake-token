@@ -15,7 +15,7 @@ pub struct RedeemStakeBatchReceipt {
     /// - is used to compute the amount of STAKE tokens to issue to the account based on the amount
     ///   of NEAR that was staked
     pub stake_token_value: StakeTokenValue,
-    /// the NEAR value of the redeemed STAKE computed from [stake_token_value](RedeemStakeBatchReceipt::RedeemStakeBatchReceipt)
+    /// the NEAR value of the redeemed STAKE computed from [stake_token_value](RedeemStakeBatchReceipt::stake_token_value)
     pub redeemed_stake_value: YoctoNear,
 }
 

@@ -9,7 +9,7 @@ use near_sdk::{AccountId, Promise, PromiseOrValue};
 /// 2. Users can withdraw NEAR funds from [StakeBatch](crate::interface::StakeBatch) that has not yet run.
 /// 3. Once the NEAR funds are staked, the account is issued STAKE tokens based on the STAKE token
 ///    value computed when the [StakeBatch](crate::interface::StakeBatch) is run.
-/// 4. Users can [redeem](StakingService::redeeem) STAKE tokens for NEAR.
+/// 4. Users can [redeem](StakingService::redeem) STAKE tokens for NEAR.
 /// 5. Users can cancel their requests to redeem STAKE, i.e., the [RedeemStakeBatch](crate::interface::RedeemStakeBatch)
 ///    is cancelled.
 /// 6. [StakeAccount](crate::interface::StakeAccount) info can be looked up
@@ -78,8 +78,9 @@ pub trait StakingService {
     ///   claimed (for valid batch IDs)
     fn redeem_stake_batch_receipt(&self, batch_id: BatchId) -> Option<RedeemStakeBatchReceipt>;
 
-    /// Adds the attached deposit to the next [StakeBatch] scheduled to run.
-    /// Returns the [BatchId] for the [StakeBatch] that the funds are deposited into.
+    /// Adds the attached deposit to the next [StakeBatch](crate::domain::StakeBatch) scheduled to run.
+    /// Returns the [BatchId](crate::domain::BatchId) for the [StakeBatch](crate::domain::StakeBatch)
+    /// that the funds are deposited into.
     /// - deposits are committed for staking via [stake](StakingService::stake)
     /// - each additional deposit request add the funds to the batch
     /// - NEAR funds can be withdrawn from the batch, as long as the batch is not yet committed via
@@ -93,7 +94,7 @@ pub trait StakingService {
     /// ## Notes
     /// Users who have pending redeem STAKE requests claim the NEAR from the liquidity pool in the
     /// following ways:
-    /// 1. explicitly via [claim_near](StakingService::claim_near)
+    /// 1. explicitly via [claim_receipts](StakingService::claim_receipts)
     /// 2. implicitly when withdrawing NEAR funds
     ///    - [withdraw_all](crate::interface::AccountManagement::withdraw_all)
     ///    - [withdraw](crate::interface::AccountManagement::withdraw_all)
@@ -105,7 +106,7 @@ pub trait StakingService {
     fn deposit(&mut self) -> BatchId;
 
     /// If there is pending unstaked NEAR awaiting to become available for withdrawal, then the the
-    /// NEAR deposits stored in the [StakeBatch](crate::domain::StakeBatch] will provide liquidity
+    /// NEAR deposits stored in the [StakeBatch](crate::domain::StakeBatch) will provide liquidity
     /// to enable NEAR funds to be withdrawn sooner than the lockup period imposed by the staking pool.
     /// When liquidity is added, instead of depositing funds into the staking pool, unstaked NEAR is
     /// simply restaked.
@@ -125,7 +126,7 @@ pub trait StakingService {
     /// 8. release the lock
     ///
     /// ## Notes
-    /// [contract_state](crates::interface::Operator::contract_state) can be queried to check if the
+    /// [contract_state](crate::interface::Operator::contract_state) can be queried to check if the
     /// batch cab be run, i.e., to check if there is a batch to run and that the contract is not locked.
     ///
     /// ## Panics
@@ -231,9 +232,9 @@ pub trait StakingService {
     ///    3.3 pop redeem stake batch
     ///
     /// ## Notes
-    /// - [contract_state](crates::interface::Operator::contract_state) can be queried to check if the
+    /// - [contract_state](crate::interface::Operator::contract_state) can be queried to check if the
     ///   batch cab be run, i.e., to check if there is a batch to run and that the contract is not locked.
-    /// - while the unstake workflow is locked, users can continue to submit [redeem](STakingService::redeem)
+    /// - while the unstake workflow is locked, users can continue to submit [redeem](StakingService::redeem)
     ///   requests which will be run in the next batch
     /// - while awaiting the unstaked NEAR funds to be withdrawn, NEAR funds can continue to be staked,
     ///   i.e., it is legal to invoke [stake](StakingService::stake)
@@ -279,7 +280,7 @@ pub trait StakingService {
 
     /// Returns the batch that is awaiting for funds to be available to be withdrawn.
     ///
-    /// NOTE: pending withdrawals blocks [RedeemStakeBatch] to run
+    /// NOTE: pending withdrawals blocks [RedeemStakeBatch](crate::domain::RedeemStakeBatch) to run
     fn pending_withdrawal(&self) -> Option<RedeemStakeBatchReceipt>;
 
     /// enables the user to claim receipts explicitly, which will also claim any available NEAR
@@ -322,7 +323,7 @@ pub mod events {
 
     #[derive(Debug)]
     pub struct Unstaked {
-        /// corresponds to the [RedeemStakeBatch](crate::dommain::RedeemStakeBatch)
+        /// corresponds to the [RedeemStakeBatch](crate::domain::RedeemStakeBatch)
         pub batch_id: u128,
         /// how much STAKE was redeemed in the batch
         pub stake: u128,
@@ -354,7 +355,7 @@ pub mod events {
 
     #[derive(Debug)]
     pub struct Staked {
-        /// corresponds to the [StakeBatch](crate::dommain::StakeBatch)
+        /// corresponds to the [StakeBatch](crate::domain::StakeBatch)
         pub batch_id: u128,
         /// how much NEAR was staked
         pub near: u128,
@@ -377,7 +378,7 @@ pub mod events {
 
     #[derive(Debug)]
     pub struct PendingWithdrawalCleared {
-        /// corresponds to the [RedeemStakeBatch](crate::dommain::RedeemStakeBatch)
+        /// corresponds to the [RedeemStakeBatch](crate::domain::RedeemStakeBatch)
         pub batch_id: u128,
         /// how much STAKE was redeemed in the batch
         pub stake: u128,
@@ -403,7 +404,7 @@ pub mod events {
 
     #[derive(Debug)]
     pub struct StakeBatch {
-        /// corresponds to the [StakeBatch](crate::dommain::StakeBatch)
+        /// corresponds to the [StakeBatch](crate::domain::StakeBatch)
         pub batch_id: u128,
         /// how much NEAR to staked is in the batch
         pub near: u128,
@@ -417,7 +418,7 @@ pub mod events {
 
     #[derive(Debug)]
     pub struct RedeemStakeBatch {
-        /// corresponds to the [RedeemStakeBatch](crate::dommain::RedeemStakeBatch)
+        /// corresponds to the [RedeemStakeBatch](crate::domain::RedeemStakeBatch)
         pub batch_id: u128,
         /// how much STAKE to redeem is in the batch
         pub stake: u128,

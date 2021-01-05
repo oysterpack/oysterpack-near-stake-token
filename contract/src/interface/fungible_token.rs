@@ -10,7 +10,7 @@ use near_sdk::{
 };
 use std::collections::HashMap;
 
-/// - Fungible token supports 1 or more [TransferProtocol]s as specified per [MetaData]
+/// - Fungible token supports 1 or more [`TransferProtocol`]s as specified per [`Metadata`]
 /// - Accounts must register with the token contract and pay for account storage fees.
 ///   - account storage fees are escrowed and refunded when the account unregisters
 ///   - account chooses the transfer protocol to use as transfer recipient
@@ -130,12 +130,12 @@ pub trait SimpleTransfer {
     //      instructions.
     ///   - `memo`: arbitrary data with no specified format used to link the transaction with an
     ///     external event. If referencing a binary data, it should use base64 serialization.
-    /// - for simple transfer, the headers are logged as part of the [Transfer](crate::interface::fungible_token::events::Transfer]
+    /// - for simple transfer, the headers are logged as part of the [SimpleTransfer](crate::interface::fungible_token::events::SimpleTransfer]
     ///   event
     ///
     /// ## Panics
     /// - if predecessor account is not registered - sender account
-    /// - if [recipient] account is not registered
+    /// - if recipient account is not registered
     /// - if sender account is same as receiver account
     /// - if account balance has insufficient funds for transfer
     fn transfer(
@@ -149,13 +149,14 @@ pub trait SimpleTransfer {
 /// modeled after [NEP-136](https://github.com/near/NEPs/issues/136)
 pub trait TransferCall {
     /// Transfer `amount` of tokens from the predecessor account to a `recipient` contract.
-    /// The recipient contract MUST implement [TransferCallRecipient] interface. The tokens are
-    /// transferred to the recipient account before calling the recipient to notify them of the transfer.
-    /// The notification is async, i.e., the transfer is committed when `transfer_call` completes.
-    /// 1. sender initiates the transfer via [`transfer_call`]
+    /// The recipient contract MUST implement [TransferCallRecipient](crate::interface::fungible_token::ext_transfer_call_recipient)
+    /// interface. The tokens are transferred to the recipient account before calling the recipient
+    /// to notify them of the transfer. The notification is async, i.e., the transfer is committed
+    /// when `transfer_call` completes.
+    /// 1. sender initiates the transfer via [transfer_call](TransferCall::transfer_call)
     /// 2. token transfers the funds from the sender's account to the recipient's account.
     /// 3. The recipient contract is then notified of the transfer via
-    ///    [on_ft_receive](crate::interface::ext_transfer_call_recipient::on_ft_receive).
+    ///    [`FinalizeTransferCallback::finalize_ft_transfer`].
     ///
     /// ## Transfer Headers
     /// - used to add context to the transfer
@@ -194,20 +195,20 @@ pub trait TransferCallRecipient {
 /// modeled after [NEP-110](https://github.com/near/NEPs/issues/110)
 pub trait ConfirmTransfer {
     /// Transfer `amount` of tokens from the predecessor account to a `recipient` contract.
-    /// The recipient contract MUST implement [TransferCallRecipient] interface. The tokens are
-    /// deposited but locked in the recipient account until the transfer has been confirmed by the
-    /// recipient contract and then finalized. The transfer workflow steps are:
-    /// 1. sender initiates the transfer via [`transfer_call`]
+    /// The recipient contract MUST implement [TransferCallRecipient](crate::interface::fungible_token::ext_transfer_call_recipient)
+    /// interface. The tokens are deposited but locked in the recipient account until the transfer has
+    /// been confirmed by the recipient contract and then finalized. The transfer workflow steps are:
+    /// 1. sender initiates the transfer via [confirm_transfer](ConfirmTransfer::confirm_transfer)
     /// 2. token transfers the funds from the sender's account to the recipient's account but locks
     ///    the transfer amount on the recipient account. The locked tokens cannot be used until
     ///    the recipient contract confirms the transfer.
     /// 3. The recipient contract is then notified of the transfer via
-    ///    [on_ft_receive](crate::interface::ext_transfer_call_recipient::on_ft_receive).
+    ///    [on_transfer_call](crate::interface::fungible_token::ext_transfer_call_recipient::on_transfer_call).
     /// 4. Once the transfer notification call completes, then the [`FinalizeTransferCallback::finalize_ft_transfer`]
     ///    callback on the token contract is invoked to finalize the transfer. If the recipient contract
     ///    successfully completed the transfer notification call, then the funds are unlocked
     ///    via the [`FinalizeTransferCallback::finalize_ft_transfer`] callback. If the
-    ///    [on_ft_receive](crate::interface::ext_transfer_call_recipient::on_ft_receive) call fails
+    ///    [on_transfer_call](crate::interface::fungible_token::ext_transfer_call_recipient::on_transfer_call) call fails
     ///    for any reason, then the fund transfer is rolled back in the finalize callback.
     ///
     /// ## Transfer Headers
@@ -236,11 +237,11 @@ pub trait FinalizeTransferCallback {
     /// Finalizes the token transfer
     ///
     /// Actions:
-    /// - if the call [on_ft_receive](crate::interface::ext_transfer_call_recipient::on_ft_receive)
+    /// - if the call [finalize_ft_transfer](crate::interface::fungible_token::ext_self_finalize_transfer_callback::finalize_ft_transfer)
     ///    succeeds, then commit the transfer,i.e., unlock the balance on the recipient account
     /// - else rollback the transfer by returning the locked balance to the sender
     ///
-    /// #[private]
+    /// #\[private\]
     fn finalize_ft_transfer(&mut self, sender: AccountId, recipient: AccountId, amount: U128);
 }
 
@@ -295,7 +296,7 @@ pub trait VaultBasedTransfer {
     ///
     /// ## Panics
     /// - if predecessor account is not registered
-    /// - if [recipient] account is not registered
+    /// - if recipient account is not registered
     /// - if sender account is same as receiver account
     /// - if account balance has insufficient funds for transfer
     fn transfer_with_vault(
@@ -318,12 +319,12 @@ pub trait VaultBasedTransfer {
     /// ## panics
     /// - if predecessor account is not registered
     /// - if predecessor account does not own the vault
-    /// - if [recipient] account is not registered
+    /// - if recipient account is not registered
     /// - if vault balance has insufficient funds for transfer
     fn withdraw_from_vault(&mut self, vault_id: VaultId, recipient: ValidAccountId, amount: U128);
 }
 
-/// implements required callbacks defined in [ExtResolveVaultCallback]
+/// implements required callbacks defined in [ExtResolveVaultCallback](crate::interface::fungible_token::ext_self_resolve_vault_callback)
 pub trait ResolveVaultCallback {
     /// Resolves a given vault, i.e., transfers any remaining vault balance to the sender account
     /// and then deletes the vault. Returns the vault remaining balance.

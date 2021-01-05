@@ -3,7 +3,6 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
 };
 
-/// Lock lifecycle transitions: [Unstaking] -> [PendingWithdrawal] -> [WithdrawalComplete]
 #[derive(
     BorshSerialize,
     BorshDeserialize,

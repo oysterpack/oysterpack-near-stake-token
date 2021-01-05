@@ -7,7 +7,7 @@ use primitive_types::U256;
 
 /// STAKE token value at a point in time, i.e., at a block height.
 ///
-/// STAKE token value = [total_staked_near_balance] / [total_stake_supply]
+/// STAKE token value = [total_staked_near_balance](StakeTokenValue::total_staked_near_balance) / [total_stake_supply](StakeTokenValue::total_stake_supply)
 ///
 /// NOTE: The STAKE token value is gathered while the contract is locked.
 #[derive(BorshSerialize, BorshDeserialize, Copy, Clone, Default, Debug)]

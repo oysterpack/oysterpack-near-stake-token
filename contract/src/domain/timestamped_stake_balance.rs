@@ -38,7 +38,8 @@ impl PartialOrd<u128> for TimestampedStakeBalance {
 }
 
 impl TimestampedStakeBalance {
-    /// [block_height], [block_timestamp], and [epoch_height] are initialized from the NEAR runtime
+    /// [block_height](TimestampedStakeBalance::block_height), [block_timestamp](TimestampedStakeBalance::block_timestamp),
+    /// and [epoch_height](TimestampedStakeBalance::epoch_height) are initialized from the NEAR runtime
     /// environment
     ///
     /// ## Panics

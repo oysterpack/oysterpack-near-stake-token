@@ -13,7 +13,7 @@ pub struct RedeemStakeBatch {
     /// if receipt is present it means the STAKE has been redeemed and the unstaked NEAR is still locked
     /// by the staking pool for withdrawal
     pub receipt: Option<RedeemStakeBatchReceipt>,
-    /// the NEAR value of the redeemed STAKE computed from [stake_token_value](RedeemStakeBatchReceipt::RedeemStakeBatchReceipt)
+    /// the NEAR value of the redeemed STAKE computed from [stake_token_value](RedeemStakeBatchReceipt::stake_token_value)
     pub redeemed_stake_value: Option<YoctoNear>,
 }
 

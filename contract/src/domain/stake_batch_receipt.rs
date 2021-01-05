@@ -28,7 +28,7 @@ impl StakeBatchReceipt {
         self.staked_near
     }
 
-    /// converts the redeemed STAKE tokens into NEAR tokens based on the receipt's [stake_token_value](RedeemStakeBatchReceipt::stake_token_value)
+    /// converts the redeemed STAKE tokens into NEAR tokens based on the receipt's [stake_token_value](StakeBatchReceipt::stake_token_value)
     pub fn near_stake_value(&self) -> YoctoStake {
         self.stake_token_value.near_to_stake(self.staked_near)
     }

@@ -29,7 +29,7 @@ The STAKE token is the solution to the problem:
 # STAKE Token Vision
 > harness the Internet of value - everything on the internet can take on the proerties of money
 
-The above quote is cited from [NEAR's website](https://near.org/). This is the STAKE token visionby leveraging NEAR as a 
+The above quote is cited from [NEAR's website](https://near.org/). This is the STAKE token vision by leveraging NEAR as a 
 digital currency beyond being a utility token for the NEAR network to pay for transaction gas and storage usage. 
 NEAR is designed to be scalable and fast with very low and predictable transaction costs and pricing. NEAR tokenomics has 
 built in inflation, with a 5% maximum inflation target. The inflation provides incentive to stake your NEAR, which helps 

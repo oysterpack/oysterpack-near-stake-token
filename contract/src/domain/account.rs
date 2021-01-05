@@ -35,8 +35,8 @@ pub struct Account {
     /// if the contract is locked, then deposit the NEAR funds in the next batch
     pub next_stake_batch: Option<StakeBatch>,
 
-    /// when a user wants to redeem STAKE tokens, they are moved from the [stake] balance into the
-    /// [redeem_stake_batch] balance.
+    /// when a user wants to redeem STAKE tokens, they are moved from the [stake](Account::stake) balance into the
+    /// [redeem_stake_batch](Account::redeem_stake_batch) balance.
     /// - STAKE tokens become locked, i.e., they can no longer be traded
     /// - when the account is accessed, the [RedeemStakeBatch] status is checked - if processed, then
     ///   the STAKE token value is looked up for the batch and the account is credited with NEAR token
