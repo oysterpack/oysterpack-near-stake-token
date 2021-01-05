@@ -78,10 +78,10 @@
 //! - [StakingService](crate::interface::StakingService)
 //! - [FungibleToken](crate::interface::FungibleToken)
 //!   - supports following token transfer protocols:
-//!     - [simple](crate::interface::SimpleTransfer)
-//!     - [vault based](crate::interface::VaultBasedTransfer)
-//!     - [transfer-call](crate::interface::TransferCall)
-//!     - [confirm-transfer](crate::interface::ConfirmTransfer)
+//!     - [simple](crate::interface::SimpleTransfer) (NEP-21)
+//!     - [vault based](crate::interface::VaultBasedTransfer) (NEP-122)
+//!     - [transfer-call](crate::interface::TransferCall) (NEP-136)
+//!     - [confirm-transfer](crate::interface::ConfirmTransfer) (NEP-110)
 //! - [Operator](crate::interface::Operator)
 //! - [ContractOwner](crate::interface::ContractOwner)
 //!
