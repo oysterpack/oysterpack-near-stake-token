@@ -13,7 +13,10 @@ use crate::{
             DEPOSIT_REQUIRED_FOR_STAKE, INSUFFICIENT_STAKE_FOR_REDEEM_REQUEST, ZERO_REDEEM_AMOUNT,
         },
     },
-    interface::{BatchId, RedeemStakeBatchReceipt, StakingService, YoctoNear, YoctoStake},
+    interface::{
+        staking_service::events, BatchId, RedeemStakeBatchReceipt, StakingService, YoctoNear,
+        YoctoStake,
+    },
     near::NO_DEPOSIT,
 };
 use near_sdk::{
@@ -51,8 +54,8 @@ impl StakingService for StakeTokenContract {
         let batch_id =
             self.deposit_near_for_account_to_stake(&mut account, env::attached_deposit().into());
         self.save_registered_account(&account);
-        self.log_stake_batch(batch_id.clone().into());
-        batch_id
+        self.log_stake_batch(batch_id);
+        batch_id.into()
     }
 
     /// runs the stake batch
@@ -357,20 +360,14 @@ impl StakeTokenContract {
     fn log_stake_batch(&self, batch_id: domain::BatchId) {
         if let Some(batch) = self.stake_batch {
             if batch_id == batch.id() {
-                log(interface::staking_service::events::StakeBatch {
-                    batch_id: batch_id.value(),
-                    near: batch.balance().amount().value(),
-                });
+                log(events::StakeBatch::from(batch));
             }
         } else if let Some(batch) = self.next_stake_batch {
             if batch_id == batch.id() {
-                log(interface::staking_service::events::StakeBatch {
-                    batch_id: batch_id.value(),
-                    near: batch.balance().amount().value(),
-                });
+                log(events::StakeBatch::from(batch));
             }
         } else {
-            log(interface::staking_service::events::StakeBatchCancelled {
+            log(events::StakeBatchCancelled {
                 batch_id: batch_id.value(),
             });
         }
@@ -379,24 +376,16 @@ impl StakeTokenContract {
     fn log_redeem_stake_batch(&self, batch_id: domain::BatchId) {
         if let Some(batch) = self.redeem_stake_batch {
             if batch_id == batch.id() {
-                log(interface::staking_service::events::RedeemStakeBatch {
-                    batch_id: batch_id.value(),
-                    stake: batch.balance().amount().value(),
-                });
+                log(events::RedeemStakeBatch::from(batch));
             }
         } else if let Some(batch) = self.next_redeem_stake_batch {
             if batch_id == batch.id() {
-                log(interface::staking_service::events::RedeemStakeBatch {
-                    batch_id: batch_id.value(),
-                    stake: batch.balance().amount().value(),
-                });
+                log(events::RedeemStakeBatch::from(batch));
             }
         } else {
-            log(
-                interface::staking_service::events::RedeemStakeBatchCancelled {
-                    batch_id: batch_id.value(),
-                },
-            );
+            log(events::RedeemStakeBatchCancelled {
+                batch_id: batch_id.value(),
+            });
         }
     }
 
@@ -486,7 +475,7 @@ impl StakeTokenContract {
         &mut self,
         account: &mut RegisteredAccount,
         amount: domain::YoctoNear,
-    ) -> BatchId {
+    ) -> domain::BatchId {
         assert!(amount.value() > 0, DEPOSIT_REQUIRED_FOR_STAKE);
 
         self.claim_receipt_funds(account);
@@ -506,7 +495,7 @@ impl StakeTokenContract {
             account_batch.add(amount);
             account.stake_batch = Some(account_batch);
 
-            account_batch.id().into()
+            account_batch.id()
         } else {
             // apply at contract level
             let mut contract_batch = self
@@ -523,7 +512,7 @@ impl StakeTokenContract {
             account_batch.add(amount);
             account.next_stake_batch = Some(account_batch);
 
-            account_batch.id().into()
+            account_batch.id()
         }
     }
 
@@ -1282,7 +1271,7 @@ mod test {
             .lookup_account(account_id.try_into().unwrap())
             .unwrap();
         let stake_batch = account.stake_batch.unwrap();
-        assert_eq!(stake_batch.id, batch_id);
+        assert_eq!(stake_batch.id, batch_id.into());
         assert_eq!(stake_batch.balance.amount, YOCTO.into());
     }
 
@@ -1362,7 +1351,7 @@ mod test {
             account.stake_batch.is_none(),
             "stake batch should be set to None"
         );
-        let batch_id = domain::BatchId(batch_id.0 .0);
+        let batch_id = domain::BatchId(batch_id.value());
         let receipt = contract.stake_batch_receipts.get(&batch_id);
         assert!(
             receipt.is_none(),

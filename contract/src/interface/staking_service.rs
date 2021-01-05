@@ -410,6 +410,15 @@ pub mod events {
         pub near: u128,
     }
 
+    impl From<domain::StakeBatch> for StakeBatch {
+        fn from(batch: domain::StakeBatch) -> Self {
+            Self {
+                batch_id: batch.id().value(),
+                near: batch.balance().amount().value(),
+            }
+        }
+    }
+
     /// batch is cancelled if all funds are withdrawn
     #[derive(Debug)]
     pub struct StakeBatchCancelled {
@@ -422,6 +431,15 @@ pub mod events {
         pub batch_id: u128,
         /// how much STAKE to redeem is in the batch
         pub stake: u128,
+    }
+
+    impl From<domain::RedeemStakeBatch> for RedeemStakeBatch {
+        fn from(batch: domain::RedeemStakeBatch) -> Self {
+            Self {
+                batch_id: batch.id().value(),
+                stake: batch.balance().amount().value(),
+            }
+        }
     }
 
     /// batch is cancelled if all funds are withdrawn
