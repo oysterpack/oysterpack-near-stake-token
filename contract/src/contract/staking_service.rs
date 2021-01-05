@@ -62,11 +62,13 @@ impl StakingService for StakeTokenContract {
     ///
     /// logical workflow:
     /// 1. lock the contract
-    /// 2. get account from staking pool
-    /// 3. deposit and stake NEAR funds
-    /// 4. create stake batch receipt
-    /// 5. update STAKE token supply
-    /// 6. unlock contract
+    /// 2. check if liquidity is needed
+    /// 3. get account from staking pool
+    /// 4. deposit and stake NEAR funds
+    ///    - deposit and stake any liquidity that is not needed
+    /// 5. create stake batch receipt
+    /// 6. update STAKE token supply
+    /// 7. unlock contract
     fn stake(&mut self) -> Promise {
         assert!(self.can_run_batch(), BLOCKED_BY_BATCH_RUNNING);
         let batch = self.stake_batch.expect(STAKE_BATCH_SHOULD_EXIST);
@@ -924,7 +926,7 @@ impl StakeTokenContract {
         // - when NEAR is staked, the staking pool converts the NEAR into shares. Because of rounding,
         //   not all staked NEAR gets converted into shares, and some is left behind as unstaked in
         //   the staking pool. In the example below 0.25 NEAR was deposited to be staked, however
-        //   after converting the NEAR to shares, there were 5 yoctoNEAR left owver that remained
+        //   after converting the NEAR to shares, there were 5 yoctoNEAR left over that remained
         //   as unstaked:
         //
         // Log [stake.oysterpack.testnet]: @stake.oysterpack.testnet deposited 250000000000000000000000. New unstaked balance is 654566211093653841620326
@@ -932,6 +934,11 @@ impl StakeTokenContract {
         //
         // Thus, if we see that the STAKE value ticks down, we need to compensate the [total_staked_near_balance]
         // because the STAKE value should never decrease.
+        //
+        // How can this happen? When we withdraw unstaked funds, we do a withdraw all, which will
+        // withdraw unstaked NEAR that should have been staked but couldn't because of the share conversion
+        // rounding. When we need to compensate, then we need to add the compensation to the liquidity
+        // to balance everything out.
         let new_stake_near_value = new_stake_token_value.stake_to_near(YOCTO.into());
         let current_stake_near_value = self.stake_token_value.stake_to_near(YOCTO.into());
         self.stake_token_value = if new_stake_near_value >= current_stake_near_value
@@ -945,6 +952,12 @@ impl StakeTokenContract {
             let staked_near_compensation = (current_stake_near_value * total_stake_supply
                 / U256::from(YOCTO))
                 - total_staked_near_balance;
+            // compensation needs to be added back to NEAR liquidity to rebalance the amounts
+            *self.near_liquidity_pool += staked_near_compensation.as_u128();
+            log(events::NearLiquidityAdded {
+                amount: staked_near_compensation.as_u128(),
+                balance: self.near_liquidity_pool.value(),
+            });
             domain::StakeTokenValue::new(
                 new_stake_token_value.block_time_height(),
                 (total_staked_near_balance + staked_near_compensation)
