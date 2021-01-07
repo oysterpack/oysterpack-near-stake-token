@@ -1,10 +1,35 @@
-use crate::{config::Config, near::*, ContractSettings};
+use crate::{config::Config, near::*, ContractSettings, StakeTokenContract};
 use near_sdk::{
     serde::{Deserialize, Serialize},
-    AccountId, VMContext,
+    testing_env, AccountId, MockedBlockchain, VMContext,
 };
 
 pub const EXPECTED_ACCOUNT_STORAGE_USAGE: u64 = 722;
+
+pub struct TestContext<'a> {
+    pub contract: StakeTokenContract,
+    pub account_id: &'a str,
+    pub context: VMContext,
+}
+
+const ACCOUNT_ID: &str = "oysterpack.near";
+
+impl<'a> TestContext<'a> {
+    pub fn new(contract_settings: Option<ContractSettings>) -> Self {
+        let mut context = new_context(ACCOUNT_ID);
+        context.is_view = false;
+        testing_env!(context.clone());
+
+        let contract_settings = contract_settings.unwrap_or_else(default_contract_settings);
+        let contract = StakeTokenContract::new(None, contract_settings);
+
+        Self {
+            contract,
+            account_id: ACCOUNT_ID,
+            context,
+        }
+    }
+}
 
 pub fn expected_account_storage_fee() -> u128 {
     EXPECTED_ACCOUNT_STORAGE_USAGE as u128 * Config::default().storage_cost_per_byte().value()

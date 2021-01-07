@@ -185,42 +185,28 @@ impl StakeTokenContract {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::interface::StakingService;
+    use crate::interface::{AccountManagement, StakingService};
     use crate::near::YOCTO;
     use crate::test_utils::*;
     use near_sdk::{serde_json, testing_env, MockedBlockchain};
-    use std::convert::TryInto;
+    use std::convert::{TryFrom, TryInto};
 
+    /// the following contract funcs are expected to be invoked in view mode:
+    /// - account_storage_fee
+    /// - account_registered
+    /// - total_registered_accounts
+    /// - lookup_account
     #[test]
-    fn account_registered_is_view_func() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.is_view = false;
-        testing_env!(context.clone());
+    fn check_view_funcs() {
+        let mut ctx = TestContext::new(None);
 
-        let contract_settings = default_contract_settings();
-        let contract = StakeTokenContract::new(None, contract_settings);
-
-        context.is_view = true;
-        testing_env!(context.clone());
-        assert!(!contract.account_registered(account_id.try_into().unwrap()));
-    }
-
-    #[test]
-    fn lookup_account_is_view_func() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.is_view = false;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let contract = StakeTokenContract::new(None, contract_settings);
-
-        context.is_view = true;
-        testing_env!(context.clone());
-        assert!(contract
-            .lookup_account(account_id.try_into().unwrap())
-            .is_none());
+        // given the funcs are called in view mode
+        ctx.context.is_view = true;
+        testing_env!(ctx.context.clone());
+        ctx.contract.account_storage_fee();
+        ctx.contract.total_registered_accounts();
+        ctx.contract
+            .lookup_account(ValidAccountId::try_from(ctx.account_id).unwrap());
     }
 
     #[test]
@@ -325,36 +311,6 @@ mod test {
             .unwrap()
             .receipt
             .expect("receipt should be present");
-    }
-
-    #[test]
-    fn account_storage_fee_is_view_func() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.is_view = false;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let contract = StakeTokenContract::new(None, contract_settings);
-
-        context.is_view = true;
-        testing_env!(context.clone());
-        contract.account_storage_fee();
-    }
-
-    #[test]
-    fn total_registered_accounts_is_view_func() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.is_view = false;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let contract = StakeTokenContract::new(None, contract_settings);
-
-        context.is_view = true;
-        testing_env!(context.clone());
-        contract.total_registered_accounts();
     }
 
     /// - Given the account is not currently registered
