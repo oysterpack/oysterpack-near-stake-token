@@ -49,21 +49,4 @@ pub trait AccountManagement {
     ///
     /// Gas Requirements: 4 TGas
     fn lookup_account(&self, account_id: ValidAccountId) -> Option<StakeAccount>;
-
-    /// Withdraws the specified amount from the account's available NEAR balance and transfers the
-    /// funds to the account.
-    ///
-    /// ## Panics
-    /// - if the account is not registered
-    /// - if there are not enough available NEAR funds to fulfill the request
-    fn withdraw(&mut self, amount: YoctoNear);
-
-    /// Withdraws all available NEAR funds from the account and transfers the
-    /// funds to the account.
-    ///
-    /// Returns the amount withdrawn.
-    ///
-    /// ## Panics
-    /// - if the account is not registered
-    fn withdraw_all(&mut self) -> YoctoNear;
 }

@@ -266,6 +266,7 @@ impl StakeTokenContract {
 }
 
 #[cfg(test)]
+#[allow(unused_imports)]
 mod test {
 
     use super::*;
@@ -274,382 +275,382 @@ mod test {
         near::YOCTO,
         test_utils::*,
     };
-    use near_sdk::{serde_json, testing_env, MockedBlockchain};
+    use near_sdk::{testing_env, MockedBlockchain};
 
-    /// Given the promise ro get the staked balance completes successfully
-    /// When the callback is invoked
-    /// And the batch funds are deposited and staked with the staking pool
-    /// And a callback is scheduled to run once the deposit and stake promise completes
-    #[test]
-    fn on_run_stake_batch_success() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = 100 * YOCTO;
-        testing_env!(context.clone());
+    // Given the promise ro get the staked balance completes successfully
+    // When the callback is invoked
+    // And the batch funds are deposited and staked with the staking pool
+    // And a callback is scheduled to run once the deposit and stake promise completes
+    // #[test]
+    // fn on_run_stake_batch_success() {
+    //     let account_id = "alfio-zappala.near";
+    //     let mut context = new_context(account_id);
+    //     context.attached_deposit = 100 * YOCTO;
+    //     testing_env!(context.clone());
+    //
+    //     let contract_settings = default_contract_settings();
+    //     let mut contract = StakeTokenContract::new(None, contract_settings);
+    //     contract.register_account();
+    //
+    //     context.attached_deposit = 100 * YOCTO;
+    //     testing_env!(context.clone());
+    //
+    //     // account deposits into stake batch
+    //     contract.deposit();
+    //     contract.stake();
+    //
+    //     // callback can only be invoked from itself
+    //     context.predecessor_account_id = context.current_account_id.clone();
+    //     context.attached_deposit = 100 * YOCTO;
+    //     context.epoch_height += 1;
+    //     testing_env!(context.clone());
+    //     let staking_pool_account = StakingPoolAccount {
+    //         account_id: context.predecessor_account_id.clone(),
+    //         unstaked_balance: 0.into(),
+    //         staked_balance: 0.into(),
+    //         can_withdraw: true,
+    //     };
+    //     contract.on_run_stake_batch(staking_pool_account);
+    //
+    //     let receipts: Vec<Receipt> = env::created_receipts()
+    //         .iter()
+    //         .map(|receipt| {
+    //             let json = serde_json::to_string_pretty(receipt).unwrap();
+    //             println!("{}", json);
+    //             let receipt: Receipt = serde_json::from_str(&json).unwrap();
+    //             receipt
+    //         })
+    //         .collect();
+    //     assert_eq!(receipts.len(), 3);
+    //
+    //     // check `deposit_and_stake` func call action
+    //     {
+    //         let receipt = &receipts[0];
+    //         let action = &receipt.actions[0];
+    //         match action {
+    //             Action::FunctionCall {
+    //                 method_name,
+    //                 deposit,
+    //                 gas,
+    //                 ..
+    //             } => {
+    //                 assert_eq!(method_name, "deposit_and_stake");
+    //                 assert_eq!(*deposit, context.attached_deposit);
+    //                 assert_eq!(
+    //                     *gas,
+    //                     contract
+    //                         .config
+    //                         .gas_config()
+    //                         .staking_pool()
+    //                         .deposit_and_stake()
+    //                         .value()
+    //                 );
+    //             }
+    //             _ => panic!("expected `deposit_and_stake` func call"),
+    //         }
+    //     }
+    //     {
+    //         let receipt = &receipts[1];
+    //         let action = &receipt.actions[0];
+    //         match action {
+    //             Action::FunctionCall {
+    //                 method_name, gas, ..
+    //             } => {
+    //                 assert_eq!(method_name, "get_account");
+    //                 assert_eq!(
+    //                     *gas,
+    //                     contract
+    //                         .config
+    //                         .gas_config()
+    //                         .staking_pool()
+    //                         .get_account()
+    //                         .value()
+    //                 );
+    //             }
+    //             _ => panic!("expected `get_account` func call"),
+    //         }
+    //     }
+    //     {
+    //         let receipt = &receipts[2];
+    //         let action = &receipt.actions[0];
+    //         match action {
+    //             Action::FunctionCall {
+    //                 method_name, gas, ..
+    //             } => {
+    //                 assert_eq!(method_name, "on_deposit_and_stake");
+    //                 assert_eq!(
+    //                     *gas,
+    //                     contract
+    //                         .config
+    //                         .gas_config()
+    //                         .callbacks()
+    //                         .on_deposit_and_stake()
+    //                         .value()
+    //                 );
+    //             }
+    //             _ => panic!("expected `on_deposit_and_stake` func call"),
+    //         }
+    //     }
+    // }
 
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-        contract.register_account();
+    // Given there is a pending withdrawal
+    // And the amount of unstaked NEAR is more than is being staked
+    // When the callback is invoked
+    // Then the entire stake batch NEAR amount is added to the liquidity pool
+    // And a stake request is submitted to the staking pool
+    // #[test]
+    // #[ignore]
+    // fn on_run_stake_batch_success_with_pending_withdrawal_with_all_near_added_to_liquidity() {
+    //     let account_id = "alfio-zappala.near";
+    //     let mut context = new_context(account_id);
+    //     context.attached_deposit = 100 * YOCTO;
+    //     testing_env!(context.clone());
+    //
+    //     let contract_settings = default_contract_settings();
+    //     let mut contract = StakeTokenContract::new(None, contract_settings);
+    //     contract.register_account();
+    //
+    //     context.attached_deposit = 100 * YOCTO;
+    //     testing_env!(context.clone());
+    //
+    //     // account deposits into stake batch
+    //     contract.deposit();
+    //     contract.stake();
+    //
+    //     // callback can only be invoked from itself
+    //     context.predecessor_account_id = context.current_account_id.clone();
+    //     context.attached_deposit = 100 * YOCTO;
+    //     context.epoch_height += 1;
+    //     testing_env!(context.clone());
+    //     let staking_pool_account = StakingPoolAccount {
+    //         account_id: context.predecessor_account_id.clone(),
+    //         unstaked_balance: (200 * YOCTO).into(),
+    //         staked_balance: 0.into(),
+    //         can_withdraw: true,
+    //     };
+    //
+    //     contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+    //     *contract.batch_id_sequence += 1;
+    //     let redeem_stake_batch =
+    //         domain::RedeemStakeBatch::new(contract.batch_id_sequence, (10 * YOCTO).into());
+    //     let receipt = redeem_stake_batch.create_receipt(contract.stake_token_value);
+    //     contract.redeem_stake_batch = Some(redeem_stake_batch);
+    //     contract
+    //         .redeem_stake_batch_receipts
+    //         .insert(&redeem_stake_batch.id(), &receipt);
+    //     contract.on_run_stake_batch(staking_pool_account);
+    //     assert_eq!(
+    //         contract.near_liquidity_pool,
+    //         contract.stake_batch.unwrap().balance().amount()
+    //     );
+    //
+    //     let receipts: Vec<Receipt> = env::created_receipts()
+    //         .iter()
+    //         .map(|receipt| {
+    //             let json = serde_json::to_string_pretty(receipt).unwrap();
+    //             println!("{}", json);
+    //             let receipt: Receipt = serde_json::from_str(&json).unwrap();
+    //             receipt
+    //         })
+    //         .collect();
+    //     assert_eq!(receipts.len(), 3);
+    // }
 
-        context.attached_deposit = 100 * YOCTO;
-        testing_env!(context.clone());
+    // Given there is a pending withdrawal
+    // And the amount of unstaked NEAR is less than what is being staked
+    // When the callback is invoked
+    // Then the entire partial batch NEAR amount is added to the liquidity pool
+    // And a deposit request and then a stake request are submitted to the staking pool
+    // #[test]
+    // #[ignore]
+    // fn on_run_stake_batch_success_with_pending_withdrawal_with_partial_near_added_to_liquidity() {
+    //     let account_id = "alfio-zappala.near";
+    //     let mut context = new_context(account_id);
+    //     context.attached_deposit = 100 * YOCTO;
+    //     testing_env!(context.clone());
+    //
+    //     let contract_settings = default_contract_settings();
+    //     let mut contract = StakeTokenContract::new(None, contract_settings);
+    //     contract.register_account();
+    //
+    //     context.attached_deposit = 100 * YOCTO;
+    //     testing_env!(context.clone());
+    //
+    //     // account deposits into stake batch
+    //     contract.deposit();
+    //     contract.stake();
+    //
+    //     // callback can only be invoked from itself
+    //     context.predecessor_account_id = context.current_account_id.clone();
+    //     context.attached_deposit = 100 * YOCTO;
+    //     context.epoch_height += 1;
+    //     testing_env!(context.clone());
+    //     let staking_pool_account = StakingPoolAccount {
+    //         account_id: context.predecessor_account_id.clone(),
+    //         unstaked_balance: (40 * YOCTO).into(),
+    //         staked_balance: 0.into(),
+    //         can_withdraw: true,
+    //     };
+    //
+    //     contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+    //     *contract.batch_id_sequence += 1;
+    //     let redeem_stake_batch =
+    //         domain::RedeemStakeBatch::new(contract.batch_id_sequence, (10 * YOCTO).into());
+    //     let receipt = redeem_stake_batch.create_receipt(contract.stake_token_value);
+    //     contract.redeem_stake_batch = Some(redeem_stake_batch);
+    //     contract
+    //         .redeem_stake_batch_receipts
+    //         .insert(&redeem_stake_batch.id(), &receipt);
+    //     contract.on_run_stake_batch(staking_pool_account.clone());
+    //     assert_eq!(
+    //         contract.near_liquidity_pool,
+    //         staking_pool_account.unstaked_balance.into()
+    //     );
+    //
+    //     let receipts: Vec<Receipt> = env::created_receipts()
+    //         .iter()
+    //         .map(|receipt| {
+    //             let json = serde_json::to_string_pretty(receipt).unwrap();
+    //             println!("{}", json);
+    //             let receipt: Receipt = serde_json::from_str(&json).unwrap();
+    //             receipt
+    //         })
+    //         .collect();
+    //     assert_eq!(receipts.len(), 4);
+    //
+    //     // check `deposit_and_stake` func call action
+    //     {
+    //         let receipt = &receipts[0];
+    //         let action = &receipt.actions[0];
+    //         if let Action::FunctionCall {
+    //             method_name,
+    //             deposit,
+    //             gas,
+    //             ..
+    //         } = action
+    //         {
+    //             assert_eq!(method_name, "deposit");
+    //             assert_eq!(
+    //                 *deposit,
+    //                 contract.stake_batch.unwrap().balance().amount().value()
+    //                     - staking_pool_account.unstaked_balance.0
+    //             );
+    //             assert_eq!(
+    //                 *gas,
+    //                 contract
+    //                     .config
+    //                     .gas_config()
+    //                     .staking_pool()
+    //                     .deposit()
+    //                     .value()
+    //             )
+    //         } else {
+    //             panic!("expected deposit function call")
+    //         }
+    //     }
+    //     {
+    //         let receipt = &receipts[1];
+    //         let action = &receipt.actions[0];
+    //         if let Action::FunctionCall {
+    //             method_name,
+    //             deposit,
+    //             gas,
+    //             ..
+    //         } = action
+    //         {
+    //             assert_eq!(method_name, "stake");
+    //             assert_eq!(*deposit, 0);
+    //             assert_eq!(
+    //                 *gas,
+    //                 contract.config.gas_config().staking_pool().stake().value()
+    //             )
+    //         } else {
+    //             panic!("expected stake function call")
+    //         }
+    //     }
+    //     {
+    //         let receipt = &receipts[2];
+    //         let action = &receipt.actions[0];
+    //         if let Action::FunctionCall {
+    //             method_name,
+    //             deposit,
+    //             gas,
+    //             ..
+    //         } = action
+    //         {
+    //             assert_eq!(method_name, "get_account");
+    //             assert_eq!(*deposit, 0);
+    //             assert_eq!(
+    //                 *gas,
+    //                 contract
+    //                     .config
+    //                     .gas_config()
+    //                     .staking_pool()
+    //                     .get_account()
+    //                     .value()
+    //             )
+    //         } else {
+    //             panic!("expected stake function call")
+    //         }
+    //     }
+    //     {
+    //         let receipt = &receipts[3];
+    //         let action = &receipt.actions[0];
+    //         if let Action::FunctionCall {
+    //             method_name,
+    //             deposit,
+    //             gas,
+    //             ..
+    //         } = action
+    //         {
+    //             assert_eq!(method_name, "on_deposit_and_stake");
+    //             assert_eq!(*deposit, 0);
+    //             assert_eq!(
+    //                 *gas,
+    //                 contract
+    //                     .config
+    //                     .gas_config()
+    //                     .callbacks()
+    //                     .on_deposit_and_stake()
+    //                     .value()
+    //             )
+    //         } else {
+    //             panic!("expected on_deposit_and_stake function call");
+    //         }
+    //     }
+    // }
 
-        // account deposits into stake batch
-        contract.deposit();
-        contract.stake();
-
-        // callback can only be invoked from itself
-        context.predecessor_account_id = context.current_account_id.clone();
-        context.attached_deposit = 100 * YOCTO;
-        context.epoch_height += 1;
-        testing_env!(context.clone());
-        let staking_pool_account = StakingPoolAccount {
-            account_id: context.predecessor_account_id.clone(),
-            unstaked_balance: 0.into(),
-            staked_balance: 0.into(),
-            can_withdraw: true,
-        };
-        contract.on_run_stake_batch(staking_pool_account);
-
-        let receipts: Vec<Receipt> = env::created_receipts()
-            .iter()
-            .map(|receipt| {
-                let json = serde_json::to_string_pretty(receipt).unwrap();
-                println!("{}", json);
-                let receipt: Receipt = serde_json::from_str(&json).unwrap();
-                receipt
-            })
-            .collect();
-        assert_eq!(receipts.len(), 3);
-
-        // check `deposit_and_stake` func call action
-        {
-            let receipt = &receipts[0];
-            let action = &receipt.actions[0];
-            match action {
-                Action::FunctionCall {
-                    method_name,
-                    deposit,
-                    gas,
-                    ..
-                } => {
-                    assert_eq!(method_name, "deposit_and_stake");
-                    assert_eq!(*deposit, context.attached_deposit);
-                    assert_eq!(
-                        *gas,
-                        contract
-                            .config
-                            .gas_config()
-                            .staking_pool()
-                            .deposit_and_stake()
-                            .value()
-                    );
-                }
-                _ => panic!("expected `deposit_and_stake` func call"),
-            }
-        }
-        {
-            let receipt = &receipts[1];
-            let action = &receipt.actions[0];
-            match action {
-                Action::FunctionCall {
-                    method_name, gas, ..
-                } => {
-                    assert_eq!(method_name, "get_account");
-                    assert_eq!(
-                        *gas,
-                        contract
-                            .config
-                            .gas_config()
-                            .staking_pool()
-                            .get_account()
-                            .value()
-                    );
-                }
-                _ => panic!("expected `get_account` func call"),
-            }
-        }
-        {
-            let receipt = &receipts[2];
-            let action = &receipt.actions[0];
-            match action {
-                Action::FunctionCall {
-                    method_name, gas, ..
-                } => {
-                    assert_eq!(method_name, "on_deposit_and_stake");
-                    assert_eq!(
-                        *gas,
-                        contract
-                            .config
-                            .gas_config()
-                            .callbacks()
-                            .on_deposit_and_stake()
-                            .value()
-                    );
-                }
-                _ => panic!("expected `on_deposit_and_stake` func call"),
-            }
-        }
-    }
-
-    /// Given there is a pending withdrawal
-    /// And the amount of unstaked NEAR is more than is being staked
-    /// When the callback is invoked
-    /// Then the entire stake batch NEAR amount is added to the liquidity pool
-    /// And a stake request is submitted to the staking pool
-    #[test]
-    #[ignore]
-    fn on_run_stake_batch_success_with_pending_withdrawal_with_all_near_added_to_liquidity() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = 100 * YOCTO;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-        contract.register_account();
-
-        context.attached_deposit = 100 * YOCTO;
-        testing_env!(context.clone());
-
-        // account deposits into stake batch
-        contract.deposit();
-        contract.stake();
-
-        // callback can only be invoked from itself
-        context.predecessor_account_id = context.current_account_id.clone();
-        context.attached_deposit = 100 * YOCTO;
-        context.epoch_height += 1;
-        testing_env!(context.clone());
-        let staking_pool_account = StakingPoolAccount {
-            account_id: context.predecessor_account_id.clone(),
-            unstaked_balance: (200 * YOCTO).into(),
-            staked_balance: 0.into(),
-            can_withdraw: true,
-        };
-
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
-        *contract.batch_id_sequence += 1;
-        let redeem_stake_batch =
-            domain::RedeemStakeBatch::new(contract.batch_id_sequence, (10 * YOCTO).into());
-        let receipt = redeem_stake_batch.create_receipt(contract.stake_token_value);
-        contract.redeem_stake_batch = Some(redeem_stake_batch);
-        contract
-            .redeem_stake_batch_receipts
-            .insert(&redeem_stake_batch.id(), &receipt);
-        contract.on_run_stake_batch(staking_pool_account);
-        assert_eq!(
-            contract.near_liquidity_pool,
-            contract.stake_batch.unwrap().balance().amount()
-        );
-
-        let receipts: Vec<Receipt> = env::created_receipts()
-            .iter()
-            .map(|receipt| {
-                let json = serde_json::to_string_pretty(receipt).unwrap();
-                println!("{}", json);
-                let receipt: Receipt = serde_json::from_str(&json).unwrap();
-                receipt
-            })
-            .collect();
-        assert_eq!(receipts.len(), 3);
-    }
-
-    /// Given there is a pending withdrawal
-    /// And the amount of unstaked NEAR is less than what is being staked
-    /// When the callback is invoked
-    /// Then the entire partial batch NEAR amount is added to the liquidity pool
-    /// And a deposit request and then a stake request are submitted to the staking pool
-    #[test]
-    #[ignore]
-    fn on_run_stake_batch_success_with_pending_withdrawal_with_partial_near_added_to_liquidity() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = 100 * YOCTO;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-        contract.register_account();
-
-        context.attached_deposit = 100 * YOCTO;
-        testing_env!(context.clone());
-
-        // account deposits into stake batch
-        contract.deposit();
-        contract.stake();
-
-        // callback can only be invoked from itself
-        context.predecessor_account_id = context.current_account_id.clone();
-        context.attached_deposit = 100 * YOCTO;
-        context.epoch_height += 1;
-        testing_env!(context.clone());
-        let staking_pool_account = StakingPoolAccount {
-            account_id: context.predecessor_account_id.clone(),
-            unstaked_balance: (40 * YOCTO).into(),
-            staked_balance: 0.into(),
-            can_withdraw: true,
-        };
-
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
-        *contract.batch_id_sequence += 1;
-        let redeem_stake_batch =
-            domain::RedeemStakeBatch::new(contract.batch_id_sequence, (10 * YOCTO).into());
-        let receipt = redeem_stake_batch.create_receipt(contract.stake_token_value);
-        contract.redeem_stake_batch = Some(redeem_stake_batch);
-        contract
-            .redeem_stake_batch_receipts
-            .insert(&redeem_stake_batch.id(), &receipt);
-        contract.on_run_stake_batch(staking_pool_account.clone());
-        assert_eq!(
-            contract.near_liquidity_pool,
-            staking_pool_account.unstaked_balance.into()
-        );
-
-        let receipts: Vec<Receipt> = env::created_receipts()
-            .iter()
-            .map(|receipt| {
-                let json = serde_json::to_string_pretty(receipt).unwrap();
-                println!("{}", json);
-                let receipt: Receipt = serde_json::from_str(&json).unwrap();
-                receipt
-            })
-            .collect();
-        assert_eq!(receipts.len(), 4);
-
-        // check `deposit_and_stake` func call action
-        {
-            let receipt = &receipts[0];
-            let action = &receipt.actions[0];
-            if let Action::FunctionCall {
-                method_name,
-                deposit,
-                gas,
-                ..
-            } = action
-            {
-                assert_eq!(method_name, "deposit");
-                assert_eq!(
-                    *deposit,
-                    contract.stake_batch.unwrap().balance().amount().value()
-                        - staking_pool_account.unstaked_balance.0
-                );
-                assert_eq!(
-                    *gas,
-                    contract
-                        .config
-                        .gas_config()
-                        .staking_pool()
-                        .deposit()
-                        .value()
-                )
-            } else {
-                panic!("expected deposit function call")
-            }
-        }
-        {
-            let receipt = &receipts[1];
-            let action = &receipt.actions[0];
-            if let Action::FunctionCall {
-                method_name,
-                deposit,
-                gas,
-                ..
-            } = action
-            {
-                assert_eq!(method_name, "stake");
-                assert_eq!(*deposit, 0);
-                assert_eq!(
-                    *gas,
-                    contract.config.gas_config().staking_pool().stake().value()
-                )
-            } else {
-                panic!("expected stake function call")
-            }
-        }
-        {
-            let receipt = &receipts[2];
-            let action = &receipt.actions[0];
-            if let Action::FunctionCall {
-                method_name,
-                deposit,
-                gas,
-                ..
-            } = action
-            {
-                assert_eq!(method_name, "get_account");
-                assert_eq!(*deposit, 0);
-                assert_eq!(
-                    *gas,
-                    contract
-                        .config
-                        .gas_config()
-                        .staking_pool()
-                        .get_account()
-                        .value()
-                )
-            } else {
-                panic!("expected stake function call")
-            }
-        }
-        {
-            let receipt = &receipts[3];
-            let action = &receipt.actions[0];
-            if let Action::FunctionCall {
-                method_name,
-                deposit,
-                gas,
-                ..
-            } = action
-            {
-                assert_eq!(method_name, "on_deposit_and_stake");
-                assert_eq!(*deposit, 0);
-                assert_eq!(
-                    *gas,
-                    contract
-                        .config
-                        .gas_config()
-                        .callbacks()
-                        .on_deposit_and_stake()
-                        .value()
-                )
-            } else {
-                panic!("expected on_deposit_and_stake function call");
-            }
-        }
-    }
-
-    /// Given the promise result failed for getting the staked balance
-    /// Then the callback fails
-    #[test]
-    #[should_panic(expected = "failed to get account info from staking pool")]
-    fn on_run_stake_batch_promise_result_fails() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = 100 * YOCTO;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-
-        contract.register_account();
-        context.attached_deposit = 100 * YOCTO;
-        testing_env!(context.clone());
-        contract.deposit();
-        contract.stake();
-
-        assert!(contract.run_stake_batch_locked);
-
-        // callback can only be invoked from itself
-        context.predecessor_account_id = context.current_account_id.clone();
-        testing_env!(context.clone());
-        set_env_with_failed_promise_result(&mut contract);
-        let staking_pool_account = StakingPoolAccount {
-            account_id: context.predecessor_account_id,
-            unstaked_balance: 0.into(),
-            staked_balance: 0.into(),
-            can_withdraw: true,
-        };
-        contract.on_run_stake_batch(staking_pool_account);
-    }
+    // Given the promise result failed for getting the staked balance
+    // Then the callback fails
+    // #[test]
+    // #[should_panic(expected = "failed to get account info from staking pool")]
+    // fn on_run_stake_batch_promise_result_fails() {
+    //     let account_id = "alfio-zappala.near";
+    //     let mut context = new_context(account_id);
+    //     context.attached_deposit = 100 * YOCTO;
+    //     testing_env!(context.clone());
+    //
+    //     let contract_settings = default_contract_settings();
+    //     let mut contract = StakeTokenContract::new(None, contract_settings);
+    //
+    //     contract.register_account();
+    //     context.attached_deposit = 100 * YOCTO;
+    //     testing_env!(context.clone());
+    //     contract.deposit();
+    //     contract.stake();
+    //
+    //     assert!(contract.run_stake_batch_locked);
+    //
+    //     // callback can only be invoked from itself
+    //     context.predecessor_account_id = context.current_account_id.clone();
+    //     testing_env!(context.clone());
+    //     set_env_with_failed_promise_result(&mut contract);
+    //     let staking_pool_account = StakingPoolAccount {
+    //         account_id: context.predecessor_account_id,
+    //         unstaked_balance: 0.into(),
+    //         staked_balance: 0.into(),
+    //         can_withdraw: true,
+    //     };
+    //     contract.on_run_stake_batch(staking_pool_account);
+    // }
 }

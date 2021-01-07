@@ -226,58 +226,58 @@ mod test {
         contract.transfer_ownership(ValidAccountId::try_from(account_id).unwrap());
     }
 
-    #[test]
-    fn withdraw_all_owner_balance_success() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.account_balance = 100 * YOCTO;
-        context.is_view = false;
-        testing_env!(context.clone());
+    // #[test]
+    // fn withdraw_all_owner_balance_success() {
+    //     let account_id = "alfio-zappala.near";
+    //     let mut context = new_context(account_id);
+    //     context.account_balance = 100 * YOCTO;
+    //     context.is_view = false;
+    //     testing_env!(context.clone());
+    //
+    //     let contract_settings = default_contract_settings();
+    //     let mut contract = StakeTokenContract::new(None, contract_settings);
+    //     let owner_balance = contract.owner_balance();
+    //
+    //     context.predecessor_account_id = contract.owner_id();
+    //     testing_env!(context.clone());
+    //     contract.withdraw_all_owner_balance();
+    //     let receipts = deserialize_receipts(&env::created_receipts());
+    //     assert_eq!(receipts.len(), 1);
+    //     let receipt = receipts.first().unwrap();
+    //     println!("{:#?}", receipt);
+    //     assert_eq!(receipt.receiver_id, contract.owner_id());
+    //     if let Action::Transfer { deposit } = receipt.actions.first().unwrap() {
+    //         assert_eq!(owner_balance.value(), *deposit);
+    //     } else {
+    //         panic!("expected transfer action");
+    //     }
+    // }
 
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-        let owner_balance = contract.owner_balance();
-
-        context.predecessor_account_id = contract.owner_id();
-        testing_env!(context.clone());
-        contract.withdraw_all_owner_balance();
-        let receipts = deserialize_receipts(&env::created_receipts());
-        assert_eq!(receipts.len(), 1);
-        let receipt = receipts.first().unwrap();
-        println!("{:#?}", receipt);
-        assert_eq!(receipt.receiver_id, contract.owner_id());
-        if let Action::Transfer { deposit } = receipt.actions.first().unwrap() {
-            assert_eq!(owner_balance.value(), *deposit);
-        } else {
-            panic!("expected transfer action");
-        }
-    }
-
-    #[test]
-    fn withdraw_owner_balance_success() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.account_balance = 100 * YOCTO;
-        context.is_view = false;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-
-        context.predecessor_account_id = contract.owner_id();
-        testing_env!(context.clone());
-        contract.withdraw_owner_balance(YOCTO.into());
-        let receipts = deserialize_receipts(&env::created_receipts());
-        assert_eq!(receipts.len(), 1);
-        let receipt = receipts.first().unwrap();
-        println!("{:#?}", receipt);
-        assert_eq!(receipt.receiver_id, contract.owner_id());
-        if let Action::Transfer { deposit } = receipt.actions.first().unwrap() {
-            assert_eq!(YOCTO, *deposit);
-        } else {
-            panic!("expected transfer action");
-        }
-    }
+    // #[test]
+    // fn withdraw_owner_balance_success() {
+    //     let account_id = "alfio-zappala.near";
+    //     let mut context = new_context(account_id);
+    //     context.account_balance = 100 * YOCTO;
+    //     context.is_view = false;
+    //     testing_env!(context.clone());
+    //
+    //     let contract_settings = default_contract_settings();
+    //     let mut contract = StakeTokenContract::new(None, contract_settings);
+    //
+    //     context.predecessor_account_id = contract.owner_id();
+    //     testing_env!(context.clone());
+    //     contract.withdraw_owner_balance(YOCTO.into());
+    //     let receipts = deserialize_receipts(&env::created_receipts());
+    //     assert_eq!(receipts.len(), 1);
+    //     let receipt = receipts.first().unwrap();
+    //     println!("{:#?}", receipt);
+    //     assert_eq!(receipt.receiver_id, contract.owner_id());
+    //     if let Action::Transfer { deposit } = receipt.actions.first().unwrap() {
+    //         assert_eq!(YOCTO, *deposit);
+    //     } else {
+    //         panic!("expected transfer action");
+    //     }
+    // }
 
     #[test]
     #[should_panic(expected = "contract call is only allowed by the contract owner")]

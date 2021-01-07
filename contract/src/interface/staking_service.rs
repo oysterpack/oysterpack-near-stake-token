@@ -1,7 +1,7 @@
 use crate::interface::{
     BatchId, RedeemStakeBatchReceipt, StakeBatchReceipt, YoctoNear, YoctoStake,
 };
-use near_sdk::{AccountId, Promise, PromiseOrValue};
+use near_sdk::{json_types::ValidAccountId, AccountId, Promise, PromiseOrValue};
 
 /// Integrates with the staking pool contract and manages STAKE token assets. The main use
 /// cases supported by this interface are:
@@ -164,7 +164,7 @@ pub trait StakingService {
     /// - if the account is not registered
     /// - if there are insufficient funds to fulfill the request
     /// - if the contract is locked
-    fn withdraw_funds_from_stake_batch(&mut self, amount: YoctoNear);
+    fn withdraw_from_stake_batch(&mut self, amount: YoctoNear);
 
     /// withdraws all NEAR from uncommitted stake batch and refunds the account
     /// - returns NEAR amount that was withdrawn from the [StakeBatch](crate::domain::StakeBatch)
@@ -174,7 +174,7 @@ pub trait StakingService {
     /// ## Panics
     /// - if the account is not registered
     /// - if the contract is locked
-    fn withdraw_all_funds_from_stake_batch(&mut self) -> YoctoNear;
+    fn withdraw_all_from_stake_batch(&mut self) -> YoctoNear;
 
     /// Submits request to redeem STAKE tokens, which are put into a [RedeemStakeBatch](crate::interface::RedeemStakeBatch).
     /// In effect, this locks up STAKE in the [RedeemStakeBatch](crate::interface::RedeemStakeBatch),
@@ -203,9 +203,18 @@ pub trait StakingService {
     /// - if account is not registered
     fn redeem_all(&mut self) -> Option<BatchId>;
 
-    /// Returns false if the account has no uncommitted redeem stake batch.
-    /// - STAKE funds that were locked in the redeem stake batch are made available for transfer
-    fn cancel_uncommitted_redeem_stake_batch(&mut self) -> bool;
+    /// Enables the user to remove all STAKE that was redeemed and placed into the uncomitted
+    /// [RedeemStakeBatch](crate::domain::RedeemStakeBatch). This effectively unlocks the STAKE
+    /// that was specified to be redeemed.
+    ///
+    /// Returns the amount of STAKE that was unlocked.
+    ///
+    /// ## Panics
+    /// - if the account is not registered
+    fn remove_all_from_redeem_stake_batch(&mut self) -> YoctoStake;
+
+    /// Enables the user to remove the specified amount of STAKE from the uncommitted [RedeemStakeBatch](crate::domain::RedeemStakeBatch)
+    fn remove_from_redeem_stake_batch(&mut self, amount: YoctoStake);
 
     /// Runs the workflow to process redeem STAKE for NEAR from the staking pool. The workflow consists
     /// of 2 sub-workflows:
@@ -290,6 +299,37 @@ pub trait StakingService {
     /// ## Panics
     /// if account is not registered
     fn claim_receipts(&mut self);
+
+    /// Withdraws the specified amount from the account's available NEAR balance and transfers the
+    /// funds to the account.
+    ///
+    /// ## Panics
+    /// - if the account is not registered
+    /// - if there are not enough available NEAR funds to fulfill the request
+    fn withdraw(&mut self, amount: YoctoNear);
+
+    /// Withdraws all available NEAR funds from the account and transfers the funds to the account.
+    ///
+    /// Returns the amount withdrawn.
+    ///
+    /// ## Panics
+    /// - if the account is not registered
+    fn withdraw_all(&mut self) -> YoctoNear;
+
+    /// Transfers the specified amount from the account's available NEAR balance to the specified
+    /// recipient account.
+    ///
+    /// ## Panics
+    /// - if the account is not registered
+    /// - if there are not enough available NEAR funds to fulfill the request
+    fn transfer_near(&mut self, recipient: ValidAccountId, amount: YoctoNear);
+
+    /// Transfers all available NEAR funds from the account's available NEAR balance to the specified
+    /// recipient account.
+    ///
+    /// ## Panics
+    /// - if the account is not registered
+    fn transfer_all_near(&mut self, recipient: ValidAccountId) -> YoctoNear;
 }
 
 pub mod events {

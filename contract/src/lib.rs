@@ -216,10 +216,6 @@ pub struct StakeTokenContract {
     /// for NEP-122 - vault-based fungible token
     vaults: LookupMap<VaultId, Vault>,
     vault_id_sequence: VaultId,
-
-    #[cfg(test)]
-    #[borsh_skip]
-    env: near_env::Env,
 }
 
 impl Default for StakeTokenContract {
@@ -275,8 +271,6 @@ impl StakeTokenContract {
 
             vaults: LookupMap::new(VAULTS_KEY_PREFIX.to_vec()),
             vault_id_sequence: VaultId::default(),
-            #[cfg(test)]
-            env: near_env::Env::default(),
         };
 
         // compute account storage usage
@@ -287,22 +281,6 @@ impl StakeTokenContract {
                 StorageUsage(env::storage_usage() - initial_storage_usage);
             contract.deallocate_account_template_to_measure_storage_usage();
             assert_eq!(initial_storage_usage, env::storage_usage());
-        }
-
-        #[cfg(test)]
-        {
-            pub fn promise_result(_result_index: u64) -> near_sdk::PromiseResult {
-                near_sdk::PromiseResult::Successful(vec![])
-            }
-
-            pub fn promise_results_count() -> u64 {
-                1
-            }
-
-            contract.set_env(near_env::Env {
-                promise_results_count_: promise_results_count,
-                promise_result_: promise_result,
-            });
         }
 
         contract

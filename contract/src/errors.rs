@@ -53,6 +53,8 @@ pub mod staking_service {
         "account STAKE balance is insufficient to fulfill request";
 
     pub const BATCH_RUN_ALREADY_IN_PROGRESS: &str = "batch run is already in progress";
+
+    pub const BATCH_BALANCE_INSUFFICIENT: &str = "batch balance is insufficient to fulfill request";
 }
 
 pub mod illegal_state {

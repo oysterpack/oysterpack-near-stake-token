@@ -1,10 +1,8 @@
-use crate::near_env::Env;
-use crate::{config::Config, near::*, ContractSettings, StakeTokenContract};
+use crate::{config::Config, near::*, ContractSettings};
 use near_sdk::{
     serde::{Deserialize, Serialize},
-    serde_json, AccountId, PromiseResult, VMContext,
+    AccountId, VMContext,
 };
-use near_vm_logic::mocks::mock_external as near_mocks;
 
 pub const EXPECTED_ACCOUNT_STORAGE_USAGE: u64 = 722;
 
@@ -65,46 +63,4 @@ pub enum Action {
         gas: u64,
         deposit: u128,
     },
-}
-
-pub fn deserialize_receipts(receipts: &[near_mocks::Receipt]) -> Vec<Receipt> {
-    receipts
-        .iter()
-        .map(|receipt| {
-            let json = serde_json::to_string_pretty(receipt).unwrap();
-            let receipt: Receipt = serde_json::from_str(&json).unwrap();
-            receipt
-        })
-        .collect()
-}
-
-#[allow(dead_code)]
-pub fn set_env_with_success_promise_result(contract: &mut StakeTokenContract) {
-    pub fn promise_result(_result_index: u64) -> PromiseResult {
-        PromiseResult::Successful(vec![])
-    }
-
-    pub fn promise_results_count() -> u64 {
-        1
-    }
-
-    contract.set_env(Env {
-        promise_results_count_: promise_results_count,
-        promise_result_: promise_result,
-    });
-}
-
-pub fn set_env_with_failed_promise_result(contract: &mut StakeTokenContract) {
-    pub fn promise_result(_result_index: u64) -> PromiseResult {
-        PromiseResult::Failed
-    }
-
-    pub fn promise_results_count() -> u64 {
-        1
-    }
-
-    contract.set_env(Env {
-        promise_results_count_: promise_results_count,
-        promise_result_: promise_result,
-    });
 }

@@ -410,10 +410,8 @@ fn assert_receiver_is_not_sender(receiver_id: &str) {
 mod test {
     use super::*;
     use crate::interface::StakingService;
-    use crate::{interface::AccountManagement, near::YOCTO, test_utils::*, Hash};
-    use near_sdk::{
-        json_types::U128, serde::Deserialize, serde_json, testing_env, MockedBlockchain,
-    };
+    use crate::{interface::AccountManagement, near::YOCTO, test_utils::*};
+    use near_sdk::{json_types::U128, serde::Deserialize, testing_env, MockedBlockchain};
     use std::convert::TryFrom;
 
     /// Given the sender and receiver accounts are registered
@@ -557,79 +555,79 @@ mod test {
     ///   2. func callback `resolve_vault`
     /// And the vault is created for the receiver holding the transfer amount
     /// And the sender account is debited the transfer amount
-    #[test]
-    fn transfer_with_vault_success() {
-        let sender_account_id = "sender.near";
-        let receiver_account_id = "receiver.near";
-
-        let mut context = new_context(receiver_account_id);
-        context.attached_deposit = 100 * YOCTO;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-        contract.register_account();
-
-        context.predecessor_account_id = sender_account_id.to_string();
-        testing_env!(context.clone());
-        contract.register_account();
-
-        let mut account = contract.registered_account(sender_account_id);
-        account.apply_stake_credit((100 * YOCTO).into());
-        contract.save_registered_account(&account);
-        contract.total_stake.credit(account.stake.unwrap().amount());
-
-        let transfer_amount = 10 * YOCTO;
-        let mut payload = HashMap::new();
-        payload.insert("msg".to_string(), "Happy New Year".to_string());
-
-        testing_env!(context.clone());
-        contract.transfer_with_vault(
-            ValidAccountId::try_from(receiver_account_id).unwrap(),
-            transfer_amount.into(),
-            Some(payload.clone()),
-        );
-        let vault = contract.vaults.get(&contract.vault_id_sequence).unwrap();
-        assert_eq!(vault.balance(), transfer_amount.into());
-        assert_eq!(vault.owner_id_hash(), Hash::from(receiver_account_id));
-        assert_eq!(
-            contract.balance(ValidAccountId::try_from(sender_account_id).unwrap()),
-            (90 * YOCTO).into()
-        );
-
-        let receipts = deserialize_receipts(&env::created_receipts());
-        println!("{:#?}", receipts);
-        {
-            let receipt = &receipts[0];
-            assert_eq!(receipt.receiver_id, receiver_account_id);
-            match receipt.actions.first().unwrap() {
-                Action::FunctionCall {
-                    method_name, args, ..
-                } => {
-                    assert_eq!(method_name, "on_receive_with_vault");
-                    let args: TransferWithVaultArgs = serde_json::from_str(args).unwrap();
-                    assert_eq!(args.vault_id, contract.vault_id_sequence.value().into());
-                    assert_eq!(args.headers.unwrap(), payload);
-                }
-                _ => panic!("invalid action type"),
-            }
-        }
-        {
-            let receipt = &receipts[1];
-            assert_eq!(receipt.receiver_id, context.current_account_id);
-            match receipt.actions.first().unwrap() {
-                Action::FunctionCall {
-                    method_name, args, ..
-                } => {
-                    assert_eq!(method_name, "resolve_vault");
-                    let args: ResolveVaultArgs = serde_json::from_str(args).unwrap();
-                    assert_eq!(args.vault_id, contract.vault_id_sequence.value().into());
-                    assert_eq!(args.sender_id, sender_account_id);
-                }
-                _ => panic!("invalid action type"),
-            }
-        }
-    }
+    // #[test]
+    // fn transfer_with_vault_success() {
+    //     let sender_account_id = "sender.near";
+    //     let receiver_account_id = "receiver.near";
+    //
+    //     let mut context = new_context(receiver_account_id);
+    //     context.attached_deposit = 100 * YOCTO;
+    //     testing_env!(context.clone());
+    //
+    //     let contract_settings = default_contract_settings();
+    //     let mut contract = StakeTokenContract::new(None, contract_settings);
+    //     contract.register_account();
+    //
+    //     context.predecessor_account_id = sender_account_id.to_string();
+    //     testing_env!(context.clone());
+    //     contract.register_account();
+    //
+    //     let mut account = contract.registered_account(sender_account_id);
+    //     account.apply_stake_credit((100 * YOCTO).into());
+    //     contract.save_registered_account(&account);
+    //     contract.total_stake.credit(account.stake.unwrap().amount());
+    //
+    //     let transfer_amount = 10 * YOCTO;
+    //     let mut payload = HashMap::new();
+    //     payload.insert("msg".to_string(), "Happy New Year".to_string());
+    //
+    //     testing_env!(context.clone());
+    //     contract.transfer_with_vault(
+    //         ValidAccountId::try_from(receiver_account_id).unwrap(),
+    //         transfer_amount.into(),
+    //         Some(payload.clone()),
+    //     );
+    //     let vault = contract.vaults.get(&contract.vault_id_sequence).unwrap();
+    //     assert_eq!(vault.balance(), transfer_amount.into());
+    //     assert_eq!(vault.owner_id_hash(), Hash::from(receiver_account_id));
+    //     assert_eq!(
+    //         contract.balance(ValidAccountId::try_from(sender_account_id).unwrap()),
+    //         (90 * YOCTO).into()
+    //     );
+    //
+    //     let receipts = deserialize_receipts(&env::created_receipts());
+    //     println!("{:#?}", receipts);
+    //     {
+    //         let receipt = &receipts[0];
+    //         assert_eq!(receipt.receiver_id, receiver_account_id);
+    //         match receipt.actions.first().unwrap() {
+    //             Action::FunctionCall {
+    //                 method_name, args, ..
+    //             } => {
+    //                 assert_eq!(method_name, "on_receive_with_vault");
+    //                 let args: TransferWithVaultArgs = serde_json::from_str(args).unwrap();
+    //                 assert_eq!(args.vault_id, contract.vault_id_sequence.value().into());
+    //                 assert_eq!(args.headers.unwrap(), payload);
+    //             }
+    //             _ => panic!("invalid action type"),
+    //         }
+    //     }
+    //     {
+    //         let receipt = &receipts[1];
+    //         assert_eq!(receipt.receiver_id, context.current_account_id);
+    //         match receipt.actions.first().unwrap() {
+    //             Action::FunctionCall {
+    //                 method_name, args, ..
+    //             } => {
+    //                 assert_eq!(method_name, "resolve_vault");
+    //                 let args: ResolveVaultArgs = serde_json::from_str(args).unwrap();
+    //                 assert_eq!(args.vault_id, contract.vault_id_sequence.value().into());
+    //                 assert_eq!(args.sender_id, sender_account_id);
+    //             }
+    //             _ => panic!("invalid action type"),
+    //         }
+    //     }
+    // }
 
     #[test]
     #[should_panic(expected = "account STAKE balance is to low to fulfill request")]
@@ -1091,6 +1089,7 @@ mod test {
 
     #[derive(Deserialize)]
     #[serde(crate = "near_sdk::serde")]
+    #[allow(dead_code)]
     struct TransferWithVaultArgs {
         vault_id: U128,
         headers: Option<HashMap<String, String>>,
@@ -1098,6 +1097,7 @@ mod test {
 
     #[derive(Deserialize)]
     #[serde(crate = "near_sdk::serde")]
+    #[allow(dead_code)]
     struct ResolveVaultArgs {
         vault_id: U128,
         sender_id: String,

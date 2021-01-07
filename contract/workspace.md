@@ -1,7 +1,7 @@
 # Workspace Setup
 ```shell script
 sudo apt update
-sudo apt install libssl-dev cmake pkg-config build-essential musl-tools
+sudo apt install libssl-dev cmake pkg-config build-essential musl-tools llvm clang
 # used to format test coverage reports into HTML
 sudo pip3 install pycobertura
 
