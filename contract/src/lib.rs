@@ -108,7 +108,6 @@ pub mod near;
 
 pub use contract::settings::*;
 pub(crate) use contract::*;
-pub(crate) use errors::*;
 
 #[cfg(test)]
 pub(crate) mod test_utils;

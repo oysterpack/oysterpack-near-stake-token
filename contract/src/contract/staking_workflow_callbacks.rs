@@ -9,7 +9,7 @@ use crate::{
     },
     ext_staking_workflow_callbacks,
     interface::staking_service::events::{NearLiquidityAdded, PendingWithdrawalCleared, Staked},
-    near::{assert_predecessor_is_self, log, NO_DEPOSIT},
+    near::{log, NO_DEPOSIT},
 };
 use near_sdk::{env, near_bindgen, Promise};
 
@@ -27,12 +27,11 @@ impl StakeTokenContract {
     /// - if not called by self
     /// - if there is no [StakeBatch](crate::domain::StakeBatch)
     /// - if the upstream promise to get the account from the staking pool failed
+    #[private]
     pub fn on_run_stake_batch(
         &mut self,
         #[callback] staking_pool_account: StakingPoolAccount,
     ) -> Promise {
-        assert_predecessor_is_self();
-
         // the batch should always be present because the purpose of this callback is a step
         // in the batch processing workflow
         // - if the callback was called by itself, and the batch is not present, then there is a bug
@@ -74,13 +73,12 @@ impl StakeTokenContract {
     /// - if not called by self
     /// - if [StakeBatch](crate::domain::StakeBatch) does not exist
     /// - if any of the upstream Promises failed
+    #[private]
     pub fn on_deposit_and_stake(
         &mut self,
         near_liquidity: Option<interface::YoctoNear>,
         #[callback] staking_pool_account: StakingPoolAccount,
     ) {
-        assert_predecessor_is_self();
-
         let batch = self.stake_batch.take().expect(STAKE_BATCH_SHOULD_EXIST);
         assert!(
             self.all_promise_results_succeeded(),

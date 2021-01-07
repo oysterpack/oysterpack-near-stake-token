@@ -2,6 +2,8 @@ extern crate oysterpack_near_stake_token;
 
 use near_sdk_sim::*;
 
+use near_sdk_sim::errors::TxExecutionError;
+use near_sdk_sim::transaction::ExecutionStatus;
 use oysterpack_near_stake_token::{near::YOCTO, ContractSettings, StakeTokenContractContract};
 
 lazy_static! {
@@ -47,5 +49,15 @@ pub fn create_context() -> TestContext {
         contract_owner,
         contract_operator,
         settings,
+    }
+}
+
+pub fn assert_private_func_call(result: ExecutionResult, func_name: &str) {
+    if let ExecutionStatus::Failure(TxExecutionError::ActionError(err)) = result.status() {
+        assert!(err
+            .to_string()
+            .contains(&format!("Method {} is private", func_name)));
+    } else {
+        panic!("expected failure");
     }
 }

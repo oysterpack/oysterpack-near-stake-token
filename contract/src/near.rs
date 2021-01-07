@@ -1,9 +1,6 @@
 pub mod storage_keys;
 
-use crate::{
-    asserts,
-    domain::{EpochHeight, YoctoNear},
-};
+use crate::domain::{EpochHeight, YoctoNear};
 use near_sdk::env;
 use std::fmt::Debug;
 
@@ -22,14 +19,6 @@ pub const NO_DEPOSIT: YoctoNear = YoctoNear(0);
 /// - https://github.com/near/core-contracts/blob/master/staking-pool/src/lib.rs
 ///  - `const NUM_EPOCHS_TO_UNLOCK: EpochHeight = 4;`
 pub const UNSTAKED_NEAR_FUNDS_NUM_EPOCHS_TO_UNLOCK: EpochHeight = EpochHeight(4);
-
-/// asserts that predecessor account is the contract itself - used to enforce that callbacks
-/// should only be called internally - even though they are exposed on the public contract interface
-pub fn assert_predecessor_is_self() {
-    if env::predecessor_account_id() != env::current_account_id() {
-        panic!(asserts::PREDECESSOR_MUST_BE_SELF)
-    }
-}
 
 /// wrapper around `near_sdk::env::log()` which supports structured logging
 pub fn log<T: Debug>(event: T) {

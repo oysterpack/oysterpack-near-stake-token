@@ -14,7 +14,7 @@ use crate::{
         FungibleToken, Metadata, ResolveVaultCallback, SimpleTransfer, TransferProtocol,
         VaultBasedTransfer, VaultId,
     },
-    near::{assert_predecessor_is_self, log, NO_DEPOSIT},
+    near::{log, NO_DEPOSIT},
 };
 use near_sdk::{
     env, json_types::ValidAccountId, json_types::U128, near_bindgen, AccountId, Promise,
@@ -190,9 +190,8 @@ impl VaultBasedTransfer for StakeTokenContract {
 
 #[near_bindgen]
 impl ResolveVaultCallback for StakeTokenContract {
+    #[private]
     fn resolve_vault(&mut self, vault_id: VaultId, sender_id: AccountId) -> U128 {
-        assert_predecessor_is_self();
-
         let vault = self
             .vaults
             .remove(&vault_id.into())
@@ -329,9 +328,8 @@ impl ConfirmTransfer for StakeTokenContract {
 
 #[near_bindgen]
 impl FinalizeTransferCallback for StakeTokenContract {
+    #[private]
     fn finalize_ft_transfer(&mut self, sender: AccountId, recipient: AccountId, amount: U128) {
-        assert_predecessor_is_self();
-
         if self.promise_result_succeeded() {
             // unlock the balance on the recipient account
             let mut receiver = self.registered_account(&recipient);

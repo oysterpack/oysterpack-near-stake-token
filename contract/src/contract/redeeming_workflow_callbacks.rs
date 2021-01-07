@@ -16,17 +16,17 @@ use crate::{
     ext_redeeming_workflow_callbacks, ext_staking_pool,
     interface::BatchId,
     interface::Operator,
-    near::{assert_predecessor_is_self, NO_DEPOSIT},
+    near::NO_DEPOSIT,
 };
 use near_sdk::{env, near_bindgen, Promise, PromiseOrValue};
 
 #[near_bindgen]
 impl StakeTokenContract {
+    #[private]
     pub fn on_run_redeem_stake_batch(
         &mut self,
         #[callback] staking_pool_account: StakingPoolAccount,
     ) -> Promise {
-        assert_predecessor_is_self();
         // this callback should only be invoked when we are unstaking, i.e., when the RedeemStakeBatch
         // is kicked off
         assert!(self.is_unstaking(), ILLEGAL_REDEEM_LOCK_STATE);
@@ -58,8 +58,8 @@ impl StakeTokenContract {
         }
     }
 
+    #[private]
     pub fn on_unstake(&mut self) {
-        assert_predecessor_is_self();
         assert!(self.promise_result_succeeded(), UNSTAKE_FAILURE);
 
         self.create_redeem_stake_batch_receipt();
@@ -67,11 +67,11 @@ impl StakeTokenContract {
         self.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal)
     }
 
+    #[private]
     pub fn on_redeeming_stake_pending_withdrawal(
         &mut self,
         #[callback] staking_pool_account: StakingPoolAccount,
     ) -> PromiseOrValue<BatchId> {
-        assert_predecessor_is_self();
         assert!(self.promise_result_succeeded(), GET_ACCOUNT_FAILURE);
 
         let unstaked_balance = staking_pool_account.unstaked_balance.0;
@@ -92,8 +92,8 @@ impl StakeTokenContract {
         }
     }
 
+    #[private]
     pub fn on_redeeming_stake_post_withdrawal(&mut self) -> BatchId {
-        assert_predecessor_is_self();
         assert!(self.promise_result_succeeded(), WITHDRAW_ALL_FAILURE);
         self.finalize_redeem_batch()
     }
@@ -407,25 +407,6 @@ mod test {
     // }
 
     #[test]
-    #[should_panic(expected = "contract call is only allowed internally")]
-    fn on_run_redeem_stake_batch_invoked_by_non_self() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = 100 * YOCTO;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-
-        contract.on_run_redeem_stake_batch(StakingPoolAccount {
-            account_id: account_id.to_string(),
-            unstaked_balance: U128(0),
-            staked_balance: U128(0),
-            can_withdraw: false,
-        });
-    }
-
-    #[test]
     #[should_panic(expected = "ILLEGAL STATE : redeem stake batch should exist")]
     fn on_run_redeem_stake_batch_invoked_illegal_state_no_redeem_batch() {
         let account_id = "alfio-zappala.near";
@@ -446,20 +427,6 @@ mod test {
             staked_balance: U128(0),
             can_withdraw: false,
         });
-    }
-
-    #[test]
-    #[should_panic(expected = "contract call is only allowed internally")]
-    fn on_unstake_invoked_by_non_self() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = 100 * YOCTO;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-
-        contract.on_unstake();
     }
 
     /// When on_unstake is invoked
