@@ -183,136 +183,14 @@ impl StakeTokenContract {
 }
 
 #[cfg(test)]
-mod test {
+mod test_register_account {
     use super::*;
-    use crate::interface::{AccountManagement, StakingService};
+    use crate::interface::AccountManagement;
     use crate::near::YOCTO;
     use crate::test_utils::*;
     use near_sdk::test_utils::get_created_receipts;
     use near_sdk::{serde_json, testing_env, MockedBlockchain};
-    use std::convert::{TryFrom, TryInto};
-
-    /// the following contract funcs are expected to be invoked in view mode:
-    /// - account_storage_fee
-    /// - account_registered
-    /// - total_registered_accounts
-    /// - lookup_account
-    #[test]
-    fn check_view_funcs() {
-        let mut ctx = TestContext::new(None);
-
-        // given the funcs are called in view mode
-        ctx.context.is_view = true;
-        testing_env!(ctx.context.clone());
-        ctx.contract.account_storage_fee();
-        ctx.contract.total_registered_accounts();
-        ctx.contract
-            .lookup_account(ValidAccountId::try_from(ctx.account_id).unwrap());
-    }
-
-    #[test]
-    fn lookup_account_with_unclaimed_receipts() {
-        let mut test_context = TestContext::new(None);
-        let mut context = test_context.context.clone();
-        let contract = &mut test_context.contract;
-        let account_id = test_context.account_id;
-
-        context.attached_deposit = YOCTO;
-        context.is_view = false;
-        testing_env!(context.clone());
-        contract.register_account();
-
-        context.attached_deposit = 10 * YOCTO;
-        testing_env!(context.clone());
-        contract.deposit();
-
-        let batch = contract.stake_batch.unwrap();
-        // create a stake batch receipt for the stake batch
-        let receipt =
-            domain::StakeBatchReceipt::new(batch.balance().amount(), contract.stake_token_value);
-        contract.stake_batch_receipts.insert(&batch.id(), &receipt);
-        contract.stake_batch = None;
-
-        // create a redeem stake batch receipt for 2 yoctoSTAKE
-        *contract.batch_id_sequence += 1;
-        let redeem_stake_batch =
-            domain::RedeemStakeBatch::new(contract.batch_id_sequence, (2 * YOCTO).into());
-        contract.redeem_stake_batch_receipts.insert(
-            &contract.batch_id_sequence,
-            &domain::RedeemStakeBatchReceipt::new(
-                redeem_stake_batch.balance().amount(),
-                contract.stake_token_value,
-            ),
-        );
-        let mut account = contract.registered_account(account_id);
-        account.redeem_stake_batch = Some(redeem_stake_batch);
-        contract.save_account(&account.id, &account);
-
-        context.is_view = true;
-        testing_env!(context.clone());
-        let account = contract
-            .lookup_account(account_id.try_into().unwrap())
-            .unwrap();
-        assert!(account.stake_batch.is_none());
-        assert!(account.redeem_stake_batch.is_none());
-        assert_eq!(account.stake.unwrap().amount, (10 * YOCTO).into());
-        assert_eq!(account.near.unwrap().amount, (2 * YOCTO).into());
-    }
-
-    #[test]
-    fn lookup_account_with_unclaimed_receipts_pending_withdrawal() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = YOCTO;
-        context.is_view = false;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-        contract.register_account();
-
-        context.attached_deposit = 10 * YOCTO;
-        testing_env!(context.clone());
-        contract.deposit();
-
-        let batch = contract.stake_batch.unwrap();
-        // create a stake batch receipt for the stake batch
-        let receipt =
-            domain::StakeBatchReceipt::new(batch.balance().amount(), contract.stake_token_value);
-        contract.stake_batch_receipts.insert(&batch.id(), &receipt);
-        contract.stake_batch = None;
-
-        // create a redeem stake batch receipt for 2 yoctoSTAKE
-        *contract.batch_id_sequence += 1;
-        let redeem_stake_batch =
-            domain::RedeemStakeBatch::new(contract.batch_id_sequence, (2 * YOCTO).into());
-        contract.redeem_stake_batch = Some(redeem_stake_batch);
-        contract.redeem_stake_batch_receipts.insert(
-            &contract.batch_id_sequence,
-            &domain::RedeemStakeBatchReceipt::new(
-                redeem_stake_batch.balance().amount(),
-                contract.stake_token_value,
-            ),
-        );
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
-        let mut account = contract.registered_account(account_id);
-        account.redeem_stake_batch = Some(redeem_stake_batch);
-        contract.save_account(&account.id, &account);
-
-        context.is_view = true;
-        testing_env!(context.clone());
-        let account = contract
-            .lookup_account(account_id.try_into().unwrap())
-            .unwrap();
-        assert!(account.stake_batch.is_none());
-        assert_eq!(account.stake.unwrap().amount, (10 * YOCTO).into());
-        assert!(account.near.is_none());
-        account
-            .redeem_stake_batch
-            .unwrap()
-            .receipt
-            .expect("receipt should be present");
-    }
+    use std::convert::TryInto;
 
     /// - Given the account is not currently registered
     /// - When a new account is registered with attached deposit to stake
@@ -436,28 +314,16 @@ mod test {
 
         contract.register_account();
     }
+}
 
-    #[test]
-    fn lookup_account() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = 10 * YOCTO;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-
-        assert!(contract
-            .lookup_account(account_id.try_into().unwrap())
-            .is_none());
-        contract.register_account();
-
-        let stake_account = contract
-            .lookup_account(account_id.try_into().unwrap())
-            .unwrap();
-        let stake_account_json = serde_json::to_string_pretty(&stake_account).unwrap();
-        println!("{}", stake_account_json);
-    }
+#[cfg(test)]
+mod test_unregister_account {
+    use super::*;
+    use crate::interface::AccountManagement;
+    use crate::test_utils::*;
+    use near_sdk::{testing_env, MockedBlockchain};
+    use std::convert::TryInto;
+    use std::ops::DerefMut;
 
     #[test]
     fn unregister_registered_account_with_no_funds() {
@@ -495,20 +361,11 @@ mod test {
         expected = "all funds must be withdrawn from the account in order to unregister"
     )]
     fn unregister_account_with_staked_funds() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = expected_account_storage_fee() + 1;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-        contract.register_account();
-
-        // given the account has STAKE funds
-        let contract_hash = Hash::from(&env::predecessor_account_id());
-        let mut account = contract.accounts.get(&contract_hash).unwrap();
-        account.apply_stake_credit(1.into());
-        contract.save_account(&contract_hash, &account);
+        let mut test_context = TestContext::with_registered_account(None);
+        let contract = &mut test_context.contract;
+        let mut account = contract.registered_account(test_context.account_id);
+        account.deref_mut().apply_stake_credit(1.into());
+        contract.save_registered_account(&account);
 
         // then unregister will fail
         contract.unregister_account();
@@ -519,21 +376,13 @@ mod test {
         expected = "all funds must be withdrawn from the account in order to unregister"
     )]
     fn unregister_account_with_stake_funds() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = expected_account_storage_fee();
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-
-        contract.register_account();
+        let mut test_context = TestContext::with_registered_account(None);
+        let contract = &mut test_context.contract;
 
         // credit some STAKE
-        let account_hash = Hash::from(&env::predecessor_account_id());
-        let mut account = contract.accounts.get(&account_hash).unwrap();
-        account.apply_stake_credit(1.into());
-        contract.accounts.insert(&account_hash, &account);
+        let mut account = contract.registered_account(test_context.account_id);
+        account.deref_mut().apply_stake_credit(1.into());
+        contract.save_registered_account(&account);
         contract.unregister_account();
     }
 
@@ -542,173 +391,177 @@ mod test {
         expected = "all funds must be withdrawn from the account in order to unregister"
     )]
     fn unregister_account_with_near_funds() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = expected_account_storage_fee();
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-
-        contract.register_account();
+        let mut test_context = TestContext::with_registered_account(None);
+        let contract = &mut test_context.contract;
 
         // credit some NEAR
-        let account_hash = Hash::from(&env::predecessor_account_id());
-        let mut account = contract.accounts.get(&account_hash).unwrap();
-        account.apply_near_credit(1.into());
-        contract.accounts.insert(&account_hash, &account);
+        let mut account = contract.registered_account(test_context.account_id);
+        account.deref_mut().apply_near_credit(1.into());
+        contract.save_registered_account(&account);
         contract.unregister_account();
     }
 
     #[test]
     #[should_panic(expected = "account is not registered")]
     fn unregister_unknown_account() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = expected_account_storage_fee() + 1;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-
-        contract.unregister_account();
+        let mut test_context = TestContext::new(None);
+        test_context.contract.unregister_account();
     }
+}
+
+#[cfg(test)]
+mod test_lookup_account {
+    use super::*;
+    use crate::interface::{AccountManagement, StakingService};
+    use crate::near::YOCTO;
+    use crate::test_utils::*;
+    use near_sdk::{serde_json, testing_env, MockedBlockchain};
+    use std::convert::TryInto;
 
     #[test]
-    fn withdraw_partial_funds() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.account_balance = 100 * YOCTO;
-        context.attached_deposit = expected_account_storage_fee();
+    fn with_unclaimed_receipts() {
+        let mut ctx = TestContext::with_registered_account(None);
+        let mut context = ctx.context;
+        let contract = &mut ctx.contract;
+
+        context.attached_deposit = 10 * YOCTO;
         testing_env!(context.clone());
+        contract.deposit();
 
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
+        let batch = contract.stake_batch.unwrap();
+        // create a stake batch receipt for the stake batch
+        let receipt =
+            domain::StakeBatchReceipt::new(batch.balance().amount(), contract.stake_token_value);
+        contract.stake_batch_receipts.insert(&batch.id(), &receipt);
+        contract.stake_batch = None;
 
-        contract.register_account();
-
-        // Given the account has some NEAR balance
-        let account_hash = Hash::from(&env::predecessor_account_id());
-        let mut account = contract.accounts.get(&account_hash).unwrap();
-        account.apply_near_credit((10 * YOCTO).into());
-        contract.accounts.insert(&account_hash, &account);
-        contract.total_near.credit(account.near.unwrap().amount());
-
-        // When partial funds are withdrawn
-        contract.withdraw((5 * YOCTO).into());
-        // Assert that the account NEAR balance was debited
-        let account = contract.accounts.get(&account_hash).unwrap();
-        assert_eq!(account.near.unwrap().amount(), (5 * YOCTO).into());
-    }
-
-    #[test]
-    fn withdraw_all_has_near_funds() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.account_balance = 100 * YOCTO;
-        context.attached_deposit = expected_account_storage_fee();
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-
-        contract.register_account();
-
-        // Given the account has some NEAR balance
-        let account_hash = Hash::from(&env::predecessor_account_id());
-        let mut account = contract.accounts.get(&account_hash).unwrap();
-        account.apply_near_credit((10 * YOCTO).into());
-        contract.accounts.insert(&account_hash, &account);
-        contract.total_near.credit(account.near.unwrap().amount());
-
-        contract.withdraw_all();
-        // Assert that the account NEAR balance was debited
-        let account = contract.accounts.get(&account_hash).unwrap();
-        assert!(account.near.is_none());
-    }
-
-    #[test]
-    fn withdraw_all_has_near_funds_in_unclaimed_receipts() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.account_balance = 100 * YOCTO;
-        context.attached_deposit = expected_account_storage_fee();
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-
-        contract.register_account();
-
-        // Given the account has some NEAR balance
-        let account_hash = Hash::from(&env::predecessor_account_id());
-        let mut account = contract.accounts.get(&account_hash).unwrap();
+        // create a redeem stake batch receipt for 2 yoctoSTAKE
         *contract.batch_id_sequence += 1;
-        account.redeem_stake_batch = Some(RedeemStakeBatch::new(
-            contract.batch_id_sequence,
-            YOCTO.into(),
-        ));
-        contract.accounts.insert(&account_hash, &account);
-        contract.total_near.credit(YOCTO.into());
+        let redeem_stake_batch =
+            domain::RedeemStakeBatch::new(contract.batch_id_sequence, (2 * YOCTO).into());
         contract.redeem_stake_batch_receipts.insert(
             &contract.batch_id_sequence,
-            &RedeemStakeBatchReceipt::new(YOCTO.into(), contract.stake_token_value),
+            &domain::RedeemStakeBatchReceipt::new(
+                redeem_stake_batch.balance().amount(),
+                contract.stake_token_value,
+            ),
         );
+        let mut account = contract.registered_account(ctx.account_id);
+        account.redeem_stake_batch = Some(redeem_stake_batch);
+        contract.save_account(&account.id, &account);
 
-        contract.withdraw_all();
-        // Assert that the account NEAR balance was debited
-        let account = contract.accounts.get(&account_hash).unwrap();
+        context.is_view = true;
+        testing_env!(context.clone());
+        let account = contract
+            .lookup_account(ctx.account_id.try_into().unwrap())
+            .unwrap();
+        assert!(account.stake_batch.is_none());
+        assert!(account.redeem_stake_batch.is_none());
+        assert_eq!(account.stake.unwrap().amount, (10 * YOCTO).into());
+        assert_eq!(account.near.unwrap().amount, (2 * YOCTO).into());
+    }
+
+    #[test]
+    fn with_unclaimed_receipts_pending_withdrawal() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = YOCTO;
+        context.is_view = false;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(None, contract_settings);
+        contract.register_account();
+
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+
+        let batch = contract.stake_batch.unwrap();
+        // create a stake batch receipt for the stake batch
+        let receipt =
+            domain::StakeBatchReceipt::new(batch.balance().amount(), contract.stake_token_value);
+        contract.stake_batch_receipts.insert(&batch.id(), &receipt);
+        contract.stake_batch = None;
+
+        // create a redeem stake batch receipt for 2 yoctoSTAKE
+        *contract.batch_id_sequence += 1;
+        let redeem_stake_batch =
+            domain::RedeemStakeBatch::new(contract.batch_id_sequence, (2 * YOCTO).into());
+        contract.redeem_stake_batch = Some(redeem_stake_batch);
+        contract.redeem_stake_batch_receipts.insert(
+            &contract.batch_id_sequence,
+            &domain::RedeemStakeBatchReceipt::new(
+                redeem_stake_batch.balance().amount(),
+                contract.stake_token_value,
+            ),
+        );
+        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+        let mut account = contract.registered_account(account_id);
+        account.redeem_stake_batch = Some(redeem_stake_batch);
+        contract.save_account(&account.id, &account);
+
+        context.is_view = true;
+        testing_env!(context.clone());
+        let account = contract
+            .lookup_account(account_id.try_into().unwrap())
+            .unwrap();
+        assert!(account.stake_batch.is_none());
+        assert_eq!(account.stake.unwrap().amount, (10 * YOCTO).into());
         assert!(account.near.is_none());
+        account
+            .redeem_stake_batch
+            .unwrap()
+            .receipt
+            .expect("receipt should be present");
     }
 
     #[test]
-    #[should_panic(expected = "account NEAR balance is too low to fulfill request")]
-    fn withdraw_with_no_near_funds() {
+    fn lookup_registered_account() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
-        context.attached_deposit = 100 * YOCTO;
+        context.attached_deposit = 10 * YOCTO;
         testing_env!(context.clone());
 
         let contract_settings = default_contract_settings();
         let mut contract = StakeTokenContract::new(None, contract_settings);
 
+        assert!(contract
+            .lookup_account(account_id.try_into().unwrap())
+            .is_none());
         contract.register_account();
-        contract.withdraw((50 * YOCTO).into());
+
+        let stake_account = contract
+            .lookup_account(account_id.try_into().unwrap())
+            .unwrap();
+        let stake_account_json = serde_json::to_string_pretty(&stake_account).unwrap();
+        println!("{}", stake_account_json);
     }
+}
 
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::interface::AccountManagement;
+    use crate::test_utils::*;
+    use near_sdk::{testing_env, MockedBlockchain};
+    use std::convert::TryFrom;
+
+    /// the following contract funcs are expected to be invoked in view mode:
+    /// - account_storage_fee
+    /// - account_registered
+    /// - total_registered_accounts
+    /// - lookup_account
     #[test]
-    #[should_panic(expected = "account NEAR balance is too low to fulfill request")]
-    fn withdraw_with_insufficient_funds() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = 100 * YOCTO;
-        testing_env!(context.clone());
+    fn check_view_funcs() {
+        let mut ctx = TestContext::new(None);
 
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-
-        contract.register_account();
-
-        // Given the account has some NEAR balance
-        let account_hash = Hash::from(&env::predecessor_account_id());
-        let mut account = contract.accounts.get(&account_hash).unwrap();
-        account.apply_near_credit((10 * YOCTO).into());
-        contract.accounts.insert(&account_hash, &account);
-
-        contract.withdraw((50 * YOCTO).into());
-    }
-
-    #[test]
-    fn withdraw_all_with_no_near_funds() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = 100 * YOCTO;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-
-        contract.register_account();
-        assert_eq!(contract.withdraw_all().value(), 0);
+        // given the funcs are called in view mode
+        ctx.context.is_view = true;
+        testing_env!(ctx.context.clone());
+        ctx.contract.account_storage_fee();
+        ctx.contract.total_registered_accounts();
+        ctx.contract
+            .lookup_account(ValidAccountId::try_from(ctx.account_id).unwrap());
     }
 }

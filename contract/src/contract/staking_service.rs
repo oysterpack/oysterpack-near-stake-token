@@ -1931,6 +1931,118 @@ mod test_withdraw_all_from_stake_batch {
 }
 
 #[cfg(test)]
+mod test_withdraw {
+    use super::*;
+
+    use crate::{near::YOCTO, test_utils::*};
+    use std::ops::DerefMut;
+
+    #[test]
+    fn partial_funds() {
+        let mut test_context = TestContext::with_registered_account(None);
+        let contract = &mut test_context.contract;
+
+        // Given the account has some NEAR balance
+        let mut account = contract.registered_account(test_context.account_id);
+        account.deref_mut().apply_near_credit((10 * YOCTO).into());
+        contract.save_registered_account(&account);
+        contract.total_near.credit(account.near.unwrap().amount());
+
+        // When partial funds are withdrawn
+        contract.withdraw((5 * YOCTO).into());
+        // Assert that the account NEAR balance was debited
+        let account = contract.registered_account(test_context.account_id);
+        assert_eq!(*account.near.unwrap().amount(), (5 * YOCTO).into());
+    }
+
+    #[test]
+    #[should_panic(expected = "account NEAR balance is too low to fulfill request")]
+    fn with_no_near_funds() {
+        let mut test_context = TestContext::with_registered_account(None);
+        test_context.contract.withdraw((50 * YOCTO).into());
+    }
+
+    #[test]
+    #[should_panic(expected = "account NEAR balance is too low to fulfill request")]
+    fn with_insufficient_funds() {
+        let mut test_context = TestContext::with_registered_account(None);
+        let contract = &mut test_context.contract;
+
+        // Given the account has some NEAR balance
+        let mut account = contract.registered_account(test_context.account_id);
+        account.deref_mut().apply_near_credit((10 * YOCTO).into());
+        contract.save_registered_account(&account);
+
+        contract.withdraw((50 * YOCTO).into());
+    }
+}
+
+#[cfg(test)]
+mod test_withdraw_all {
+    use super::*;
+
+    use crate::{interface::AccountManagement, near::YOCTO, test_utils::*};
+    use near_sdk::{testing_env, MockedBlockchain};
+    use std::ops::Deref;
+
+    #[test]
+    fn has_near_funds() {
+        let mut test_context = TestContext::with_registered_account(None);
+        let contract = &mut test_context.contract;
+
+        // Given the account has some NEAR balance
+        let mut account = contract.registered_account(test_context.account_id);
+        account.apply_near_credit((10 * YOCTO).into());
+        contract.save_registered_account(&account);
+        contract.total_near.credit(account.near.unwrap().amount());
+
+        contract.withdraw_all();
+        // Assert that the account NEAR balance was debited
+        let account = contract.registered_account(test_context.account_id);
+        assert!(account.deref().near.is_none());
+    }
+
+    #[test]
+    fn has_near_funds_in_unclaimed_receipts() {
+        let mut test_context = TestContext::with_registered_account(None);
+        let contract = &mut test_context.contract;
+
+        // Given the account has some NEAR balance
+        let mut account = contract.registered_account(test_context.account_id);
+        *contract.batch_id_sequence += 1;
+        account.account.redeem_stake_batch = Some(RedeemStakeBatch::new(
+            contract.batch_id_sequence,
+            YOCTO.into(),
+        ));
+        contract.save_registered_account(&account);
+        contract.total_near.credit(YOCTO.into());
+        contract.redeem_stake_batch_receipts.insert(
+            &contract.batch_id_sequence,
+            &domain::RedeemStakeBatchReceipt::new(YOCTO.into(), contract.stake_token_value),
+        );
+
+        contract.withdraw_all();
+        // Assert that the account NEAR balance was debited
+        let account = contract.registered_account(test_context.account_id);
+        assert!(account.account.near.is_none());
+    }
+
+    #[test]
+    fn with_no_near_funds() {
+        let account_id = "alfio-zappala.near";
+        let mut context = new_context(account_id);
+        context.attached_deposit = 100 * YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = default_contract_settings();
+        let mut contract = StakeTokenContract::new(None, contract_settings);
+
+        contract.register_account();
+        assert_eq!(contract.withdraw_all().value(), 0);
+    }
+}
+
+#[cfg(test)]
 mod test {
     use super::*;
 
