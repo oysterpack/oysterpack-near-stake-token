@@ -1259,6 +1259,678 @@ pub trait ExtStakingWorkflowCallbacks {
 }
 
 #[cfg(test)]
+mod test_stake {
+    use super::*;
+
+    use crate::{near::YOCTO, test_utils::*};
+    use near_sdk::{test_utils::*, testing_env, MockedBlockchain};
+
+    /// Given the contract has a stake batch
+    /// And the contract is not locked
+    /// When the stake batch is run
+    /// Then it generates to FunctionCall receipts:
+    ///   1. deposit and stake into the staking pool
+    ///   2. and then to callback into this contract - check_deposit_and_stake
+    ///   3. and finally a callback into this contract to unlock the contract
+    #[test]
+    fn with_no_locks() {
+        let mut test_context = TestContext::with_registered_account(None);
+        let mut context = test_context.context.clone();
+        let contract = &mut test_context.contract;
+
+        context.attached_deposit = YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+
+        context.prepaid_gas = 10u64.pow(18);
+        testing_env!(context.clone());
+        contract.stake();
+        assert!(contract.run_stake_batch_locked);
+        println!(
+            "prepaid gas: {}, used_gas: {}, unused_gas: {}",
+            context.prepaid_gas,
+            env::used_gas(),
+            context.prepaid_gas - env::used_gas()
+        );
+
+        let receipts: Vec<Receipt> = deserialize_receipts(&get_created_receipts());
+        assert_eq!(receipts.len(), 3);
+
+        {
+            let receipt = &receipts[0];
+            let action = &receipt.actions[0];
+            match action {
+                Action::FunctionCall { method_name, .. } => {
+                    assert_eq!(method_name, "deposit_and_stake")
+                }
+                _ => panic!("expected `deposit_and_stake` func call on staking pool"),
+            }
+        }
+
+        {
+            let receipt = &receipts[1];
+            let action = &receipt.actions[0];
+            match action {
+                Action::FunctionCall { method_name, .. } => {
+                    assert_eq!(method_name, "check_deposit_and_stake")
+                }
+                _ => panic!("expected `get_account` func call on staking pool"),
+            }
+        }
+
+        {
+            let receipt = &receipts[2];
+            let action = &receipt.actions[0];
+            match action {
+                Action::FunctionCall { method_name, .. } => {
+                    assert_eq!(method_name, "release_run_stake_batch_lock")
+                }
+                _ => panic!("expected `release_run_stake_batch_lock` callback"),
+            }
+        }
+    }
+
+    /// Given there is a pending withdrawal
+    /// And the contract is not locked
+    /// When the stake batch is run
+    /// Then it generates to FunctionCall receipts:
+    ///   1. get account from staking pool
+    ///   2. and then to callback into this contract - on_run_stake_batch
+    ///   3. and finally a callback into this contract to unlock the contract
+    #[test]
+    fn with_pending_withdrawal() {
+        let mut test_context = TestContext::with_registered_account(None);
+        let mut context = test_context.context.clone();
+        let contract = &mut test_context.contract;
+
+        context.attached_deposit = YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+
+        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+        *contract.batch_id_sequence += 1;
+        let redeem_stake_batch =
+            domain::RedeemStakeBatch::new(contract.batch_id_sequence, YOCTO.into());
+        contract.redeem_stake_batch = Some(redeem_stake_batch);
+        let receipt = redeem_stake_batch.create_receipt(contract.stake_token_value);
+        contract
+            .redeem_stake_batch_receipts
+            .insert(&contract.batch_id_sequence, &receipt);
+
+        context.prepaid_gas = 10u64.pow(18);
+        testing_env!(context.clone());
+        contract.stake();
+
+        let receipts = deserialize_receipts(&get_created_receipts());
+        assert_eq!(receipts.len(), 3);
+
+        {
+            let receipt = &receipts[0];
+            let action = &receipt.actions[0];
+            match action {
+                Action::FunctionCall { method_name, .. } => {
+                    assert_eq!(method_name, "get_account")
+                }
+                _ => panic!("expected `deposit_and_stake` func call on staking pool"),
+            }
+        }
+
+        {
+            let receipt = &receipts[1];
+            let action = &receipt.actions[0];
+            match action {
+                Action::FunctionCall { method_name, .. } => {
+                    assert_eq!(method_name, "on_run_stake_batch")
+                }
+                _ => panic!("expected `get_account` func call on staking pool"),
+            }
+        }
+
+        {
+            let receipt = &receipts[2];
+            let action = &receipt.actions[0];
+            match action {
+                Action::FunctionCall { method_name, .. } => {
+                    assert_eq!(method_name, "release_run_stake_batch_lock")
+                }
+                _ => panic!("expected `release_run_stake_batch_lock` callback"),
+            }
+        }
+    }
+
+    /// Given the stake batch status is set to Deposited - meaning the stake workflow failed downstream
+    ///  from the deposit
+    /// When the stake batch is run
+    /// Then it generates to FunctionCall receipts:
+    ///   1. stake the amount stored in the `StakeBatchStatus` with the staking pool
+    ///   2. and then to callback into this contract - check_stake
+    ///   3. and finally a callback into this contract to unlock the contract
+    #[test]
+    fn with_stake_batch_status_deposited() {
+        let mut test_context = TestContext::with_registered_account(None);
+        let mut context = test_context.context.clone();
+        let contract = &mut test_context.contract;
+
+        context.attached_deposit = YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+
+        contract.stake_batch_status = Some(StakeBatchStatus::Deposited {
+            amount: YOCTO.into(),
+            near_liquidity: Some(YOCTO.into()),
+        });
+
+        context.prepaid_gas = 10u64.pow(18);
+        testing_env!(context.clone());
+        contract.stake();
+
+        let receipts = deserialize_receipts(&get_created_receipts());
+        assert_eq!(receipts.len(), 3);
+
+        {
+            let receipt = &receipts[0];
+            let action = &receipt.actions[0];
+            match action {
+                Action::FunctionCall { method_name, .. } => {
+                    assert_eq!(method_name, "stake")
+                }
+                _ => panic!("expected `deposit_and_stake` func call on staking pool"),
+            }
+        }
+
+        {
+            let receipt = &receipts[1];
+            let action = &receipt.actions[0];
+            match action {
+                Action::FunctionCall { method_name, .. } => {
+                    assert_eq!(method_name, "check_stake")
+                }
+                _ => panic!("expected `get_account` func call on staking pool"),
+            }
+        }
+
+        {
+            let receipt = &receipts[2];
+            let action = &receipt.actions[0];
+            match action {
+                Action::FunctionCall { method_name, .. } => {
+                    assert_eq!(method_name, "release_run_stake_batch_lock")
+                }
+                _ => panic!("expected `release_run_stake_batch_lock` callback"),
+            }
+        }
+    }
+
+    /// Given the stake batch status is set to Staked - meaning the StakeBatch was deposited and staked
+    ///   into the staking pool but there was a failure downstream
+    /// When the stake batch is run
+    /// Then it generates to FunctionCall receipts:
+    ///   1. stake the amount stored in the `StakeBatchStatus` with the staking pool
+    ///   2. and then to callback into this contract - check_stake
+    ///   3. and finally a callback into this contract to unlock the contract
+    #[test]
+    fn with_stake_batch_status_staked() {
+        let mut test_context = TestContext::with_registered_account(None);
+        let mut context = test_context.context.clone();
+        let contract = &mut test_context.contract;
+
+        context.attached_deposit = YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+
+        contract.stake_batch_status = Some(StakeBatchStatus::Staked {
+            near_liquidity: Some(YOCTO.into()),
+        });
+
+        context.prepaid_gas = 10u64.pow(18);
+        testing_env!(context.clone());
+        contract.stake();
+
+        let receipts = deserialize_receipts(&get_created_receipts());
+        assert_eq!(receipts.len(), 3);
+
+        {
+            let receipt = &receipts[0];
+            let action = &receipt.actions[0];
+            match action {
+                Action::FunctionCall { method_name, .. } => {
+                    assert_eq!(method_name, "get_account")
+                }
+                _ => panic!("expected `deposit_and_stake` func call on staking pool"),
+            }
+        }
+
+        {
+            let receipt = &receipts[1];
+            let action = &receipt.actions[0];
+            match action {
+                Action::FunctionCall { method_name, .. } => {
+                    assert_eq!(method_name, "on_deposit_and_stake")
+                }
+                _ => panic!("expected `get_account` func call on staking pool"),
+            }
+        }
+
+        {
+            let receipt = &receipts[2];
+            let action = &receipt.actions[0];
+            match action {
+                Action::FunctionCall { method_name, .. } => {
+                    assert_eq!(method_name, "release_run_stake_batch_lock")
+                }
+                _ => panic!("expected `release_run_stake_batch_lock` callback"),
+            }
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "action is blocked because a batch is running")]
+    fn withdraw_funds_from_stake_batch_while_stake_batch_run_locked_and_stake_batch() {
+        let mut test_context = TestContext::with_registered_account(None);
+        let mut context = test_context.context.clone();
+        let contract = &mut test_context.contract;
+
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+
+        contract.run_stake_batch_locked = true;
+
+        testing_env!(context.clone());
+        contract.withdraw_from_stake_batch(YOCTO.into());
+    }
+
+    #[test]
+    #[should_panic(expected = "action is blocked because a batch is running")]
+    fn withdraw_funds_from_stake_batch_while_unstaking_and_stake_batch() {
+        let mut test_context = TestContext::with_registered_account(None);
+        let mut context = test_context.context.clone();
+        let contract = &mut test_context.contract;
+
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+
+        contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
+
+        testing_env!(context.clone());
+        contract.withdraw_from_stake_batch(YOCTO.into());
+    }
+
+    #[test]
+    #[should_panic(expected = "there are no funds in stake batch")]
+    fn withdraw_funds_from_stake_batch_no_stake_batch() {
+        let mut test_context = TestContext::with_registered_account(None);
+        let context = test_context.context.clone();
+        let contract = &mut test_context.contract;
+
+        testing_env!(context.clone());
+        contract.withdraw_from_stake_batch(YOCTO.into());
+    }
+}
+
+#[cfg(test)]
+mod test_withdraw_from_stake_batch {
+    use super::*;
+
+    use crate::{interface::AccountManagement, near::YOCTO, test_utils::*};
+    use near_sdk::{json_types::ValidAccountId, test_utils::*, testing_env, MockedBlockchain};
+    use std::convert::TryFrom;
+
+    /// Given an account has deposited funds into a stake batch
+    /// And the contract is not locked
+    /// When the account tries to withdraw funds from the batch
+    /// Then the funds are transferred back to the account
+    #[test]
+    fn account_has_uncommitted_stake_batch() {
+        let mut test_context = TestContext::with_registered_account(None);
+        let mut context = test_context.context.clone();
+        let contract = &mut test_context.contract;
+
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+
+        testing_env!(context.clone());
+        contract.withdraw_from_stake_batch(YOCTO.into());
+
+        {
+            let receipts = deserialize_receipts(&get_created_receipts());
+            println!("{:#?}", &receipts);
+            assert_eq!(receipts.len(), 1);
+            let receipt = receipts.first().unwrap();
+            assert_eq!(receipt.receiver_id, test_context.account_id);
+            match receipt.actions.first().unwrap() {
+                Action::Transfer { deposit } => assert_eq!(*deposit, YOCTO),
+                _ => panic!("unexpected action type"),
+            }
+        }
+
+        let account = contract
+            .lookup_account(ValidAccountId::try_from(test_context.account_id).unwrap())
+            .unwrap();
+        assert_eq!(
+            account.stake_batch.unwrap().balance.amount.value(),
+            (9 * YOCTO)
+        );
+        assert_eq!(
+            contract.stake_batch.unwrap().balance().amount().value(),
+            (9 * YOCTO)
+        );
+    }
+
+    #[test]
+    fn withdraw_all_funds_from_batch_specifying_exact_amount() {
+        let mut test_context = TestContext::with_registered_account(None);
+        let mut context = test_context.context.clone();
+        let contract = &mut test_context.contract;
+
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+
+        testing_env!(context.clone());
+        contract.withdraw_from_stake_batch(context.attached_deposit.into());
+
+        {
+            let receipts = deserialize_receipts(&get_created_receipts());
+            assert_eq!(receipts.len(), 1);
+            let receipt = receipts.first().unwrap();
+            assert_eq!(receipt.receiver_id, test_context.account_id);
+            match receipt.actions.first().unwrap() {
+                Action::Transfer { deposit } => assert_eq!(*deposit, context.attached_deposit),
+                _ => panic!("unexpected action type"),
+            }
+        }
+
+        let account = contract
+            .lookup_account(ValidAccountId::try_from(test_context.account_id).unwrap())
+            .unwrap();
+        assert!(account.stake_batch.is_none());
+    }
+
+    /// Given an account has deposited funds into the next stake batch
+    /// And the contract is locked
+    /// When the account tries to withdraw funds from the batch
+    /// Then the funds are transferred back to the account
+    #[test]
+    fn while_stake_batch_is_locked_withdraw_partial() {
+        let mut test_context = TestContext::with_registered_account(None);
+        let mut context = test_context.context.clone();
+        let contract = &mut test_context.contract;
+        contract.run_stake_batch_locked = true;
+
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+
+        testing_env!(context.clone());
+        contract.withdraw_from_stake_batch(YOCTO.into());
+
+        {
+            let receipts = deserialize_receipts(&get_created_receipts());
+            println!("{:#?}", &receipts);
+            assert_eq!(receipts.len(), 1);
+            let receipt = receipts.first().unwrap();
+            assert_eq!(receipt.receiver_id, test_context.account_id);
+            match receipt.actions.first().unwrap() {
+                Action::Transfer { deposit } => assert_eq!(*deposit, YOCTO),
+                _ => panic!("unexpected action type"),
+            }
+        }
+
+        let account = contract
+            .lookup_account(ValidAccountId::try_from(test_context.account_id).unwrap())
+            .unwrap();
+        assert_eq!(
+            account.next_stake_batch.unwrap().balance.amount.value(),
+            (9 * YOCTO)
+        );
+    }
+
+    /// Given an account has deposited funds into the next stake batch
+    /// And the contract is locked
+    /// When the account tries to withdraw all funds from the batch
+    /// Then the funds are transferred back to the account
+    /// And the batch is deleted on the account
+    #[test]
+    fn while_stake_batch_is_locked_withdraw_all() {
+        let mut test_context = TestContext::with_registered_account(None);
+        let mut context = test_context.context.clone();
+        let contract = &mut test_context.contract;
+        contract.run_stake_batch_locked = true;
+
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+
+        testing_env!(context.clone());
+        contract.withdraw_from_stake_batch(context.attached_deposit.into());
+
+        {
+            let receipts = deserialize_receipts(&get_created_receipts());
+            assert_eq!(receipts.len(), 1);
+            let receipt = receipts.first().unwrap();
+            assert_eq!(receipt.receiver_id, test_context.account_id);
+            match receipt.actions.first().unwrap() {
+                Action::Transfer { deposit } => assert_eq!(*deposit, context.attached_deposit),
+                _ => panic!("unexpected action type"),
+            }
+        }
+
+        let account = contract
+            .lookup_account(ValidAccountId::try_from(test_context.account_id).unwrap())
+            .unwrap();
+        assert!(account.next_stake_batch.is_none());
+    }
+}
+
+#[cfg(test)]
+mod test_withdraw_all_from_stake_batch {
+    use super::*;
+
+    use crate::{interface::AccountManagement, near::YOCTO, test_utils::*};
+    use near_sdk::{json_types::ValidAccountId, test_utils::*, testing_env, MockedBlockchain};
+    use std::convert::TryFrom;
+
+    /// Given an account has deposited funds into the next stake batch
+    /// And the contract is locked
+    /// When the account tries to withdraw funds from the batch
+    /// Then the funds are transferred back to the account
+    #[test]
+    fn while_stake_batch_is_locked() {
+        let mut test_context = TestContext::with_registered_account(None);
+        let mut context = test_context.context.clone();
+        let contract = &mut test_context.contract;
+        contract.run_stake_batch_locked = true;
+
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+
+        testing_env!(context.clone());
+        contract.withdraw_all_from_stake_batch();
+
+        {
+            let receipts = deserialize_receipts(&get_created_receipts());
+            assert_eq!(receipts.len(), 1);
+            let receipt = receipts.first().unwrap();
+            assert_eq!(receipt.receiver_id, test_context.account_id);
+            match receipt.actions.first().unwrap() {
+                Action::Transfer { deposit } => assert_eq!(*deposit, 10 * YOCTO),
+                _ => panic!("unexpected action type"),
+            }
+        }
+
+        let account = contract
+            .lookup_account(ValidAccountId::try_from(test_context.account_id).unwrap())
+            .unwrap();
+        assert!(account.next_stake_batch.is_none());
+    }
+
+    #[test]
+    fn while_stake_batch_is_locked_with_other_funds_batch() {
+        let mut test_context = TestContext::with_registered_account(None);
+        let mut context = test_context.context.clone();
+        let contract = &mut test_context.contract;
+        contract.run_stake_batch_locked = true;
+
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+        assert!(contract.next_stake_batch.is_some());
+        if let Some(batch) = contract.next_stake_batch.as_mut() {
+            batch.add(YOCTO.into());
+        }
+
+        testing_env!(context.clone());
+        contract.withdraw_all_from_stake_batch();
+
+        {
+            let receipts = deserialize_receipts(&get_created_receipts());
+            assert_eq!(receipts.len(), 1);
+            let receipt = receipts.first().unwrap();
+            assert_eq!(receipt.receiver_id, test_context.account_id);
+            match receipt.actions.first().unwrap() {
+                Action::Transfer { deposit } => assert_eq!(*deposit, 10 * YOCTO),
+                _ => panic!("unexpected action type"),
+            }
+        }
+
+        let account = contract
+            .lookup_account(ValidAccountId::try_from(test_context.account_id).unwrap())
+            .unwrap();
+        assert!(account.next_stake_batch.is_none());
+        assert_eq!(
+            contract.next_stake_batch.unwrap().balance().amount(),
+            YOCTO.into()
+        );
+    }
+
+    #[test]
+    fn from_uncommitted_stake_batch() {
+        let mut test_context = TestContext::with_registered_account(None);
+        let mut context = test_context.context.clone();
+        let contract = &mut test_context.contract;
+
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+        let account = contract
+            .lookup_account(ValidAccountId::try_from(test_context.account_id).unwrap())
+            .unwrap();
+        assert!(account.stake_batch.is_some());
+        assert!(contract.stake_batch.is_some());
+
+        testing_env!(context.clone());
+        contract.withdraw_all_from_stake_batch();
+
+        {
+            let receipts = deserialize_receipts(&get_created_receipts());
+            assert_eq!(receipts.len(), 1);
+            let receipt = receipts.first().unwrap();
+            assert_eq!(receipt.receiver_id, test_context.account_id);
+            match receipt.actions.first().unwrap() {
+                Action::Transfer { deposit } => assert_eq!(*deposit, 10 * YOCTO),
+                _ => panic!("unexpected action type"),
+            }
+        }
+
+        let account = contract
+            .lookup_account(ValidAccountId::try_from(test_context.account_id).unwrap())
+            .unwrap();
+        assert!(account.stake_batch.is_none());
+        assert!(contract.stake_batch.is_none());
+    }
+
+    #[test]
+    fn from_uncommitted_stake_batch_with_other_funds_batched() {
+        let mut test_context = TestContext::with_registered_account(None);
+        let mut context = test_context.context.clone();
+        let contract = &mut test_context.contract;
+
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+        let account = contract
+            .lookup_account(ValidAccountId::try_from(test_context.account_id).unwrap())
+            .unwrap();
+        assert!(account.stake_batch.is_some());
+        assert!(contract.stake_batch.is_some());
+        if let Some(batch) = contract.stake_batch.as_mut() {
+            batch.add(YOCTO.into());
+        }
+
+        testing_env!(context.clone());
+        contract.withdraw_all_from_stake_batch();
+
+        {
+            let receipts = deserialize_receipts(&get_created_receipts());
+            assert_eq!(receipts.len(), 1);
+            let receipt = receipts.first().unwrap();
+            assert_eq!(receipt.receiver_id, test_context.account_id);
+            match receipt.actions.first().unwrap() {
+                Action::Transfer { deposit } => assert_eq!(*deposit, 10 * YOCTO),
+                _ => panic!("unexpected action type"),
+            }
+        }
+
+        let account = contract
+            .lookup_account(ValidAccountId::try_from(test_context.account_id).unwrap())
+            .unwrap();
+        assert!(account.stake_batch.is_none());
+        assert_eq!(
+            contract.stake_batch.unwrap().balance().amount(),
+            YOCTO.into()
+        );
+    }
+
+    #[test]
+    fn with_no_stake_batch() {
+        let mut test_context = TestContext::with_registered_account(None);
+        let context = test_context.context.clone();
+        let contract = &mut test_context.contract;
+
+        testing_env!(context.clone());
+        assert_eq!(contract.withdraw_all_from_stake_batch().value(), 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "action is blocked because a batch is running")]
+    fn withdraw_all_funds_from_stake_batch_while_unstaking() {
+        let mut test_context = TestContext::with_registered_account(None);
+        let mut context = test_context.context.clone();
+        let contract = &mut test_context.contract;
+
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+
+        contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
+
+        testing_env!(context.clone());
+        contract.withdraw_all_from_stake_batch();
+    }
+
+    #[test]
+    #[should_panic(expected = "action is blocked because a batch is running")]
+    fn withdraw_all_funds_from_stake_batch_while_stake_batch_is_locked() {
+        let mut test_context = TestContext::with_registered_account(None);
+        let mut context = test_context.context.clone();
+        let contract = &mut test_context.contract;
+
+        context.attached_deposit = 10 * YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+
+        contract.run_stake_batch_locked = true;
+
+        testing_env!(context.clone());
+        contract.withdraw_all_from_stake_batch();
+    }
+}
+
+#[cfg(test)]
 mod test {
     use super::*;
 
@@ -1419,7 +2091,7 @@ mod test {
     /// When funds are claimed
     /// Then there should be no effect
     #[test]
-    fn claim_all_batch_receipt_funds_with_no_batched_funds() {
+    fn claim_receipt_funds_with_no_batched_funds() {
         let mut test_context = TestContext::with_registered_account(None);
         let contract = &mut test_context.contract;
 
@@ -1433,7 +2105,7 @@ mod test {
     /// When funds are claimed
     /// Then there should be no effect on the account
     #[test]
-    fn claim_all_batch_receipt_funds_with_funds_in_stake_batch_and_no_receipt() {
+    fn claim_receipt_funds_with_funds_in_stake_batch_and_no_receipt() {
         let mut test_context = TestContext::with_registered_account(None);
         let contract = &mut test_context.contract;
 
@@ -1461,7 +2133,7 @@ mod test {
     /// Then the STAKE tokens should be credited to the account
     /// And the receipt NEAR balance should have been debited
     #[test]
-    fn claim_all_batch_receipt_funds_with_funds_in_stake_batch_and_with_receipt() {
+    fn claim_receipt_funds_with_funds_in_stake_batch_and_with_receipt() {
         let mut test_context = TestContext::with_registered_account(None);
         let contract = &mut test_context.contract;
 
@@ -1537,7 +2209,7 @@ mod test {
     /// Then the STAKE tokens should be credited to the account
     /// And the receipt is deleted
     #[test]
-    fn claim_all_batch_receipt_funds_with_all_stake_batch_funds_claimed_on_receipt() {
+    fn claim_receipt_funds_with_all_stake_batch_funds_claimed_on_receipt() {
         let mut test_context = TestContext::with_registered_account(None);
         let contract = &mut test_context.contract;
 
@@ -1585,7 +2257,7 @@ mod test {
     /// Then STAKE tokens should be claimed for both
     /// And the receipts should be deleted
     #[test]
-    fn claim_all_batch_receipt_funds_with_stake_batch_and_next_stake_batch_funds_with_receipts() {
+    fn claim_receipt_funds_with_stake_batch_and_next_stake_batch_funds_with_receipts() {
         let mut test_context = TestContext::with_registered_account(None);
         let contract = &mut test_context.contract;
 
@@ -1794,71 +2466,6 @@ mod test {
             contract.stake_token_value.total_staked_near_balance(),
             YOCTO.into()
         );
-    }
-
-    /// Given the contract has a stake batch
-    /// And the contract is not locked
-    /// When the stake batch is run
-    /// Then it generates to FunctionCall receipts:
-    ///   1. deposit and stake into the staking pool
-    ///   2. and then to callback into this contract - check_deposit_and_stake
-    ///   3. and finally a callback into this contract to unlock the contract
-    #[test]
-    fn stake_success() {
-        let mut test_context = TestContext::with_registered_account(None);
-        let mut context = test_context.context.clone();
-        let contract = &mut test_context.contract;
-
-        context.attached_deposit = YOCTO;
-        testing_env!(context.clone());
-        contract.deposit();
-
-        context.prepaid_gas = 10u64.pow(18);
-        testing_env!(context.clone());
-        contract.stake();
-        assert!(contract.run_stake_batch_locked);
-        println!(
-            "prepaid gas: {}, used_gas: {}, unused_gas: {}",
-            context.prepaid_gas,
-            env::used_gas(),
-            context.prepaid_gas - env::used_gas()
-        );
-
-        let receipts: Vec<Receipt> = deserialize_receipts(&get_created_receipts());
-        assert_eq!(receipts.len(), 3);
-
-        {
-            let receipt = &receipts[0];
-            let action = &receipt.actions[0];
-            match action {
-                Action::FunctionCall { method_name, .. } => {
-                    assert_eq!(method_name, "deposit_and_stake")
-                }
-                _ => panic!("expected `deposit_and_stake` func call on staking pool"),
-            }
-        }
-
-        {
-            let receipt = &receipts[1];
-            let action = &receipt.actions[0];
-            match action {
-                Action::FunctionCall { method_name, .. } => {
-                    assert_eq!(method_name, "check_deposit_and_stake")
-                }
-                _ => panic!("expected `get_account` func call on staking pool"),
-            }
-        }
-
-        {
-            let receipt = &receipts[2];
-            let action = &receipt.actions[0];
-            match action {
-                Action::FunctionCall { method_name, .. } => {
-                    assert_eq!(method_name, "release_run_stake_batch_lock")
-                }
-                _ => panic!("expected `release_run_stake_batch_lock` callback"),
-            }
-        }
     }
 
     #[test]
@@ -2983,387 +3590,6 @@ mod test {
         assert!(account.next_redeem_stake_batch.is_none());
         assert_eq!(account.stake.unwrap().amount, (2 * 10 * YOCTO).into());
         assert_eq!(account.near.unwrap().amount, (2 * 2 * YOCTO).into());
-    }
-
-    /// Given an account has deposited funds into a stake batch
-    /// And the contract is not locked
-    /// When the account tries to withdraw funds from the batch
-    /// Then the funds are transferred back to the account
-    // #[test]
-    // fn withdraw_funds_from_stake_batch_success() {
-    //     let account_id = "alfio-zappala.near";
-    //     let mut context = new_context(account_id);
-    //     context.attached_deposit = YOCTO;
-    //     context.is_view = false;
-    //     testing_env!(context.clone());
-    //
-    //     let contract_settings = default_contract_settings();
-    //     let mut contract = StakeTokenContract::new(None, contract_settings);
-    //     contract.register_account();
-    //
-    //     context.attached_deposit = 10 * YOCTO;
-    //     testing_env!(context.clone());
-    //     contract.deposit();
-    //
-    //     testing_env!(context.clone());
-    //     contract.withdraw_funds_from_stake_batch(YOCTO.into());
-    //
-    //     {
-    //         let receipts = deserialize_receipts(&env::created_receipts());
-    //         println!("{:#?}", &receipts);
-    //         assert_eq!(receipts.len(), 1);
-    //         let receipt = receipts.first().unwrap();
-    //         assert_eq!(receipt.receiver_id, account_id);
-    //         match receipt.actions.first().unwrap() {
-    //             Action::Transfer { deposit } => assert_eq!(*deposit, YOCTO),
-    //             _ => panic!("unexpected action type"),
-    //         }
-    //     }
-    //
-    //     let account = contract
-    //         .lookup_account(ValidAccountId::try_from(account_id).unwrap())
-    //         .unwrap();
-    //     assert_eq!(
-    //         account.stake_batch.unwrap().balance.amount.value(),
-    //         (9 * YOCTO)
-    //     );
-    //     assert_eq!(
-    //         contract.stake_batch.unwrap().balance().amount().value(),
-    //         (9 * YOCTO)
-    //     );
-    // }
-
-    // #[test]
-    // fn withdraw_funds_from_stake_batch_all_funds_success() {
-    //     let account_id = "alfio-zappala.near";
-    //     let mut context = new_context(account_id);
-    //     context.attached_deposit = YOCTO;
-    //     context.is_view = false;
-    //     testing_env!(context.clone());
-    //
-    //     let contract_settings = default_contract_settings();
-    //     let mut contract = StakeTokenContract::new(None, contract_settings);
-    //     contract.register_account();
-    //
-    //     context.attached_deposit = 10 * YOCTO;
-    //     testing_env!(context.clone());
-    //     contract.deposit();
-    //
-    //     testing_env!(context.clone());
-    //     contract.withdraw_funds_from_stake_batch(context.attached_deposit.into());
-    //
-    //     {
-    //         let receipts = deserialize_receipts(&env::created_receipts());
-    //         println!("{:#?}", &receipts);
-    //         assert_eq!(receipts.len(), 1);
-    //         let receipt = receipts.first().unwrap();
-    //         assert_eq!(receipt.receiver_id, account_id);
-    //         match receipt.actions.first().unwrap() {
-    //             Action::Transfer { deposit } => assert_eq!(*deposit, context.attached_deposit),
-    //             _ => panic!("unexpected action type"),
-    //         }
-    //     }
-    //
-    //     let account = contract
-    //         .lookup_account(ValidAccountId::try_from(account_id).unwrap())
-    //         .unwrap();
-    //     assert!(account.stake_batch.is_none());
-    // }
-
-    /// Given an account has deposited funds into the next stake batch
-    /// And the contract is locked
-    /// When the account tries to withdraw funds from the batch
-    /// Then the funds are transferred back to the account
-    // #[test]
-    // fn withdraw_funds_from_stake_batch_while_stake_batch_run_locked_success() {
-    //     let account_id = "alfio-zappala.near";
-    //     let mut context = new_context(account_id);
-    //     context.attached_deposit = YOCTO;
-    //     context.is_view = false;
-    //     testing_env!(context.clone());
-    //
-    //     let contract_settings = default_contract_settings();
-    //     let mut contract = StakeTokenContract::new(None, contract_settings);
-    //     contract.register_account();
-    //     contract.run_stake_batch_locked = true;
-    //
-    //     context.attached_deposit = 10 * YOCTO;
-    //     testing_env!(context.clone());
-    //     contract.deposit();
-    //
-    //     testing_env!(context.clone());
-    //     contract.withdraw_funds_from_stake_batch(YOCTO.into());
-    //
-    //     {
-    //         let receipts = deserialize_receipts(&env::created_receipts());
-    //         println!("{:#?}", &receipts);
-    //         assert_eq!(receipts.len(), 1);
-    //         let receipt = receipts.first().unwrap();
-    //         assert_eq!(receipt.receiver_id, account_id);
-    //         match receipt.actions.first().unwrap() {
-    //             Action::Transfer { deposit } => assert_eq!(*deposit, YOCTO),
-    //             _ => panic!("unexpected action type"),
-    //         }
-    //     }
-    //
-    //     let account = contract
-    //         .lookup_account(ValidAccountId::try_from(account_id).unwrap())
-    //         .unwrap();
-    //     assert_eq!(
-    //         account.next_stake_batch.unwrap().balance.amount.value(),
-    //         (9 * YOCTO)
-    //     );
-    // }
-
-    /// Given an account has deposited funds into the next stake batch
-    /// And the contract is locked
-    /// When the account tries to withdraw funds from the batch
-    /// Then the funds are transferred back to the account
-    // #[test]
-    // fn withdraw_funds_from_stake_batch_while_stake_batch_run_locked_all_funds_auccess() {
-    //     let account_id = "alfio-zappala.near";
-    //     let mut context = new_context(account_id);
-    //     context.attached_deposit = YOCTO;
-    //     context.is_view = false;
-    //     testing_env!(context.clone());
-    //
-    //     let contract_settings = default_contract_settings();
-    //     let mut contract = StakeTokenContract::new(None, contract_settings);
-    //     contract.register_account();
-    //     contract.run_stake_batch_locked = true;
-    //
-    //     context.attached_deposit = 10 * YOCTO;
-    //     testing_env!(context.clone());
-    //     contract.deposit();
-    //
-    //     testing_env!(context.clone());
-    //     contract.withdraw_funds_from_stake_batch(context.attached_deposit.into());
-    //
-    //     {
-    //         let receipts = deserialize_receipts(&env::created_receipts());
-    //         println!("{:#?}", &receipts);
-    //         assert_eq!(receipts.len(), 1);
-    //         let receipt = receipts.first().unwrap();
-    //         assert_eq!(receipt.receiver_id, account_id);
-    //         match receipt.actions.first().unwrap() {
-    //             Action::Transfer { deposit } => assert_eq!(*deposit, context.attached_deposit),
-    //             _ => panic!("unexpected action type"),
-    //         }
-    //     }
-    //
-    //     let account = contract
-    //         .lookup_account(ValidAccountId::try_from(account_id).unwrap())
-    //         .unwrap();
-    //     assert!(account.next_stake_batch.is_none());
-    // }
-
-    #[test]
-    #[should_panic(expected = "action is blocked because a batch is running")]
-    fn withdraw_funds_from_stake_batch_while_stake_batch_run_locked_and_stake_batch() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = YOCTO;
-        context.is_view = false;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-        contract.register_account();
-
-        context.attached_deposit = 10 * YOCTO;
-        testing_env!(context.clone());
-        contract.deposit();
-
-        contract.run_stake_batch_locked = true;
-
-        testing_env!(context.clone());
-        contract.withdraw_from_stake_batch(YOCTO.into());
-    }
-
-    #[test]
-    #[should_panic(expected = "action is blocked because a batch is running")]
-    fn withdraw_funds_from_stake_batch_while_unstaking_and_stake_batch() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = YOCTO;
-        context.is_view = false;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-        contract.register_account();
-
-        context.attached_deposit = 10 * YOCTO;
-        testing_env!(context.clone());
-        contract.deposit();
-
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
-
-        testing_env!(context.clone());
-        contract.withdraw_from_stake_batch(YOCTO.into());
-    }
-
-    #[test]
-    #[should_panic(expected = "there are no funds in stake batch")]
-    fn withdraw_funds_from_stake_batch_no_stake_batch() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = YOCTO;
-        context.is_view = false;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-        contract.register_account();
-
-        testing_env!(context.clone());
-        contract.withdraw_from_stake_batch(YOCTO.into());
-    }
-
-    /// Given an account has deposited funds into a stake batch
-    /// And the contract is not locked
-    /// When the account tries to withdraw funds from the batch
-    /// Then the funds are transferred back to the account
-    // #[test]
-    // fn withdraw_all_funds_from_stake_batch_success() {
-    //     let account_id = "alfio-zappala.near";
-    //     let mut context = new_context(account_id);
-    //     context.attached_deposit = YOCTO;
-    //     context.is_view = false;
-    //     testing_env!(context.clone());
-    //
-    //     let contract_settings = default_contract_settings();
-    //     let mut contract = StakeTokenContract::new(None, contract_settings);
-    //     contract.register_account();
-    //
-    //     context.attached_deposit = 10 * YOCTO;
-    //     testing_env!(context.clone());
-    //     contract.deposit();
-    //
-    //     testing_env!(context.clone());
-    //     contract.withdraw_all_funds_from_stake_batch();
-    //
-    //     {
-    //         let receipts = deserialize_receipts(&env::created_receipts());
-    //         println!("{:#?}", &receipts);
-    //         assert_eq!(receipts.len(), 1);
-    //         let receipt = receipts.first().unwrap();
-    //         assert_eq!(receipt.receiver_id, account_id);
-    //         match receipt.actions.first().unwrap() {
-    //             Action::Transfer { deposit } => assert_eq!(*deposit, 10 * YOCTO),
-    //             _ => panic!("unexpected action type"),
-    //         }
-    //     }
-    //
-    //     let account = contract
-    //         .lookup_account(ValidAccountId::try_from(account_id).unwrap())
-    //         .unwrap();
-    //     assert!(account.stake_batch.is_none());
-    //     assert!(contract.stake_batch.is_none());
-    // }
-
-    /// Given an account has deposited funds into the next stake batch
-    /// And the contract is locked
-    /// When the account tries to withdraw funds from the batch
-    /// Then the funds are transferred back to the account
-    // #[test]
-    // fn withdraw_all_funds_from_stake_batch_while_stake_batch_run_locked_success() {
-    //     let account_id = "alfio-zappala.near";
-    //     let mut context = new_context(account_id);
-    //     context.attached_deposit = YOCTO;
-    //     context.is_view = false;
-    //     testing_env!(context.clone());
-    //
-    //     let contract_settings = default_contract_settings();
-    //     let mut contract = StakeTokenContract::new(None, contract_settings);
-    //     contract.register_account();
-    //     contract.run_stake_batch_locked = true;
-    //
-    //     context.attached_deposit = 10 * YOCTO;
-    //     testing_env!(context.clone());
-    //     contract.deposit();
-    //
-    //     testing_env!(context.clone());
-    //     contract.withdraw_all_funds_from_stake_batch();
-    //
-    //     {
-    //         let receipts = deserialize_receipts(&env::created_receipts());
-    //         println!("{:#?}", &receipts);
-    //         assert_eq!(receipts.len(), 1);
-    //         let receipt = receipts.first().unwrap();
-    //         assert_eq!(receipt.receiver_id, account_id);
-    //         match receipt.actions.first().unwrap() {
-    //             Action::Transfer { deposit } => assert_eq!(*deposit, 10 * YOCTO),
-    //             _ => panic!("unexpected action type"),
-    //         }
-    //     }
-    //
-    //     let account = contract
-    //         .lookup_account(ValidAccountId::try_from(account_id).unwrap())
-    //         .unwrap();
-    //     assert!(account.next_stake_batch.is_none());
-    // }
-
-    #[test]
-    #[should_panic(expected = "action is blocked because a batch is running")]
-    fn withdraw_all_funds_from_stake_batch_while_stake_batch_run_locked_and_stake_batch() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = YOCTO;
-        context.is_view = false;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-        contract.register_account();
-
-        context.attached_deposit = 10 * YOCTO;
-        testing_env!(context.clone());
-        contract.deposit();
-
-        contract.run_stake_batch_locked = true;
-
-        testing_env!(context.clone());
-        contract.withdraw_all_from_stake_batch();
-    }
-
-    #[test]
-    #[should_panic(expected = "action is blocked because a batch is running")]
-    fn withdraw_all_funds_from_stake_batch_while_unstaking_and_stake_batch() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = YOCTO;
-        context.is_view = false;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-        contract.register_account();
-
-        context.attached_deposit = 10 * YOCTO;
-        testing_env!(context.clone());
-        contract.deposit();
-
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
-
-        testing_env!(context.clone());
-        contract.withdraw_all_from_stake_batch();
-    }
-
-    #[test]
-    fn withdraw_all_funds_from_stake_batch_no_stake_batch() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = YOCTO;
-        context.is_view = false;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-        contract.register_account();
-
-        testing_env!(context.clone());
-        assert_eq!(contract.withdraw_all_from_stake_batch().value(), 0);
     }
 
     #[test]

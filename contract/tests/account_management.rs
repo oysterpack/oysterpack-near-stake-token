@@ -13,6 +13,7 @@ lazy_static! {
 }
 
 #[test]
+#[ignore]
 fn account_management_tests() {
     let ctx = test_utils::create_context();
     let contract = ctx.contract;
