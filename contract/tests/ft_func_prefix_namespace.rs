@@ -26,7 +26,10 @@ pub trait FungibleTokenCoreResolveTransfer {
         sender_id: ValidAccountId,
         receiver_id: ValidAccountId,
         amount: U128,
-        #[callback_result] used_amount: CallbackResult<U128>, // NOTE: this interface is not supported yet and has to
-                                                              // be handled using lower level interface.
+        // #[callback_result]
+        used_amount: CallbackResult<U128>, // NOTE: this interface is not supported yet and has to
+                                           // be handled using lower level interface.
     ) -> U128;
 }
+
+pub struct CallbackResult<T>(T);

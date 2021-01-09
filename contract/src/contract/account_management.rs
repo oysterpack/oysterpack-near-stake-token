@@ -188,6 +188,7 @@ mod test {
     use crate::interface::{AccountManagement, StakingService};
     use crate::near::YOCTO;
     use crate::test_utils::*;
+    use near_sdk::test_utils::get_created_receipts;
     use near_sdk::{serde_json, testing_env, MockedBlockchain};
     use std::convert::{TryFrom, TryInto};
 
@@ -211,14 +212,14 @@ mod test {
 
     #[test]
     fn lookup_account_with_unclaimed_receipts() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
+        let mut test_context = TestContext::new(None);
+        let mut context = test_context.context.clone();
+        let contract = &mut test_context.contract;
+        let account_id = test_context.account_id;
+
         context.attached_deposit = YOCTO;
         context.is_view = false;
         testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.register_account();
 
         context.attached_deposit = 10 * YOCTO;
@@ -322,81 +323,78 @@ mod test {
     ///   and the on the contract
     /// - And the next stake batch is set to None
     /// - And the redeem stake batches are set to None
-    // #[test]
-    // fn register_new_account() {
-    //     let account_id = "alfio-zappala.near";
-    //     let mut context = new_context(account_id);
-    //     context.attached_deposit = 10 * YOCTO;
-    //     context.is_view = false;
-    //     testing_env!(context.clone());
-    //
-    //     let contract_settings = default_contract_settings();
-    //     let mut contract = StakeTokenContract::new(None, contract_settings);
-    //
-    //     // Given the account is not currently registered
-    //     assert!(
-    //         !contract.account_registered(account_id.try_into().unwrap()),
-    //         "account should not be registered"
-    //     );
-    //
-    //     let storage_before_registering_account = env::storage_usage();
-    //     contract.register_account();
-    //
-    //     // the txn should have created a Transfer receipt to refund the storage fee over payment
-    //     let receipt = env::created_receipts().first().cloned().unwrap();
-    //     let json = serde_json::to_string_pretty(&receipt).unwrap();
-    //     println!("receipt: {}", json);
-    //     let receipt: Receipt = serde_json::from_str(&json).unwrap();
-    //     let refund: u128 = match receipt.actions.first().unwrap() {
-    //         Action::Transfer { deposit } => *deposit,
-    //         action => panic!("unexpected action: {:?}", action),
-    //     };
-    //     assert_eq!(
-    //         refund,
-    //         context.attached_deposit - contract.account_storage_fee().value()
-    //     );
-    //
-    //     let account = contract
-    //         .accounts
-    //         .get(&Hash::from(account_id))
-    //         .expect("account should be registered");
-    //     assert!(
-    //         contract.account_registered(account_id.try_into().unwrap()),
-    //         "account should be registered"
-    //     );
-    //     assert_eq!(
-    //         contract.total_registered_accounts().0,
-    //         1,
-    //         "There should be 1 account registered"
-    //     );
-    //
-    //     let account_storage_usage = env::storage_usage() - storage_before_registering_account;
-    //     assert_eq!(
-    //         account_storage_usage, 120,
-    //         "account storage usage changed !!! If the change is expected, then update the assert"
-    //     );
-    //
-    //     // And the storage fee credit is applied on the account
-    //     assert_eq!(
-    //         account.storage_escrow.amount(),
-    //         contract.account_storage_fee().into()
-    //     );
-    // }
+    #[test]
+    fn register_new_account() {
+        let mut test_context = TestContext::new(None);
+        let mut context = test_context.context.clone();
+        let contract = &mut test_context.contract;
+        let account_id = test_context.account_id;
 
-    // #[test]
-    // fn register_account_with_exact_storage_fee() {
-    //     let account_id = "alfio-zappala.near";
-    //     let mut context = new_context(account_id);
-    //     context.attached_deposit = expected_account_storage_fee();
-    //     testing_env!(context.clone());
-    //
-    //     let contract_settings = default_contract_settings();
-    //     let mut contract = StakeTokenContract::new(None, contract_settings);
-    //
-    //     contract.register_account();
-    //     println!("{:?}", env::created_receipts());
-    //     assert!(env::created_receipts().is_empty());
-    // }
+        // Given the account is not currently registered
+        assert!(
+            !contract.account_registered(account_id.try_into().unwrap()),
+            "account should not be registered"
+        );
+
+        let storage_before_registering_account = env::storage_usage();
+        context.attached_deposit = YOCTO;
+        testing_env!(context.clone());
+        contract.register_account();
+
+        // the txn should have created a Transfer receipt to refund the storage fee over payment
+        let receipt = get_created_receipts().first().cloned().unwrap();
+        let json = serde_json::to_string_pretty(&receipt).unwrap();
+        println!("receipt: {}", json);
+        let receipt: Receipt = serde_json::from_str(&json).unwrap();
+        let refund: u128 = match receipt.actions.first().unwrap() {
+            Action::Transfer { deposit } => *deposit,
+            action => panic!("unexpected action: {:?}", action),
+        };
+        assert_eq!(
+            refund,
+            context.attached_deposit - contract.account_storage_fee().value()
+        );
+
+        let account = contract
+            .accounts
+            .get(&Hash::from(account_id))
+            .expect("account should be registered");
+        assert!(
+            contract.account_registered(account_id.try_into().unwrap()),
+            "account should be registered"
+        );
+        assert_eq!(
+            contract.total_registered_accounts().0,
+            1,
+            "There should be 1 account registered"
+        );
+
+        let account_storage_usage = env::storage_usage() - storage_before_registering_account;
+        assert_eq!(
+            account_storage_usage, 120,
+            "account storage usage changed !!! If the change is expected, then update the assert"
+        );
+
+        // And the storage fee credit is applied on the account
+        assert_eq!(
+            account.storage_escrow.amount(),
+            contract.account_storage_fee().into()
+        );
+    }
+
+    #[test]
+    fn register_account_with_exact_storage_fee() {
+        let mut test_context = TestContext::new(None);
+        let mut context = test_context.context.clone();
+        let contract = &mut test_context.contract;
+
+        context.attached_deposit = contract.account_storage_fee().value();
+        testing_env!(context.clone());
+        contract.register_account();
+        println!("{:?}", get_created_receipts());
+        assert!(get_created_receipts().is_empty());
+    }
+
     #[test]
     #[should_panic(expected = "account is already registered")]
     fn register_preexisting_account() {
