@@ -1322,6 +1322,7 @@ version = "0.1.0"
 dependencies = [
  "near-sdk",
  "near-sdk-sim",
+ "near-vm-logic 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "primitive-types 0.7.3",
  "quickcheck",
  "quickcheck_macros",

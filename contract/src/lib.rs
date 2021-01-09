@@ -218,6 +218,10 @@ pub struct StakeTokenContract {
     /// for NEP-122 - vault-based fungible token
     vaults: LookupMap<VaultId, Vault>,
     vault_id_sequence: VaultId,
+
+    #[cfg(test)]
+    #[borsh_skip]
+    env: near_env::Env,
 }
 
 impl Default for StakeTokenContract {
@@ -269,6 +273,8 @@ impl StakeTokenContract {
 
             vaults: LookupMap::new(VAULTS_KEY_PREFIX.to_vec()),
             vault_id_sequence: VaultId::default(),
+            #[cfg(test)]
+            env: near_env::Env::default(),
         };
 
         // compute account storage usage
@@ -279,6 +285,16 @@ impl StakeTokenContract {
                 StorageUsage(env::storage_usage() - initial_storage_usage);
             contract.deallocate_account_template_to_measure_storage_usage();
             assert_eq!(initial_storage_usage, env::storage_usage());
+        }
+
+        // for testing purposes, inject a successful PromiseResult
+        // - this enables callbacks that have callback data dependencies to be unit tested because
+        //   the callbacks check if the promise call succeeded. Without this, the callbacks would
+        //   not be able to be unit tested because the NEAR VMContext does not provide ability to
+        //   inject receipts.
+        #[cfg(test)]
+        {
+            crate::test_utils::set_env_with_success_promise_result(&mut contract);
         }
 
         contract

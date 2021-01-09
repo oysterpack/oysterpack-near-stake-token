@@ -14,6 +14,7 @@ primitive-types = "^0.7.3"
 [dev-dependencies]
 quickcheck = "0.9"
 quickcheck_macros = "0.9"
+near-vm-logic = "2.2.0"
 
 near-sdk-sim = { git = "https://github.com/near/near-sdk-rs",  tag = "2.3.0" }
 

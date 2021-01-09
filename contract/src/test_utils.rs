@@ -1,8 +1,11 @@
+use crate::interface::{AccountManagement, YoctoNear};
+use crate::near_env::Env;
 use crate::{config::Config, near::*, ContractSettings, StakeTokenContract};
 use near_sdk::{
     serde::{Deserialize, Serialize},
-    testing_env, AccountId, MockedBlockchain, VMContext,
+    serde_json, testing_env, AccountId, MockedBlockchain, PromiseResult, VMContext,
 };
+use near_vm_logic::mocks::mock_external as near_mocks;
 
 pub const EXPECTED_ACCOUNT_STORAGE_USAGE: u64 = 722;
 
@@ -22,6 +25,26 @@ impl<'a> TestContext<'a> {
 
         let contract_settings = contract_settings.unwrap_or_else(default_contract_settings);
         let contract = StakeTokenContract::new(None, contract_settings);
+
+        Self {
+            contract,
+            account_id: ACCOUNT_ID,
+            context,
+        }
+    }
+
+    pub fn with_registered_account(contract_settings: Option<ContractSettings>) -> Self {
+        let mut context = new_context(ACCOUNT_ID);
+        context.is_view = false;
+        context.attached_deposit = YOCTO;
+        testing_env!(context.clone());
+
+        let contract_settings = contract_settings.unwrap_or_else(default_contract_settings);
+        let mut contract = StakeTokenContract::new(None, contract_settings);
+        contract.register_account();
+
+        context.attached_deposit = 0;
+        testing_env!(context.clone());
 
         Self {
             contract,
@@ -88,4 +111,64 @@ pub enum Action {
         gas: u64,
         deposit: u128,
     },
+}
+
+pub fn deserialize_receipts(receipts: &[near_mocks::Receipt]) -> Vec<Receipt> {
+    receipts
+        .iter()
+        .map(|receipt| {
+            let json = serde_json::to_string_pretty(receipt).unwrap();
+            println!("{}", json);
+            let receipt: Receipt = serde_json::from_str(&json).unwrap();
+            receipt
+        })
+        .collect()
+}
+
+pub fn set_env_with_success_promise_result(contract: &mut StakeTokenContract) {
+    pub fn promise_result(_result_index: u64) -> PromiseResult {
+        PromiseResult::Successful(vec![])
+    }
+
+    pub fn promise_results_count() -> u64 {
+        1
+    }
+
+    contract.set_env(Env {
+        promise_results_count_: promise_results_count,
+        promise_result_: promise_result,
+    });
+}
+
+pub fn set_env_with_failed_promise_result(contract: &mut StakeTokenContract) {
+    pub fn promise_result(_result_index: u64) -> PromiseResult {
+        PromiseResult::Failed
+    }
+
+    pub fn promise_results_count() -> u64 {
+        1
+    }
+
+    contract.set_env(Env {
+        promise_results_count_: promise_results_count,
+        promise_result_: promise_result,
+    });
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct StakeArgs {
+    pub amount: near_sdk::json_types::U128,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct CheckStakeArgs {
+    pub near_liquidity: Option<YoctoNear>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct CheckDepositAndStakeArgs {
+    pub near_liquidity: Option<YoctoNear>,
 }
