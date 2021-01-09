@@ -228,11 +228,6 @@ impl StakeTokenContract {
     /// ## Notes
     /// - when the contract is deployed it will measure account storage usage
     /// - owner account ID defaults to the operator account ID
-    ///
-    /// TODO: verify the staking pool - contract is disabled until staking pool is verified via transation
-    ///       If the staking pool contract fails verification, then the operator can delete the this contract.
-    ///       NOTE: verification may fail if the contract mis-configured
-    ///
     #[payable]
     #[init]
     pub fn new(owner_id: Option<ValidAccountId>, settings: ContractSettings) -> Self {

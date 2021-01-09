@@ -55,21 +55,4 @@ impl StakeTokenContract {
             _ => false,
         }
     }
-
-    /// # Panics
-    /// if there are no promise results - this should only be called if promise results are expected
-    pub fn all_promise_results_succeeded(&self) -> bool {
-        let count = env::promise_results_count();
-        assert!(count > 0, "there are no promise results");
-        for i in 0..count {
-            let success = match env::promise_result(i) {
-                PromiseResult::Successful(_) => true,
-                _ => false,
-            };
-            if !success {
-                return false;
-            }
-        }
-        true
-    }
 }

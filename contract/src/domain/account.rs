@@ -1,7 +1,8 @@
 use crate::core::Hash;
 use crate::domain::stake_batch::StakeBatch;
 use crate::domain::{
-    RedeemStakeBatch, TimestampedNearBalance, TimestampedStakeBalance, YoctoNear, YoctoStake,
+    BatchId, RedeemStakeBatch, TimestampedNearBalance, TimestampedStakeBalance, YoctoNear,
+    YoctoStake,
 };
 use crate::errors::vault_fungible_token::{
     ACCOUNT_INSUFFICIENT_NEAR_FUNDS, ACCOUNT_INSUFFICIENT_STAKE_FUNDS,
@@ -59,6 +60,22 @@ impl Account {
             redeem_stake_batch: None,
             next_redeem_stake_batch: None,
         }
+    }
+
+    pub fn stake_batch(&self, batch_id: BatchId) -> Option<StakeBatch> {
+        if let Some(batch) = self.next_stake_batch {
+            if batch.id() == batch_id {
+                return Some(batch);
+            }
+        }
+
+        if let Some(batch) = self.stake_batch {
+            if batch.id() == batch_id {
+                return Some(batch);
+            }
+        }
+
+        None
     }
 
     /// the purpose for this constructor is to create a fully allocated [Account] object instance

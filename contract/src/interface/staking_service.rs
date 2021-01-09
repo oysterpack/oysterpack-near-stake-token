@@ -134,6 +134,7 @@ pub trait StakingService {
     ///   - staking batch is in progress
     ///   - unstaking is in progress
     /// - if there is no stake batch to run
+    /// - if the attached deposit is less than the [minimum required deposit](StakingService::min_required_deposit_to_stake)
     ///
     /// GAS REQUIREMENTS: 225 TGas
     fn stake(&mut self) -> Promise;
@@ -330,6 +331,13 @@ pub trait StakingService {
     /// ## Panics
     /// - if the account is not registered
     fn transfer_all_near(&mut self, recipient: ValidAccountId) -> YoctoNear;
+
+    /// In order to make sure STAKE tokens are issued when NEAR is staked, the user needs to deposit
+    /// a minimum required amount based on the cached STAKE token value to issue ~100 yoctoSTAKE.
+    ///
+    /// NOTE: the min required deposit amount is conservative and the exact STAKE token value will
+    /// only be known when the deposit is staked into the staking pool
+    fn min_required_deposit_to_stake(&self) -> YoctoNear;
 }
 
 pub mod events {

@@ -1,25 +1,44 @@
+use oysterpack_near_stake_token::domain::{BlockTimeHeight, StakeTokenValue};
 use oysterpack_near_stake_token::near::YOCTO;
 use primitive_types::U256;
 
 #[test]
 fn quick_test() {
-    let stake_near_value_1 = U256::from(YOCTO) * U256::from(4658063269802878999370714u128)
-        / U256::from(4579943328412471962879774u128);
+    let stake_token_value = StakeTokenValue::new(
+        BlockTimeHeight::default(),
+        7000000000000000000000001_u128.into(),
+        1749999999999999999999998_u128.into(),
+    );
 
-    let stake_near_value_2 = U256::from(YOCTO) * U256::from(10147632520791516894443791_u128)
-        / U256::from(5552942966614588265320892u128);
-
-    let stake_near_value_remainder = (U256::from(YOCTO)
-        * U256::from(5658063269802878999370750u128))
-        % U256::from(5552942966614588265320892u128);
-
-    println!("{} {}", stake_near_value_1, stake_near_value_1.as_u128());
-    println!("{} {} ", stake_near_value_2, stake_near_value_2.as_u128());
-    println!("{}", stake_near_value_remainder);
     println!(
-        "tokens: {}",
-        U256::from(YOCTO) * U256::from(7991261398424471377072781_u128)
-            / U256::from(1420625353371712220803200185802_u128)
-            * U256::from(27264948486929872420597293801_u128)
+        "1 NEAR = {} STAKE",
+        stake_token_value.near_to_stake(YOCTO.into())
+    );
+    println!(
+        "499999999999999999999999 STAKE = {} NEAR",
+        stake_token_value.stake_to_near(499999999999999999999999.into())
+    );
+
+    let stake_token_value = StakeTokenValue::new(
+        BlockTimeHeight::default(),
+        9000000000000000000000002_u128.into(),
+        2249999999999999999999996_u128.into(),
+    );
+
+    println!(
+        "1 NEAR = {} STAKE",
+        stake_token_value.near_to_stake(1.into())
+    );
+    println!(
+        "1 STAKE = {} NEAR",
+        stake_token_value.stake_to_near(1.into())
+    );
+
+    let total_staked_near_balance = U256::from(2249999999999999999999996_u128)
+        * U256::from(stake_token_value.stake_to_near(YOCTO.into()))
+        / U256::from(YOCTO);
+    println!(
+        "total_staked_near_balance =  {} NEAR",
+        total_staked_near_balance
     );
 }

@@ -71,8 +71,9 @@ impl StakeTokenValue {
         let total_stake_supply = U256::from(self.total_stake_supply);
         let total_staked_near_balance = U256::from(self.total_staked_near_balance);
 
-        let stake_value = near * total_stake_supply / total_staked_near_balance;
-        stake_value.as_u128().into()
+        (near * total_stake_supply / total_staked_near_balance)
+            .as_u128()
+            .into()
     }
 
     /// converts STAKE to NEAR rounded down and then adds back the remainder

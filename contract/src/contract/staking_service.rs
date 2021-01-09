@@ -1,24 +1,24 @@
 //required in order for near_bindgen macro to work outside of lib.rs
-use crate::domain::RegisteredAccount;
-use crate::errors::illegal_state::STAKE_BATCH_SHOULD_EXIST;
-use crate::errors::staking_service::BATCH_BALANCE_INSUFFICIENT;
-use crate::near::{log, YOCTO};
 use crate::*;
 use crate::{
-    domain::{self, Account, RedeemLock, RedeemStakeBatch, StakeBatch},
+    domain::{self, Account, RedeemLock, RedeemStakeBatch, RegisteredAccount, StakeBatch},
     errors::{
-        illegal_state::{REDEEM_STAKE_BATCH_RECEIPT_SHOULD_EXIST, REDEEM_STAKE_BATCH_SHOULD_EXIST},
+        illegal_state::{
+            REDEEM_STAKE_BATCH_RECEIPT_SHOULD_EXIST, REDEEM_STAKE_BATCH_SHOULD_EXIST,
+            STAKE_BATCH_SHOULD_EXIST,
+        },
         redeeming_stake_errors::NO_REDEEM_STAKE_BATCH_TO_RUN,
         staking_errors::{BLOCKED_BY_BATCH_RUNNING, NO_FUNDS_IN_STAKE_BATCH_TO_WITHDRAW},
         staking_service::{
-            DEPOSIT_REQUIRED_FOR_STAKE, INSUFFICIENT_STAKE_FOR_REDEEM_REQUEST, ZERO_REDEEM_AMOUNT,
+            BATCH_BALANCE_INSUFFICIENT, DEPOSIT_REQUIRED_FOR_STAKE,
+            INSUFFICIENT_STAKE_FOR_REDEEM_REQUEST, ZERO_REDEEM_AMOUNT,
         },
     },
     interface::{
         staking_service::events, BatchId, RedeemStakeBatchReceipt, StakingService, YoctoNear,
         YoctoStake,
     },
-    near::NO_DEPOSIT,
+    near::{log, NO_DEPOSIT, YOCTO},
 };
 use near_sdk::{
     env, ext_contract, near_bindgen,
@@ -52,8 +52,11 @@ impl StakingService for StakeTokenContract {
     fn deposit(&mut self) -> BatchId {
         let mut account = self.registered_account(&env::predecessor_account_id());
 
-        let batch_id =
-            self.deposit_near_for_account_to_stake(&mut account, env::attached_deposit().into());
+        let near_amount = env::attached_deposit().into();
+        let batch_id = self.deposit_near_for_account_to_stake(&mut account, near_amount);
+
+        self.check_min_required_near_deposit(&account, batch_id);
+
         self.save_registered_account(&account);
         self.log_stake_batch(batch_id);
         batch_id.into()
@@ -85,8 +88,7 @@ impl StakingService for StakeTokenContract {
             let stake_amount = batch.balance().amount() + self.near_liquidity_pool;
             self.near_liquidity_pool = 0.into();
             self.invoke_deposit_and_stake(stake_amount)
-                .then(self.get_account_from_staking_pool())
-                .then(self.invoke_on_deposit_and_stake(None))
+                .then(self.invoke_check_deposit_and_stake(None))
                 .then(self.invoke_release_run_stake_batch_lock())
         }
     }
@@ -126,6 +128,7 @@ impl StakingService for StakeTokenContract {
             if batch.remove(amount).value() == 0 {
                 account.next_stake_batch = None;
             } else {
+                self.check_stake_batch_min_required_near_balance(batch);
                 account.next_stake_batch = Some(batch);
             }
             self.save_registered_account(&account);
@@ -447,6 +450,10 @@ impl StakingService for StakeTokenContract {
             }
         }
     }
+
+    fn min_required_deposit_to_stake(&self) -> YoctoNear {
+        self.min_required_near_deposit().into()
+    }
 }
 
 // staking pool func call invocations
@@ -569,6 +576,31 @@ impl StakeTokenContract {
 }
 
 impl StakeTokenContract {
+    /// check that batch NEAR amount will issue at least 1 yoctoSTAKE
+    /// we never want to issue 0 yoctoSTAKE tokens if NEAR is deposited and staked
+    ///
+    /// the min required NEAR deposit is calculated using the cached STAKE token value
+    /// thus, to be on the safe side, we will require that mininum amount of NEAR deposit should be
+    /// enough to for 100 yoctoSTAKE
+    fn check_min_required_near_deposit(&self, account: &Account, batch_id: domain::BatchId) {
+        if let Some(batch) = account.stake_batch(batch_id) {
+            self.check_stake_batch_min_required_near_balance(batch)
+        }
+    }
+
+    fn check_stake_batch_min_required_near_balance(&self, batch: StakeBatch) {
+        let min_required_near_deposit = self.min_required_near_deposit();
+        assert!(
+            batch.balance().amount() >= min_required_near_deposit,
+            "minimum required NEAR deposit is: {}",
+            min_required_near_deposit
+        );
+    }
+
+    fn min_required_near_deposit(&self) -> domain::YoctoNear {
+        self.stake_token_value.stake_to_near(100.into())
+    }
+
     pub(crate) fn get_pending_withdrawal(&self) -> Option<domain::RedeemStakeBatchReceipt> {
         self.redeem_stake_batch
             .map(|batch| self.redeem_stake_batch_receipts.get(&batch.id()))
@@ -1178,12 +1210,32 @@ pub trait ExtStakingWorkflowCallbacks {
     /// ## Success Workflow
     /// 1. update the stake token value
     /// 2. store the stake batch receipt
-    /// 4. update the STAKE token supply with the new STAKE tokens that were issued
+    /// 3. update the STAKE token supply with the new STAKE tokens that were issued
     fn on_deposit_and_stake(
         &mut self,
         near_liquidity: Option<interface::YoctoNear>,
         #[callback] staking_pool_account: StakingPoolAccount,
     );
+
+    /// checks that the `deposit` call succeeded on the staking pool before
+    /// progressing the workflow:
+    /// 1. stake
+    /// 2. check_state
+    fn check_deposit(
+        &mut self,
+        stake_amount: YoctoNear,
+        near_liquidity: Option<YoctoNear>,
+    ) -> Promise;
+
+    /// checks that the `stake` call succeeded on the staking pool before
+    /// progressing the workflow:
+    /// 1. get_account
+    /// 2. on_deposit_and_stake
+    fn check_stake(&mut self, near_liquidity: Option<YoctoNear>) -> Promise;
+
+    /// checks that the `deposit_and_stake` call succeeded on the staking pool before
+    /// progressing the workflow
+    fn check_deposit_and_stake(&mut self, near_liquidity: Option<YoctoNear>) -> Promise;
 
     /// defined on [Operator] interface
     fn release_run_stake_batch_lock(&mut self);

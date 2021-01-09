@@ -35,6 +35,10 @@ pub struct CallBacksGasConfig {
     pub on_unstake: Option<Gas>,
     pub unlock: Option<Gas>,
 
+    pub check_deposit: Option<Gas>,
+    pub check_stake: Option<Gas>,
+    pub check_deposit_and_stake: Option<Gas>,
+
     // used by redeem stake workflow
     pub on_run_redeem_stake_batch: Option<Gas>,
     pub on_redeeming_stake_pending_withdrawal: Option<Gas>,

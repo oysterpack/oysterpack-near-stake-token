@@ -54,8 +54,7 @@ impl StakeTokenContract {
             };
 
             self.invoke_deposit_and_stake(stake_amount)
-                .then(self.get_account_from_staking_pool())
-                .then(self.invoke_on_deposit_and_stake(None))
+                .then(self.invoke_check_deposit_and_stake(None))
         }
     }
 
@@ -80,10 +79,7 @@ impl StakeTokenContract {
         #[callback] staking_pool_account: StakingPoolAccount,
     ) {
         let batch = self.stake_batch.take().expect(STAKE_BATCH_SHOULD_EXIST);
-        assert!(
-            self.all_promise_results_succeeded(),
-            STAKING_POOL_CALL_FAILED
-        );
+        assert!(self.promise_result_succeeded(), STAKING_POOL_CALL_FAILED);
 
         if let Some(near_liquidity) = near_liquidity {
             if near_liquidity.value() > 0 {
@@ -93,6 +89,7 @@ impl StakeTokenContract {
                     balance: self.near_liquidity_pool.value(),
                 });
 
+                // check if liquidity can clear the pending withdrawal
                 if let Some(receipt) = self.get_pending_withdrawal() {
                     let stake_near_value = receipt.stake_near_value();
                     if self.near_liquidity_pool >= stake_near_value {
@@ -112,6 +109,35 @@ impl StakeTokenContract {
         self.mint_stake_and_update_stake_token_value(&staking_pool_account, batch);
         self.create_stake_batch_receipt(batch);
         self.pop_stake_batch();
+    }
+
+    #[private]
+    pub fn check_deposit_and_stake(
+        &mut self,
+        near_liquidity: Option<interface::YoctoNear>,
+    ) -> Promise {
+        self.check_stake(near_liquidity)
+    }
+
+    #[private]
+    pub fn check_stake(&mut self, near_liquidity: Option<interface::YoctoNear>) -> Promise {
+        assert!(self.promise_result_succeeded(), STAKING_POOL_CALL_FAILED);
+
+        self.get_account_from_staking_pool()
+            .then(self.invoke_on_deposit_and_stake(near_liquidity.map(Into::into)))
+    }
+
+    #[private]
+    pub fn check_deposit(
+        &mut self,
+        stake_amount: interface::YoctoNear,
+        near_liquidity: Option<interface::YoctoNear>,
+    ) -> Promise {
+        assert!(self.promise_result_succeeded(), STAKING_POOL_CALL_FAILED);
+
+        self.invoke_stake(stake_amount.into())
+            .then(self.get_account_from_staking_pool())
+            .then(self.invoke_on_deposit_and_stake(near_liquidity.map(Into::into)))
     }
 }
 
@@ -190,14 +216,12 @@ impl StakeTokenContract {
 
         let deposit_amount = batch.balance().amount().value() - near_liquidity;
         if deposit_amount > 0 {
-            self.invoke_deposit(deposit_amount.into())
-                .then(self.invoke_stake(batch.balance().amount()))
-                .then(self.get_account_from_staking_pool())
-                .then(self.invoke_on_deposit_and_stake(Some(near_liquidity.into())))
+            self.invoke_deposit(deposit_amount.into()).then(
+                self.invoke_check_deposit(batch.balance().amount(), Some(near_liquidity.into())),
+            )
         } else {
             self.invoke_stake(batch.balance().amount())
-                .then(self.get_account_from_staking_pool())
-                .then(self.invoke_on_deposit_and_stake(Some(near_liquidity.into())))
+                .then(self.invoke_check_stake(Some(near_liquidity.into())))
         }
     }
 
@@ -229,6 +253,45 @@ impl StakeTokenContract {
 
 /// staking NEAR workflow callback invocations
 impl StakeTokenContract {
+    pub(crate) fn invoke_check_deposit(
+        &self,
+        stake_amount: YoctoNear,
+        near_liquidity: Option<YoctoNear>,
+    ) -> Promise {
+        ext_staking_workflow_callbacks::check_deposit(
+            stake_amount.into(),
+            near_liquidity.map(Into::into),
+            &env::current_account_id(),
+            NO_DEPOSIT.into(),
+            self.config.gas_config().callbacks().check_deposit().value(),
+        )
+    }
+
+    pub(crate) fn invoke_check_stake(&self, near_liquidity: Option<YoctoNear>) -> Promise {
+        ext_staking_workflow_callbacks::check_stake(
+            near_liquidity.map(Into::into),
+            &env::current_account_id(),
+            NO_DEPOSIT.into(),
+            self.config.gas_config().callbacks().check_stake().value(),
+        )
+    }
+
+    pub(crate) fn invoke_check_deposit_and_stake(
+        &self,
+        near_liquidity: Option<YoctoNear>,
+    ) -> Promise {
+        ext_staking_workflow_callbacks::check_deposit_and_stake(
+            near_liquidity.map(Into::into),
+            &env::current_account_id(),
+            NO_DEPOSIT.into(),
+            self.config
+                .gas_config()
+                .callbacks()
+                .check_deposit_and_stake()
+                .value(),
+        )
+    }
+
     pub(crate) fn invoke_on_run_stake_batch(&self) -> Promise {
         ext_staking_workflow_callbacks::on_run_stake_batch(
             &env::current_account_id(),
