@@ -112,6 +112,7 @@ pub(crate) use contract::*;
 #[cfg(test)]
 pub(crate) mod test_utils;
 
+use crate::domain::StakeBatchStatus;
 use crate::{
     config::Config,
     core::Hash,
@@ -192,6 +193,8 @@ pub struct StakeTokenContract {
     ///   to the current `stake_batch`
     next_stake_batch: Option<StakeBatch>,
 
+    stake_batch_status: Option<StakeBatchStatus>,
+
     redeem_stake_batch: Option<RedeemStakeBatch>,
     /// used to store batch requests while the contract is locked    
     next_redeem_stake_batch: Option<RedeemStakeBatch>,
@@ -254,6 +257,7 @@ impl StakeTokenContract {
             redeem_stake_batch: None,
             next_stake_batch: None,
             next_redeem_stake_batch: None,
+            stake_batch_status: None,
             stake_batch_receipts: LookupMap::new(STAKE_BATCH_RECEIPTS_KEY_PREFIX.to_vec()),
             redeem_stake_batch_receipts: LookupMap::new(
                 REDEEM_STAKE_BATCH_RECEIPTS_KEY_PREFIX.to_vec(),

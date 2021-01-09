@@ -79,17 +79,34 @@ impl StakingService for StakeTokenContract {
 
         self.run_stake_batch_locked = true;
 
-        if self.is_liquidity_needed() {
-            self.get_account_from_staking_pool()
-                .then(self.invoke_on_run_stake_batch())
-                .then(self.invoke_release_run_stake_batch_lock())
-        } else {
-            // stake any liquidity that is not needed
-            let stake_amount = batch.balance().amount() + self.near_liquidity_pool;
-            self.near_liquidity_pool = 0.into();
-            self.invoke_deposit_and_stake(stake_amount)
-                .then(self.invoke_check_deposit_and_stake(None))
-                .then(self.invoke_release_run_stake_batch_lock())
+        match self.stake_batch_status {
+            None => {
+                if self.is_liquidity_needed() {
+                    self.get_account_from_staking_pool()
+                        .then(self.invoke_on_run_stake_batch())
+                        .then(self.invoke_release_run_stake_batch_lock())
+                } else {
+                    // stake any liquidity that is not needed
+                    let stake_amount = batch.balance().amount() + self.near_liquidity_pool;
+                    self.near_liquidity_pool = 0.into();
+                    self.invoke_deposit_and_stake(stake_amount)
+                        .then(self.invoke_check_deposit_and_stake(None))
+                        .then(self.invoke_release_run_stake_batch_lock())
+                }
+            }
+            Some(StakeBatchStatus::Deposited {
+                amount,
+                near_liquidity: liquidity_added,
+            }) => self
+                .invoke_stake(amount.into())
+                .then(self.invoke_check_stake(liquidity_added))
+                .then(self.invoke_release_run_stake_batch_lock()),
+            Some(StakeBatchStatus::Staked {
+                near_liquidity: liquidity_added,
+            }) => self
+                .get_account_from_staking_pool()
+                .then(self.invoke_on_deposit_and_stake(liquidity_added))
+                .then(self.invoke_release_run_stake_batch_lock()),
         }
     }
 

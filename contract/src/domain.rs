@@ -34,7 +34,7 @@ pub use gas::{Gas, TGAS};
 pub use lock::RedeemLock;
 pub use redeem_stake_batch::RedeemStakeBatch;
 pub use redeem_stake_batch_receipt::RedeemStakeBatchReceipt;
-pub use stake_batch::StakeBatch;
+pub use stake_batch::{StakeBatch, StakeBatchStatus};
 pub use stake_batch_receipt::StakeBatchReceipt;
 pub use stake_token_value::StakeTokenValue;
 pub use storage_usage::StorageUsage;

@@ -18,11 +18,11 @@ near call stake.oysterpack.testnet deposit --accountId 1.alfio-zappala-oysterpac
 near call stake.oysterpack.testnet withdraw_funds_from_stake_batch --accountId oysterpack.testnet --args '{"amount":"500000000000000000000000"}'
 near call stake.oysterpack.testnet withdraw_all_funds_from_stake_batch --accountId oysterpack.testnet
 
-near call stake.oysterpack.testnet stake --accountId alfio-zappala-oysterpack.testnet --gas 225000000000000
-near call stake.oysterpack.testnet stake --accountId oysterpack.testnet --gas 225000000000000
+near call stake.oysterpack.testnet stake --accountId alfio-zappala-oysterpack.testnet --gas 250000000000000
+near call stake.oysterpack.testnet stake --accountId oysterpack.testnet --gas 250000000000000
 
-near call stake.oysterpack.testnet deposit_and_stake --accountId alfio-zappala-oysterpack.testnet --amount 1 --gas 225000000000000
-near call stake.oysterpack.testnet deposit_and_stake --accountId oysterpack.testnet --amount 1 --gas 225000000000000
+near call stake.oysterpack.testnet deposit_and_stake --accountId alfio-zappala-oysterpack.testnet --amount 1 --gas 250000000000000
+near call stake.oysterpack.testnet deposit_and_stake --accountId oysterpack.testnet --amount 1 --gas 250000000000000
 
 near call stake.oysterpack.testnet redeem --accountId alfio-zappala-oysterpack.testnet --args '{"amount":"500000000000000000000000"}'
 near call stake.oysterpack.testnet redeem --accountId oysterpack.testnet --args '{"amount":"600000000000000000000000"}'
@@ -52,6 +52,7 @@ near call stake.oysterpack.testnet claim_receipts --accountId alfio-zappala-oyst
 export STAKING_POOL=staked.pool.f863973.m0
 export STAKING_POOL=stakin.pool.f863973.m0
 export STAKING_POOL=lunanova.pool.f863973.m0
+export STAKING_POOL=dokia.pool.f863973.m0
 
 near view $STAKING_POOL get_account --args '{"account_id":"stake.oysterpack.testnet"}'
 
@@ -70,6 +71,9 @@ near call $STAKING_POOL withdraw_all --accountId stake.oysterpack.testnet --gas 
 1999999999999999999999999
 
 1000000000000                 = 1 TGas
+10000000000000,
+45000000000000,
+110000000000000
 
 
 

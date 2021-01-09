@@ -38,6 +38,7 @@ impl Operator for StakeTokenContract {
             }),
             pending_withdrawal: self.pending_withdrawal(),
             run_stake_batch_locked: self.run_stake_batch_locked,
+            stake_batch_status: self.stake_batch_status,
             run_redeem_stake_batch_lock: self.run_redeem_stake_batch_lock,
         }
     }

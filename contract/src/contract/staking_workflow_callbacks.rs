@@ -109,6 +109,7 @@ impl StakeTokenContract {
         self.mint_stake_and_update_stake_token_value(&staking_pool_account, batch);
         self.create_stake_batch_receipt(batch);
         self.pop_stake_batch();
+        self.stake_batch_status = None;
     }
 
     #[private]
@@ -122,9 +123,12 @@ impl StakeTokenContract {
     #[private]
     pub fn check_stake(&mut self, near_liquidity: Option<interface::YoctoNear>) -> Promise {
         assert!(self.promise_result_succeeded(), STAKING_POOL_CALL_FAILED);
-
+        let near_liquidity = near_liquidity.map(Into::into);
+        self.stake_batch_status = Some(StakeBatchStatus::Staked {
+            near_liquidity: near_liquidity,
+        });
         self.get_account_from_staking_pool()
-            .then(self.invoke_on_deposit_and_stake(near_liquidity.map(Into::into)))
+            .then(self.invoke_on_deposit_and_stake(near_liquidity))
     }
 
     #[private]
@@ -134,10 +138,14 @@ impl StakeTokenContract {
         near_liquidity: Option<interface::YoctoNear>,
     ) -> Promise {
         assert!(self.promise_result_succeeded(), STAKING_POOL_CALL_FAILED);
-
-        self.invoke_stake(stake_amount.into())
-            .then(self.get_account_from_staking_pool())
-            .then(self.invoke_on_deposit_and_stake(near_liquidity.map(Into::into)))
+        let amount = stake_amount.into();
+        let near_liquidity = near_liquidity.map(Into::into);
+        self.stake_batch_status = Some(StakeBatchStatus::Deposited {
+            amount,
+            near_liquidity,
+        });
+        self.invoke_stake(amount)
+            .then(self.invoke_check_stake(near_liquidity))
     }
 }
 

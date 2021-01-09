@@ -386,10 +386,10 @@ impl CallBacksGasConfig {
 impl Default for CallBacksGasConfig {
     fn default() -> Self {
         Self {
-            on_run_stake_batch: TGAS * 175,
+            on_run_stake_batch: TGAS * 200,
             on_deposit_and_stake: TGAS * 5,
 
-            check_deposit: TGAS * 100,
+            check_deposit: TGAS * 110,
             check_stake: TGAS * 40,
             check_deposit_and_stake: TGAS * 40,
 

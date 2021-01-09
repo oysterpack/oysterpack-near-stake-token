@@ -1,3 +1,4 @@
+use crate::domain::StakeBatchStatus;
 use crate::interface::BlockHeight;
 use crate::{
     domain::RedeemLock,
@@ -40,5 +41,6 @@ pub struct ContractState {
     pub pending_withdrawal: Option<RedeemStakeBatchReceipt>,
 
     pub run_stake_batch_locked: bool,
+    pub stake_batch_status: Option<StakeBatchStatus>,
     pub run_redeem_stake_batch_lock: Option<RedeemLock>,
 }

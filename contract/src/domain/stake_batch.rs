@@ -8,7 +8,10 @@
 //! STAKE token value needs to be computed.
 
 use crate::domain::{BatchId, TimestampedNearBalance, YoctoNear};
-use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
+use near_sdk::{
+    borsh::{self, BorshDeserialize, BorshSerialize},
+    serde::{Deserialize, Serialize},
+};
 
 /// Gathers NEAR deposits to stake into a batch
 #[derive(BorshSerialize, BorshDeserialize, Clone, Copy, Debug)]
@@ -42,4 +45,16 @@ impl StakeBatch {
         self.balance.debit(amount);
         self.balance.amount()
     }
+}
+
+#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, Copy, Debug)]
+#[serde(crate = "near_sdk::serde")]
+pub enum StakeBatchStatus {
+    Deposited {
+        amount: YoctoNear,
+        near_liquidity: Option<YoctoNear>,
+    },
+    Staked {
+        near_liquidity: Option<YoctoNear>,
+    },
 }
