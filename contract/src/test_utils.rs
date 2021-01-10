@@ -169,6 +169,6 @@ pub struct CheckStakeArgs {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(crate = "near_sdk::serde")]
-pub struct CheckDepositAndStakeArgs {
+pub struct OnDepositAndStakeArgs {
     pub near_liquidity: Option<YoctoNear>,
 }

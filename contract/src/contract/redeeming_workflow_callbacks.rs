@@ -4,7 +4,7 @@ use crate::interface::staking_service::events::Unstaked;
 use crate::near::log;
 use crate::*;
 use crate::{
-    domain::{self, RedeemLock},
+    domain::RedeemLock,
     errors::{
         illegal_state::{
             ILLEGAL_REDEEM_LOCK_STATE, REDEEM_STAKE_BATCH_RECEIPT_SHOULD_EXIST,
@@ -13,7 +13,7 @@ use crate::{
         redeeming_stake_errors::UNSTAKED_FUNDS_NOT_AVAILABLE_FOR_WITHDRAWAL,
         staking_pool_failures::{GET_ACCOUNT_FAILURE, UNSTAKE_FAILURE, WITHDRAW_ALL_FAILURE},
     },
-    ext_redeeming_workflow_callbacks, ext_staking_pool,
+    ext_redeeming_workflow_callbacks,
     interface::BatchId,
     interface::Operator,
     near::NO_DEPOSIT,
@@ -51,9 +51,14 @@ impl StakeTokenContract {
         if staking_pool_account.staked_balance.0 < unstake_amount.value() {
             // when unstaking the remaining balance, there will probably be some NEAR that is already
             // unstaked because of the rounding issues when the staking pool issued shares
-            self.invoke_unstake_all().then(self.invoke_on_unstake())
+            self.staking_pool_promise()
+                .unstake_all()
+                .promise()
+                .then(self.invoke_on_unstake())
         } else {
-            self.invoke_unstake(unstake_amount)
+            self.staking_pool_promise()
+                .unstake(unstake_amount)
+                .promise()
                 .then(self.invoke_on_unstake())
         }
     }
@@ -118,23 +123,6 @@ impl StakeTokenContract {
 }
 
 impl StakeTokenContract {
-    fn invoke_unstake(&self, unstake_amount: domain::YoctoNear) -> Promise {
-        ext_staking_pool::unstake(
-            unstake_amount.value().into(),
-            &self.staking_pool_id,
-            NO_DEPOSIT.value(),
-            self.config.gas_config().staking_pool().unstake().value(),
-        )
-    }
-
-    fn invoke_unstake_all(&self) -> Promise {
-        ext_staking_pool::unstake_all(
-            &self.staking_pool_id,
-            NO_DEPOSIT.value(),
-            self.config.gas_config().staking_pool().unstake().value(),
-        )
-    }
-
     fn create_redeem_stake_batch_receipt(&mut self) {
         let batch = self.redeem_stake_batch.expect(STAKE_BATCH_SHOULD_EXIST);
         let batch_receipt = batch.create_receipt(self.stake_token_value);

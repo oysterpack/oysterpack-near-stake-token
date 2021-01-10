@@ -53,8 +53,11 @@ impl StakeTokenContract {
                 batch.balance().amount()
             };
 
-            self.invoke_deposit_and_stake(stake_amount)
-                .then(self.invoke_check_deposit_and_stake(None))
+            self.staking_pool_promise()
+                .deposit_and_stake(stake_amount)
+                .get_account()
+                .promise()
+                .then(self.invoke_on_deposit_and_stake(None))
         }
     }
 
@@ -109,43 +112,6 @@ impl StakeTokenContract {
         self.mint_stake_and_update_stake_token_value(&staking_pool_account, batch);
         self.create_stake_batch_receipt(batch);
         self.pop_stake_batch();
-        self.stake_batch_status = None;
-    }
-
-    #[private]
-    pub fn check_deposit_and_stake(
-        &mut self,
-        near_liquidity: Option<interface::YoctoNear>,
-    ) -> Promise {
-        self.check_stake(near_liquidity)
-    }
-
-    #[private]
-    pub fn check_stake(&mut self, near_liquidity: Option<interface::YoctoNear>) -> Promise {
-        assert!(self.promise_result_succeeded(), STAKING_POOL_CALL_FAILED);
-        let near_liquidity = near_liquidity.map(Into::into);
-        self.stake_batch_status = Some(StakeBatchStatus::Staked {
-            near_liquidity: near_liquidity,
-        });
-        self.get_account_from_staking_pool()
-            .then(self.invoke_on_deposit_and_stake(near_liquidity))
-    }
-
-    #[private]
-    pub fn check_deposit(
-        &mut self,
-        stake_amount: interface::YoctoNear,
-        near_liquidity: Option<interface::YoctoNear>,
-    ) -> Promise {
-        assert!(self.promise_result_succeeded(), STAKING_POOL_CALL_FAILED);
-        let amount = stake_amount.into();
-        let near_liquidity = near_liquidity.map(Into::into);
-        self.stake_batch_status = Some(StakeBatchStatus::Deposited {
-            amount,
-            near_liquidity,
-        });
-        self.invoke_stake(amount)
-            .then(self.invoke_check_stake(near_liquidity))
     }
 }
 
@@ -224,12 +190,18 @@ impl StakeTokenContract {
 
         let deposit_amount = batch.balance().amount().value() - near_liquidity;
         if deposit_amount > 0 {
-            self.invoke_deposit(deposit_amount.into()).then(
-                self.invoke_check_deposit(batch.balance().amount(), Some(near_liquidity.into())),
-            )
+            self.staking_pool_promise()
+                .deposit(deposit_amount.into())
+                .stake(batch.balance().amount())
+                .get_account()
+                .promise()
+                .then(self.invoke_on_deposit_and_stake(Some(near_liquidity.into())))
         } else {
-            self.invoke_stake(batch.balance().amount())
-                .then(self.invoke_check_stake(Some(near_liquidity.into())))
+            self.staking_pool_promise()
+                .stake(batch.balance().amount())
+                .get_account()
+                .promise()
+                .then(self.invoke_on_deposit_and_stake(Some(near_liquidity.into())))
         }
     }
 
@@ -261,45 +233,6 @@ impl StakeTokenContract {
 
 /// staking NEAR workflow callback invocations
 impl StakeTokenContract {
-    pub(crate) fn invoke_check_deposit(
-        &self,
-        stake_amount: YoctoNear,
-        near_liquidity: Option<YoctoNear>,
-    ) -> Promise {
-        ext_staking_workflow_callbacks::check_deposit(
-            stake_amount.into(),
-            near_liquidity.map(Into::into),
-            &env::current_account_id(),
-            NO_DEPOSIT.into(),
-            self.config.gas_config().callbacks().check_deposit().value(),
-        )
-    }
-
-    pub(crate) fn invoke_check_stake(&self, near_liquidity: Option<YoctoNear>) -> Promise {
-        ext_staking_workflow_callbacks::check_stake(
-            near_liquidity.map(Into::into),
-            &env::current_account_id(),
-            NO_DEPOSIT.into(),
-            self.config.gas_config().callbacks().check_stake().value(),
-        )
-    }
-
-    pub(crate) fn invoke_check_deposit_and_stake(
-        &self,
-        near_liquidity: Option<YoctoNear>,
-    ) -> Promise {
-        ext_staking_workflow_callbacks::check_deposit_and_stake(
-            near_liquidity.map(Into::into),
-            &env::current_account_id(),
-            NO_DEPOSIT.into(),
-            self.config
-                .gas_config()
-                .callbacks()
-                .check_deposit_and_stake()
-                .value(),
-        )
-    }
-
     pub(crate) fn invoke_on_run_stake_batch(&self) -> Promise {
         ext_staking_workflow_callbacks::on_run_stake_batch(
             &env::current_account_id(),
@@ -339,6 +272,7 @@ impl StakeTokenContract {
 mod test {
 
     use super::*;
+    use crate::contract::staking_pool::GetAccountArgs;
     use crate::{
         interface::{AccountManagement, StakingService},
         near::YOCTO,
@@ -381,27 +315,54 @@ mod test {
 
         {
             let receipt = &receipts[0];
-            let action = &receipt.actions[0];
-            match action {
-                Action::FunctionCall {
-                    method_name,
-                    deposit,
-                    gas,
-                    ..
-                } => {
-                    assert_eq!(method_name, "deposit_and_stake");
-                    assert_eq!(*deposit, context.attached_deposit);
-                    assert_eq!(
-                        *gas,
-                        contract
-                            .config
-                            .gas_config()
-                            .staking_pool()
-                            .deposit_and_stake()
-                            .value()
-                    );
+            assert_eq!(receipt.actions.len(), 2);
+            {
+                let action = &receipt.actions[0];
+                match action {
+                    Action::FunctionCall {
+                        method_name,
+                        deposit,
+                        gas,
+                        ..
+                    } => {
+                        assert_eq!(method_name, "deposit_and_stake");
+                        assert_eq!(*deposit, context.attached_deposit);
+                        assert_eq!(
+                            *gas,
+                            contract
+                                .config
+                                .gas_config()
+                                .staking_pool()
+                                .deposit_and_stake()
+                                .value()
+                        );
+                    }
+                    _ => panic!("expected `deposit_and_stake` func call"),
                 }
-                _ => panic!("expected `deposit_and_stake` func call"),
+            }
+            {
+                let action = &receipt.actions[1];
+                match action {
+                    Action::FunctionCall {
+                        method_name,
+                        deposit,
+                        gas,
+                        ..
+                    } => {
+                        assert_eq!(method_name, "get_account");
+                        assert_eq!(*deposit, 0);
+                        assert_eq!(
+                            *gas,
+                            contract
+                                .config
+                                .gas_config()
+                                .staking_pool()
+                                .get_account()
+                                .value()
+                        );
+                    }
+                    _ => panic!("expected `get_account` func call"),
+                }
             }
         }
         {
@@ -411,10 +372,10 @@ mod test {
                 Action::FunctionCall {
                     method_name,
                     gas,
-                    args,
                     deposit,
+                    ..
                 } => {
-                    assert_eq!(method_name, "check_deposit_and_stake");
+                    assert_eq!(method_name, "on_deposit_and_stake");
                     assert_eq!(*deposit, 0);
                     assert_eq!(
                         *gas,
@@ -422,13 +383,11 @@ mod test {
                             .config
                             .gas_config()
                             .callbacks()
-                            .check_deposit_and_stake()
+                            .on_deposit_and_stake()
                             .value()
                     );
-                    let args: CheckDepositAndStakeArgs = serde_json::from_str(args).unwrap();
-                    assert!(args.near_liquidity.is_none());
                 }
-                _ => panic!("expected `get_account` func call"),
+                _ => panic!("expected `on_deposit_and_stake` func call"),
             }
         }
     }
@@ -483,27 +442,56 @@ mod test {
 
         {
             let receipt = &receipts[0];
-            let action = &receipt.actions[0];
-            if let Action::FunctionCall {
-                method_name,
-                deposit,
-                gas,
-                args,
-            } = action
+            assert_eq!(receipt.actions.len(), 2);
             {
-                assert_eq!(method_name, "stake");
-                assert_eq!(*deposit, 0);
-                assert_eq!(
-                    *gas,
-                    contract.config.gas_config().staking_pool().stake().value()
-                );
-                let args: StakeArgs = serde_json::from_str(args).unwrap();
-                assert_eq!(
-                    args.amount.0,
-                    contract.stake_batch.unwrap().balance().amount().value()
-                );
-            } else {
-                panic!("expected stake function call")
+                let action = &receipt.actions[0];
+                if let Action::FunctionCall {
+                    method_name,
+                    deposit,
+                    gas,
+                    args,
+                } = action
+                {
+                    assert_eq!(method_name, "stake");
+                    assert_eq!(*deposit, 0);
+                    assert_eq!(
+                        *gas,
+                        contract.config.gas_config().staking_pool().stake().value()
+                    );
+                    let args: StakeArgs = serde_json::from_str(args).unwrap();
+                    assert_eq!(
+                        args.amount.0,
+                        contract.stake_batch.unwrap().balance().amount().value()
+                    );
+                } else {
+                    panic!("expected stake function call")
+                }
+            }
+            {
+                let action = &receipt.actions[1];
+                if let Action::FunctionCall {
+                    method_name,
+                    deposit,
+                    gas,
+                    args,
+                } = action
+                {
+                    assert_eq!(method_name, "get_account");
+                    assert_eq!(*deposit, 0);
+                    assert_eq!(
+                        *gas,
+                        contract
+                            .config
+                            .gas_config()
+                            .staking_pool()
+                            .get_account()
+                            .value()
+                    );
+                    let args: GetAccountArgs = serde_json::from_str(args).unwrap();
+                    assert_eq!(args.account_id, env::current_account_id());
+                } else {
+                    panic!("expected get_account function call")
+                }
             }
         }
         {
@@ -513,10 +501,10 @@ mod test {
                 method_name,
                 deposit,
                 gas,
-                args,
+                ..
             } = action
             {
-                assert_eq!(method_name, "check_stake");
+                assert_eq!(method_name, "on_deposit_and_stake");
                 assert_eq!(*deposit, 0);
                 assert_eq!(
                     *gas,
@@ -524,25 +512,11 @@ mod test {
                         .config
                         .gas_config()
                         .callbacks()
-                        .check_stake()
+                        .on_deposit_and_stake()
                         .value()
                 );
-                let args: CheckStakeArgs = serde_json::from_str(args).unwrap();
-                // Then the entire stake batch NEAR amount is added to the liquidity pool
-                assert_eq!(
-                    args.near_liquidity,
-                    Some(
-                        contract
-                            .stake_batch
-                            .unwrap()
-                            .balance()
-                            .amount()
-                            .value()
-                            .into()
-                    )
-                );
             } else {
-                panic!("expected check_deposit function call")
+                panic!("expected on_deposit_and_stake function call")
             }
         }
     }
@@ -561,7 +535,7 @@ mod test {
         context.attached_deposit = 100 * YOCTO;
         testing_env!(context.clone());
 
-        // account deposits into stake batch
+        // account deposits 100 NEAR into stake batch
         contract.deposit();
         contract.stake();
 
@@ -571,7 +545,7 @@ mod test {
         context.epoch_height += 1;
         testing_env!(context.clone());
 
-        // Given there is a pending withdrawal
+        // Given there is a pending withdrawal for 10 NEAR
         {
             contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
             *contract.batch_id_sequence += 1;
@@ -603,31 +577,82 @@ mod test {
 
         {
             let receipt = &receipts[0];
-            let action = &receipt.actions[0];
-            if let Action::FunctionCall {
-                method_name,
-                deposit,
-                gas,
-                ..
-            } = action
+            assert_eq!(receipt.actions.len(), 3);
             {
-                assert_eq!(method_name, "deposit");
-                assert_eq!(
-                    *deposit,
-                    contract.stake_batch.unwrap().balance().amount().value()
-                        - staking_pool_account.unstaked_balance.0
-                );
-                assert_eq!(
-                    *gas,
-                    contract
-                        .config
-                        .gas_config()
-                        .staking_pool()
-                        .deposit()
-                        .value()
-                )
-            } else {
-                panic!("expected deposit function call")
+                let action = &receipt.actions[0];
+                if let Action::FunctionCall {
+                    method_name,
+                    deposit,
+                    gas,
+                    ..
+                } = action
+                {
+                    assert_eq!(method_name, "deposit");
+                    assert_eq!(
+                        *deposit,
+                        contract.stake_batch.unwrap().balance().amount().value()
+                            - staking_pool_account.unstaked_balance.0
+                    );
+                    assert_eq!(
+                        *gas,
+                        contract
+                            .config
+                            .gas_config()
+                            .staking_pool()
+                            .deposit()
+                            .value()
+                    )
+                } else {
+                    panic!("expected deposit function call")
+                }
+            }
+            {
+                let action = &receipt.actions[1];
+                if let Action::FunctionCall {
+                    method_name,
+                    deposit,
+                    gas,
+                    args,
+                } = action
+                {
+                    assert_eq!(method_name, "stake");
+                    let args: StakeArgs = serde_json::from_str(args).unwrap();
+                    assert_eq!(*deposit, 0);
+                    assert_eq!(
+                        args.amount.0,
+                        contract.stake_batch.unwrap().balance().amount().value()
+                    );
+                    assert_eq!(
+                        *gas,
+                        contract.config.gas_config().staking_pool().stake().value()
+                    )
+                } else {
+                    panic!("expected stake function call")
+                }
+            }
+            {
+                let action = &receipt.actions[2];
+                if let Action::FunctionCall {
+                    method_name,
+                    deposit,
+                    gas,
+                    ..
+                } = action
+                {
+                    assert_eq!(method_name, "get_account");
+                    assert_eq!(*deposit, 0);
+                    assert_eq!(
+                        *gas,
+                        contract
+                            .config
+                            .gas_config()
+                            .staking_pool()
+                            .get_account()
+                            .value()
+                    )
+                } else {
+                    panic!("expected get_account function call")
+                }
             }
         }
         {
@@ -640,7 +665,7 @@ mod test {
                 ..
             } = action
             {
-                assert_eq!(method_name, "check_deposit");
+                assert_eq!(method_name, "on_deposit_and_stake");
                 assert_eq!(*deposit, 0);
                 assert_eq!(
                     *gas,
@@ -648,7 +673,7 @@ mod test {
                         .config
                         .gas_config()
                         .callbacks()
-                        .check_deposit()
+                        .on_deposit_and_stake()
                         .value()
                 )
             } else {

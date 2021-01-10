@@ -260,10 +260,6 @@ pub struct CallBacksGasConfig {
     on_run_stake_batch: Gas,
     on_deposit_and_stake: Gas,
 
-    check_deposit: Gas,
-    check_stake: Gas,
-    check_deposit_and_stake: Gas,
-
     on_unstake: Gas,
     unlock: Gas,
 
@@ -292,24 +288,6 @@ impl CallBacksGasConfig {
                 assert_gas_range(gas, 5, 10, "callbacks::on_unstake");
             }
             self.on_unstake = gas;
-        }
-        if let Some(gas) = config.check_deposit {
-            if validate {
-                assert_gas_range(gas, 100, 150, "callbacks::check_deposit");
-            }
-            self.check_deposit = gas;
-        }
-        if let Some(gas) = config.check_stake {
-            if validate {
-                assert_gas_range(gas, 20, 40, "callbacks::check_stake");
-            }
-            self.check_stake = gas;
-        }
-        if let Some(gas) = config.check_deposit_and_stake {
-            if validate {
-                assert_gas_range(gas, 20, 40, "callbacks::check_deposit_and_stake");
-            }
-            self.check_deposit_and_stake = gas;
         }
         if let Some(gas) = config.unlock {
             if validate {
@@ -369,29 +347,13 @@ impl CallBacksGasConfig {
     pub fn on_unstake(&self) -> Gas {
         self.on_unstake
     }
-
-    pub fn check_deposit(&self) -> Gas {
-        self.check_deposit
-    }
-
-    pub fn check_stake(&self) -> Gas {
-        self.check_stake
-    }
-
-    pub fn check_deposit_and_stake(&self) -> Gas {
-        self.check_deposit_and_stake
-    }
 }
 
 impl Default for CallBacksGasConfig {
     fn default() -> Self {
         Self {
-            on_run_stake_batch: TGAS * 200,
+            on_run_stake_batch: TGAS * 150,
             on_deposit_and_stake: TGAS * 5,
-
-            check_deposit: TGAS * 110,
-            check_stake: TGAS * 40,
-            check_deposit_and_stake: TGAS * 40,
 
             unlock: TGAS * 4,
 
@@ -545,9 +507,6 @@ mod test {
                 on_deposit_and_stake: Some(TGAS * 6),
                 on_unstake: Some(TGAS * 7),
                 unlock: Some(TGAS * 8),
-                check_deposit: None,
-                check_stake: None,
-                check_deposit_and_stake: None,
                 on_run_redeem_stake_batch: Some(TGAS * 72),
                 on_redeeming_stake_pending_withdrawal: Some(TGAS * 73),
                 on_redeeming_stake_post_withdrawal: Some(TGAS * 9),

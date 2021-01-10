@@ -1,11 +1,9 @@
 //required in order for near_bindgen macro to work outside of lib.rs
 use crate::*;
 use crate::{
-    contract::ext_staking_pool,
     domain::RedeemLock,
     interface::{contract_state::ContractState, AccountManagement},
     interface::{Operator, StakingService},
-    near::NO_DEPOSIT,
 };
 use near_sdk::{near_bindgen, Promise};
 
@@ -38,7 +36,6 @@ impl Operator for StakeTokenContract {
             }),
             pending_withdrawal: self.pending_withdrawal(),
             run_stake_batch_locked: self.run_stake_batch_locked,
-            stake_batch_status: self.stake_batch_status,
             run_redeem_stake_batch_lock: self.run_redeem_stake_batch_lock,
         }
     }
@@ -81,13 +78,7 @@ impl Operator for StakeTokenContract {
     }
 
     fn withdraw_all_funds_from_staking_pool(&self) -> Promise {
-        self.assert_predecessor_is_self_or_operator();
-
-        ext_staking_pool::withdraw_all(
-            &self.staking_pool_id,
-            NO_DEPOSIT.into(),
-            self.config.gas_config().staking_pool().withdraw().value(),
-        )
+        self.staking_pool_promise().withdraw_all().promise()
     }
 }
 

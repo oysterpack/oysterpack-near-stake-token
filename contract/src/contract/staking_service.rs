@@ -18,7 +18,7 @@ use crate::{
         staking_service::events, BatchId, RedeemStakeBatchReceipt, StakingService, YoctoNear,
         YoctoStake,
     },
-    near::{log, NO_DEPOSIT, YOCTO},
+    near::{log, YOCTO},
 };
 use near_sdk::{
     env, ext_contract, near_bindgen,
@@ -79,34 +79,24 @@ impl StakingService for StakeTokenContract {
 
         self.run_stake_batch_locked = true;
 
-        match self.stake_batch_status {
-            None => {
-                if self.is_liquidity_needed() {
-                    self.get_account_from_staking_pool()
-                        .then(self.invoke_on_run_stake_batch())
-                        .then(self.invoke_release_run_stake_batch_lock())
-                } else {
-                    // stake any liquidity that is not needed
-                    let stake_amount = batch.balance().amount() + self.near_liquidity_pool;
-                    self.near_liquidity_pool = 0.into();
-                    self.invoke_deposit_and_stake(stake_amount)
-                        .then(self.invoke_check_deposit_and_stake(None))
-                        .then(self.invoke_release_run_stake_batch_lock())
-                }
-            }
-            Some(StakeBatchStatus::Deposited {
-                amount,
-                near_liquidity: liquidity_added,
-            }) => self
-                .invoke_stake(amount.into())
-                .then(self.invoke_check_stake(liquidity_added))
-                .then(self.invoke_release_run_stake_batch_lock()),
-            Some(StakeBatchStatus::Staked {
-                near_liquidity: liquidity_added,
-            }) => self
-                .get_account_from_staking_pool()
-                .then(self.invoke_on_deposit_and_stake(liquidity_added))
-                .then(self.invoke_release_run_stake_batch_lock()),
+        if self.is_liquidity_needed() {
+            self.staking_pool_promise()
+                .get_account()
+                .promise()
+                .then(self.invoke_on_run_stake_batch())
+                .then(self.invoke_release_run_stake_batch_lock())
+        } else {
+            // if no liquidity is needed, then lets stake it
+            // NOTE: liquidity belongs to the stakers - some will leak over when we withdraw all from
+            //       the staking pool because of the shares rounding issue on the staking pool side
+            let stake_amount = batch.balance().amount() + self.near_liquidity_pool;
+            self.near_liquidity_pool = 0.into();
+            self.staking_pool_promise()
+                .deposit_and_stake(stake_amount)
+                .get_account()
+                .promise()
+                .then(self.invoke_on_deposit_and_stake(None))
+                .then(self.invoke_release_run_stake_batch_lock())
         }
     }
 
@@ -388,12 +378,16 @@ impl StakingService for StakeTokenContract {
                 );
                 self.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
 
-                self.get_account_from_staking_pool()
+                self.staking_pool_promise()
+                    .get_account()
+                    .promise()
                     .then(self.invoke_on_run_redeem_stake_batch())
                     .then(self.invoke_release_run_redeem_stake_batch_unstaking_lock())
             }
             Some(RedeemLock::PendingWithdrawal) => self
-                .get_account_from_staking_pool()
+                .staking_pool_promise()
+                .get_account()
+                .promise()
                 .then(self.invoke_on_redeeming_stake_pending_withdrawal()),
             // this should already be handled by above assert and should never be hit
             // but it was added to satisfy the match clause for completeness
@@ -505,48 +499,6 @@ impl StakeTokenContract {
                 batch_id: batch_id.value(),
             });
         }
-    }
-
-    pub(crate) fn get_account_from_staking_pool(&self) -> Promise {
-        ext_staking_pool::get_account(
-            env::current_account_id(),
-            &self.staking_pool_id,
-            NO_DEPOSIT.into(),
-            self.config
-                .gas_config()
-                .staking_pool()
-                .get_account()
-                .value(),
-        )
-    }
-
-    pub(crate) fn invoke_deposit(&self, amount: domain::YoctoNear) -> Promise {
-        ext_staking_pool::deposit(
-            &self.staking_pool_id,
-            amount.value(),
-            self.config.gas_config().staking_pool().deposit().value(),
-        )
-    }
-
-    pub(crate) fn invoke_stake(&self, amount: domain::YoctoNear) -> Promise {
-        ext_staking_pool::stake(
-            amount.value().into(),
-            &self.staking_pool_id,
-            NO_DEPOSIT.value(),
-            self.config.gas_config().staking_pool().stake().value(),
-        )
-    }
-
-    pub(crate) fn invoke_deposit_and_stake(&self, amount: domain::YoctoNear) -> Promise {
-        ext_staking_pool::deposit_and_stake(
-            &self.staking_pool_id,
-            amount.value(),
-            self.config
-                .gas_config()
-                .staking_pool()
-                .deposit_and_stake()
-                .value(),
-        )
     }
 }
 
@@ -1166,27 +1118,6 @@ pub struct StakingPoolAccount {
     pub can_withdraw: bool,
 }
 
-#[ext_contract(ext_staking_pool)]
-pub trait ExtStakingPool {
-    fn get_account(&self, account_id: AccountId) -> StakingPoolAccount;
-
-    fn ping(&mut self);
-
-    fn deposit(&mut self);
-
-    fn deposit_and_stake(&mut self);
-
-    fn stake(&mut self, amount: near_sdk::json_types::U128);
-
-    fn unstake_all(&mut self);
-
-    fn unstake(&mut self, amount: near_sdk::json_types::U128);
-
-    fn get_account_total_balance(&self, account_id: AccountId) -> near_sdk::json_types::U128;
-
-    fn withdraw_all(&mut self);
-}
-
 #[ext_contract(ext_redeeming_workflow_callbacks)]
 pub trait ExtRedeemingWokflowCallbacks {
     fn on_run_redeem_stake_batch(
@@ -1234,26 +1165,6 @@ pub trait ExtStakingWorkflowCallbacks {
         #[callback] staking_pool_account: StakingPoolAccount,
     );
 
-    /// checks that the `deposit` call succeeded on the staking pool before
-    /// progressing the workflow:
-    /// 1. stake
-    /// 2. check_state
-    fn check_deposit(
-        &mut self,
-        stake_amount: YoctoNear,
-        near_liquidity: Option<YoctoNear>,
-    ) -> Promise;
-
-    /// checks that the `stake` call succeeded on the staking pool before
-    /// progressing the workflow:
-    /// 1. get_account
-    /// 2. on_deposit_and_stake
-    fn check_stake(&mut self, near_liquidity: Option<YoctoNear>) -> Promise;
-
-    /// checks that the `deposit_and_stake` call succeeded on the staking pool before
-    /// progressing the workflow
-    fn check_deposit_and_stake(&mut self, near_liquidity: Option<YoctoNear>) -> Promise;
-
     /// defined on [Operator] interface
     fn release_run_stake_batch_lock(&mut self);
 }
@@ -1270,7 +1181,8 @@ mod test_stake {
     /// When the stake batch is run
     /// Then it generates to FunctionCall receipts:
     ///   1. deposit and stake into the staking pool
-    ///   2. and then to callback into this contract - check_deposit_and_stake
+    ///   1.1. get account from staking pool
+    ///   2. invoke `on_deposit_and_stake` callback
     ///   3. and finally a callback into this contract to unlock the contract
     #[test]
     fn with_no_locks() {
@@ -1298,12 +1210,24 @@ mod test_stake {
 
         {
             let receipt = &receipts[0];
-            let action = &receipt.actions[0];
-            match action {
-                Action::FunctionCall { method_name, .. } => {
-                    assert_eq!(method_name, "deposit_and_stake")
+            assert_eq!(receipt.actions.len(), 2);
+            {
+                let action = &receipt.actions[0];
+                match action {
+                    Action::FunctionCall { method_name, .. } => {
+                        assert_eq!(method_name, "deposit_and_stake")
+                    }
+                    _ => panic!("expected `deposit_and_stake` func call on staking pool"),
                 }
-                _ => panic!("expected `deposit_and_stake` func call on staking pool"),
+            }
+            {
+                let action = &receipt.actions[1];
+                match action {
+                    Action::FunctionCall { method_name, .. } => {
+                        assert_eq!(method_name, "get_account")
+                    }
+                    _ => panic!("expected `get_account` func call on staking pool"),
+                }
             }
         }
 
@@ -1312,7 +1236,7 @@ mod test_stake {
             let action = &receipt.actions[0];
             match action {
                 Action::FunctionCall { method_name, .. } => {
-                    assert_eq!(method_name, "check_deposit_and_stake")
+                    assert_eq!(method_name, "on_deposit_and_stake")
                 }
                 _ => panic!("expected `get_account` func call on staking pool"),
             }
@@ -1381,131 +1305,6 @@ mod test_stake {
             match action {
                 Action::FunctionCall { method_name, .. } => {
                     assert_eq!(method_name, "on_run_stake_batch")
-                }
-                _ => panic!("expected `get_account` func call on staking pool"),
-            }
-        }
-
-        {
-            let receipt = &receipts[2];
-            let action = &receipt.actions[0];
-            match action {
-                Action::FunctionCall { method_name, .. } => {
-                    assert_eq!(method_name, "release_run_stake_batch_lock")
-                }
-                _ => panic!("expected `release_run_stake_batch_lock` callback"),
-            }
-        }
-    }
-
-    /// Given the stake batch status is set to Deposited - meaning the stake workflow failed downstream
-    ///  from the deposit
-    /// When the stake batch is run
-    /// Then it generates to FunctionCall receipts:
-    ///   1. stake the amount stored in the `StakeBatchStatus` with the staking pool
-    ///   2. and then to callback into this contract - check_stake
-    ///   3. and finally a callback into this contract to unlock the contract
-    #[test]
-    fn with_stake_batch_status_deposited() {
-        let mut test_context = TestContext::with_registered_account(None);
-        let mut context = test_context.context.clone();
-        let contract = &mut test_context.contract;
-
-        context.attached_deposit = YOCTO;
-        testing_env!(context.clone());
-        contract.deposit();
-
-        contract.stake_batch_status = Some(StakeBatchStatus::Deposited {
-            amount: YOCTO.into(),
-            near_liquidity: Some(YOCTO.into()),
-        });
-
-        context.prepaid_gas = 10u64.pow(18);
-        testing_env!(context.clone());
-        contract.stake();
-
-        let receipts = deserialize_receipts(&get_created_receipts());
-        assert_eq!(receipts.len(), 3);
-
-        {
-            let receipt = &receipts[0];
-            let action = &receipt.actions[0];
-            match action {
-                Action::FunctionCall { method_name, .. } => {
-                    assert_eq!(method_name, "stake")
-                }
-                _ => panic!("expected `deposit_and_stake` func call on staking pool"),
-            }
-        }
-
-        {
-            let receipt = &receipts[1];
-            let action = &receipt.actions[0];
-            match action {
-                Action::FunctionCall { method_name, .. } => {
-                    assert_eq!(method_name, "check_stake")
-                }
-                _ => panic!("expected `get_account` func call on staking pool"),
-            }
-        }
-
-        {
-            let receipt = &receipts[2];
-            let action = &receipt.actions[0];
-            match action {
-                Action::FunctionCall { method_name, .. } => {
-                    assert_eq!(method_name, "release_run_stake_batch_lock")
-                }
-                _ => panic!("expected `release_run_stake_batch_lock` callback"),
-            }
-        }
-    }
-
-    /// Given the stake batch status is set to Staked - meaning the StakeBatch was deposited and staked
-    ///   into the staking pool but there was a failure downstream
-    /// When the stake batch is run
-    /// Then it generates to FunctionCall receipts:
-    ///   1. stake the amount stored in the `StakeBatchStatus` with the staking pool
-    ///   2. and then to callback into this contract - check_stake
-    ///   3. and finally a callback into this contract to unlock the contract
-    #[test]
-    fn with_stake_batch_status_staked() {
-        let mut test_context = TestContext::with_registered_account(None);
-        let mut context = test_context.context.clone();
-        let contract = &mut test_context.contract;
-
-        context.attached_deposit = YOCTO;
-        testing_env!(context.clone());
-        contract.deposit();
-
-        contract.stake_batch_status = Some(StakeBatchStatus::Staked {
-            near_liquidity: Some(YOCTO.into()),
-        });
-
-        context.prepaid_gas = 10u64.pow(18);
-        testing_env!(context.clone());
-        contract.stake();
-
-        let receipts = deserialize_receipts(&get_created_receipts());
-        assert_eq!(receipts.len(), 3);
-
-        {
-            let receipt = &receipts[0];
-            let action = &receipt.actions[0];
-            match action {
-                Action::FunctionCall { method_name, .. } => {
-                    assert_eq!(method_name, "get_account")
-                }
-                _ => panic!("expected `deposit_and_stake` func call on staking pool"),
-            }
-        }
-
-        {
-            let receipt = &receipts[1];
-            let action = &receipt.actions[0];
-            match action {
-                Action::FunctionCall { method_name, .. } => {
-                    assert_eq!(method_name, "on_deposit_and_stake")
                 }
                 _ => panic!("expected `get_account` func call on staking pool"),
             }
@@ -2603,12 +2402,24 @@ mod test {
 
         {
             let receipt = &receipts[0];
-            let action = &receipt.actions[0];
-            match action {
-                Action::FunctionCall { method_name, .. } => {
-                    assert_eq!(method_name, "deposit_and_stake")
+            assert_eq!(receipt.actions.len(), 2);
+            {
+                let action = &receipt.actions[0];
+                match action {
+                    Action::FunctionCall { method_name, .. } => {
+                        assert_eq!(method_name, "deposit_and_stake")
+                    }
+                    _ => panic!("expected `deposit_and_stake` func call on staking pool"),
                 }
-                _ => panic!("expected `deposit_and_stake` func call on staking pool"),
+            }
+            {
+                let action = &receipt.actions[1];
+                match action {
+                    Action::FunctionCall { method_name, .. } => {
+                        assert_eq!(method_name, "get_account")
+                    }
+                    _ => panic!("expected `get_account` func call on staking pool"),
+                }
             }
         }
 
@@ -2617,9 +2428,9 @@ mod test {
             let action = &receipt.actions[0];
             match action {
                 Action::FunctionCall { method_name, .. } => {
-                    assert_eq!(method_name, "check_deposit_and_stake")
+                    assert_eq!(method_name, "on_deposit_and_stake")
                 }
-                _ => panic!("expected `get_account` func call on staking pool"),
+                _ => panic!("expected `on_deposit_and_stake` func call on staking pool"),
             }
         }
 

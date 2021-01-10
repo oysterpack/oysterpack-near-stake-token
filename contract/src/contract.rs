@@ -4,6 +4,7 @@ pub mod fungible_token;
 pub mod operator;
 pub mod redeeming_workflow_callbacks;
 pub mod settings;
+pub(crate) mod staking_pool;
 pub mod staking_service;
 pub mod staking_workflow_callbacks;
 

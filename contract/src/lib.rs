@@ -112,7 +112,6 @@ pub(crate) use contract::*;
 #[cfg(test)]
 pub(crate) mod test_utils;
 
-use crate::domain::StakeBatchStatus;
 use crate::{
     config::Config,
     core::Hash,
@@ -131,14 +130,14 @@ use near_sdk::{
     collections::LookupMap,
     env,
     json_types::ValidAccountId,
-    near_bindgen, wee_alloc, AccountId,
+    near_bindgen, wee_alloc, AccountId, PanicOnDefault,
 };
 
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 #[near_bindgen]
-#[derive(BorshDeserialize, BorshSerialize)]
+#[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct StakeTokenContract {
     /// contract owner
     owner_id: AccountId,
@@ -193,8 +192,6 @@ pub struct StakeTokenContract {
     ///   to the current `stake_batch`
     next_stake_batch: Option<StakeBatch>,
 
-    stake_batch_status: Option<StakeBatchStatus>,
-
     redeem_stake_batch: Option<RedeemStakeBatch>,
     /// used to store batch requests while the contract is locked    
     next_redeem_stake_batch: Option<RedeemStakeBatch>,
@@ -222,12 +219,6 @@ pub struct StakeTokenContract {
     #[cfg(test)]
     #[borsh_skip]
     env: near_env::Env,
-}
-
-impl Default for StakeTokenContract {
-    fn default() -> Self {
-        panic!("contract must be initialized before usage")
-    }
 }
 
 #[near_bindgen]
@@ -261,7 +252,6 @@ impl StakeTokenContract {
             redeem_stake_batch: None,
             next_stake_batch: None,
             next_redeem_stake_batch: None,
-            stake_batch_status: None,
             stake_batch_receipts: LookupMap::new(STAKE_BATCH_RECEIPTS_KEY_PREFIX.to_vec()),
             redeem_stake_batch_receipts: LookupMap::new(
                 REDEEM_STAKE_BATCH_RECEIPTS_KEY_PREFIX.to_vec(),
@@ -360,7 +350,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "contract must be initialized before usage")]
+    #[should_panic(expected = "The contract is not initialized")]
     fn default_constructor_should_fail() {
         let account_id = "bob.near";
         let mut context = new_context(account_id);
