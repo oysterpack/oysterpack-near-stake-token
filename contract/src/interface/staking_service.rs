@@ -84,8 +84,8 @@ pub trait StakingService {
     /// - deposits are committed for staking via [stake](StakingService::stake)
     /// - each additional deposit request add the funds to the batch
     /// - NEAR funds can be withdrawn from the batch, as long as the batch is not yet committed via
-    ///   - [withdraw_funds_from_stake_batch](StakingService::withdraw_funds_from_stake_batch)
-    ///   - [withdraw_all_funds_from_stake_batch](StakingService::withdraw_all_funds_from_stake_batch)
+    ///   - [withdraw_from_stake_batch](StakingService::withdraw_from_stake_batch)
+    ///   - [withdraw_all_from_stake_batch](StakingService::withdraw_all_from_stake_batch)
     ///
     /// ## Panics
     /// - if account is not registered
@@ -96,8 +96,8 @@ pub trait StakingService {
     /// following ways:
     /// 1. explicitly via [claim_receipts](StakingService::claim_receipts)
     /// 2. implicitly when withdrawing NEAR funds
-    ///    - [withdraw_all](crate::interface::AccountManagement::withdraw_all)
-    ///    - [withdraw](crate::interface::AccountManagement::withdraw_all)
+    ///    - [withdraw_all](crate::interface::StakingService::withdraw_all)
+    ///    - [withdraw](crate::interface::StakingService::withdraw)
     /// 3. implicitly when the user who is depositing has pending redeem stake batches
     ///
     /// #\[payable\]
@@ -183,7 +183,9 @@ pub trait StakingService {
     /// The account's STAKE balance is debited the amount and moved into the batch.
     /// - redeem STAKE tokens are committed and unstaked via [unstake](StakingService::unstake)
     /// - each redeem request adds the STAKE into the batch
-    /// - the entire redeem batch can be cancelled via [cancel_uncommitted_redeem_stake_batch](StakingService::cancel_uncommitted_redeem_stake_batch)
+    /// - STAKE can be removed from uncommitted batches via:
+    ///   - [remove_from_redeem_stake_batch](StakingService::remove_from_redeem_stake_batch)
+    ///   - [remove_all_from_redeem_stake_batch](StakingService::remove_all_from_redeem_stake_batch)
     ///
     /// If the contract is locked for redeeming, then the request is put into the next batch.    
     /// If the contract is not locked for redeeming, then the request is put into the current batch,
