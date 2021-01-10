@@ -191,8 +191,7 @@ impl StakeTokenContract {
         let deposit_amount = batch.balance().amount().value() - near_liquidity;
         if deposit_amount > 0 {
             self.staking_pool_promise()
-                .deposit(deposit_amount.into())
-                .stake(batch.balance().amount())
+                .deposit_then_stake(deposit_amount.into(), batch.balance().amount())
                 .get_account()
                 .promise()
                 .then(self.invoke_on_deposit_and_stake(Some(near_liquidity.into())))

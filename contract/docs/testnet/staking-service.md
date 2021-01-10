@@ -22,7 +22,7 @@ near call stake.oysterpack.testnet stake --accountId alfio-zappala-oysterpack.te
 near call stake.oysterpack.testnet stake --accountId oysterpack.testnet --gas 250000000000000
 
 near call stake.oysterpack.testnet deposit_and_stake --accountId alfio-zappala-oysterpack.testnet --amount 1 --gas 200000000000000
-near call stake.oysterpack.testnet deposit_and_stake --accountId oysterpack.testnet --amount 1 --gas 200000000000000
+near call stake.oysterpack.testnet deposit_and_stake --accountId oysterpack.testnet --amount 1 --gas 150000000000000
 
 near call stake.oysterpack.testnet redeem --accountId alfio-zappala-oysterpack.testnet --args '{"amount":"500000000000000000000000"}'
 near call stake.oysterpack.testnet redeem --accountId oysterpack.testnet --args '{"amount":"600000000000000000000000"}'
@@ -71,12 +71,7 @@ near call $STAKING_POOL withdraw_all --accountId stake.oysterpack.testnet --gas 
 1999999999999999999999999
 
 1000000000000                 = 1 TGas
-41137741519743
-10851542876472
-210277125000
-3591923837853
-210277125000
-2835131909331
+22372533024614
 
 
 

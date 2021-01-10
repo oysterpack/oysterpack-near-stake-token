@@ -352,7 +352,7 @@ impl CallBacksGasConfig {
 impl Default for CallBacksGasConfig {
     fn default() -> Self {
         Self {
-            on_run_stake_batch: TGAS * 150,
+            on_run_stake_batch: TGAS * 135,
             on_deposit_and_stake: TGAS * 5,
 
             unlock: TGAS * 4,

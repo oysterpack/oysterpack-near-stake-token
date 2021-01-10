@@ -34,14 +34,21 @@ impl<'a> StakingPoolPromiseBuilder<'a> {
         )
     }
 
-    pub fn deposit(self, amount: YoctoNear) -> Self {
+    pub fn deposit_then_stake(self, deposit_amount: YoctoNear, stake_amount: YoctoNear) -> Self {
         Self(
-            self.0.function_call(
-                b"deposit".to_vec(),
-                NO_ARGS.to_vec(),
-                amount.into(),
-                self.1.gas_config().staking_pool().deposit().value(),
-            ),
+            self.0
+                .function_call(
+                    b"deposit".to_vec(),
+                    NO_ARGS.to_vec(),
+                    deposit_amount.into(),
+                    self.1.gas_config().staking_pool().deposit().value(),
+                )
+                .function_call(
+                    b"stake".to_vec(),
+                    serde_json::to_vec(&StakeArgs::from(stake_amount)).unwrap(),
+                    NO_DEPOSIT.into(),
+                    self.1.gas_config().staking_pool().stake().value(),
+                ),
             self.1,
         )
     }
