@@ -18,11 +18,11 @@ near call stake.oysterpack.testnet deposit --accountId 1.alfio-zappala-oysterpac
 near call stake.oysterpack.testnet withdraw_funds_from_stake_batch --accountId oysterpack.testnet --args '{"amount":"500000000000000000000000"}'
 near call stake.oysterpack.testnet withdraw_all_funds_from_stake_batch --accountId oysterpack.testnet
 
-near call stake.oysterpack.testnet stake --accountId alfio-zappala-oysterpack.testnet --gas 250000000000000
-near call stake.oysterpack.testnet stake --accountId oysterpack.testnet --gas 250000000000000
+near call stake.oysterpack.testnet stake --accountId alfio-zappala-oysterpack.testnet --gas 200000000000000
+near call stake.oysterpack.testnet stake --accountId oysterpack.testnet --gas 200000000000000
 
 near call stake.oysterpack.testnet deposit_and_stake --accountId alfio-zappala-oysterpack.testnet --amount 1 --gas 200000000000000
-near call stake.oysterpack.testnet deposit_and_stake --accountId oysterpack.testnet --amount 1 --gas 150000000000000
+near call stake.oysterpack.testnet deposit_and_stake --accountId oysterpack.testnet --amount 1 --gas 200000000000000
 
 near call stake.oysterpack.testnet redeem --accountId alfio-zappala-oysterpack.testnet --args '{"amount":"500000000000000000000000"}'
 near call stake.oysterpack.testnet redeem --accountId oysterpack.testnet --args '{"amount":"600000000000000000000000"}'
