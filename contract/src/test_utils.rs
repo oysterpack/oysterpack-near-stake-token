@@ -1,6 +1,6 @@
 use crate::interface::{AccountManagement, YoctoNear};
 use crate::near_env::Env;
-use crate::{config::Config, near::*, ContractSettings, StakeTokenContract};
+use crate::{near::*, ContractSettings, StakeTokenContract};
 use near_sdk::{
     serde::{Deserialize, Serialize},
     serde_json, testing_env, AccountId, MockedBlockchain, PromiseResult, VMContext,
@@ -52,10 +52,6 @@ impl<'a> TestContext<'a> {
             context,
         }
     }
-}
-
-pub fn expected_account_storage_fee() -> u128 {
-    EXPECTED_ACCOUNT_STORAGE_USAGE as u128 * Config::default().storage_cost_per_byte().value()
 }
 
 pub fn default_contract_settings() -> ContractSettings {

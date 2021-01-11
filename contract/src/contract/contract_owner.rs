@@ -1,4 +1,4 @@
-use crate::interface::{AccountManagement, ContractOwner, YoctoNear};
+use crate::interface::{AccountManagement, ContractOwner, StakingService, YoctoNear};
 //required in order for near_bindgen macro to work outside of lib.rs
 use crate::errors::contract_owner::{
     INSUFFICIENT_FUNDS_FOR_OWNER_STAKING, INSUFFICIENT_FUNDS_FOR_OWNER_WITHDRAWAL,
@@ -8,6 +8,15 @@ use crate::interface::contract_owner::events::OwnershipTransferred;
 use crate::near::{log, YOCTO};
 use crate::*;
 use near_sdk::{json_types::ValidAccountId, near_bindgen, Promise};
+
+// TODO: remove
+//       - added to show example for https://github.com/near/near-sdk-rs/issues/262
+#[near_bindgen]
+impl StakeTokenContract {
+    pub fn get_staking_pool_id(&self) -> AccountId {
+        self.staking_pool_id()
+    }
+}
 
 #[near_bindgen]
 impl ContractOwner for StakeTokenContract {
@@ -112,7 +121,7 @@ mod test {
     fn owner_balance_has_funds() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
-        context.account_balance = 100 * YOCTO;
+        context.account_balance = YOCTO * 100;
         context.is_view = false;
         testing_env!(context.clone());
 
@@ -125,22 +134,22 @@ mod test {
 
         assert_eq!(
             env::account_balance(),
-            (100 * YOCTO) + contract.account_storage_fee().value()
+            (YOCTO + 100) + contract.account_storage_fee().value()
         );
 
         testing_env!(context.clone());
-        assert_eq!(contract.owner_balance(), (59 * YOCTO).into());
+        assert_eq!(contract.owner_balance(), (YOCTO * 59).into());
 
-        contract.total_near.credit((50 * YOCTO).into());
+        contract.total_near.credit((YOCTO * 50).into());
         testing_env!(context.clone());
-        assert_eq!(contract.owner_balance(), (9 * YOCTO).into());
+        assert_eq!(contract.owner_balance(), (YOCTO * 9).into());
     }
 
     #[test]
     fn owner_balance_has_funds_with_pending_stake_batches_and_near_balance_and_liquidity() {
         let account_id = "alfio-zappala.near";
         let mut context = new_context(account_id);
-        context.account_balance = 100 * YOCTO;
+        context.account_balance = YOCTO * 100;
         context.is_view = false;
         testing_env!(context.clone());
 
@@ -158,10 +167,10 @@ mod test {
         *contract.batch_id_sequence += 1;
         contract.next_stake_batch = Some(domain::StakeBatch::new(
             contract.batch_id_sequence,
-            (2 * YOCTO).into(),
+            (YOCTO * 2).into(),
         ));
 
-        context.storage_usage = 400 * 1000; // 400 KB
+        context.storage_usage = 400u64 * 1000u64; // 400 KB
         testing_env!(context.clone());
         assert_eq!(contract.owner_balance(), (56 * YOCTO).into());
 
