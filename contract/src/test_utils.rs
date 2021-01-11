@@ -7,7 +7,7 @@ use near_sdk::{
 };
 use near_vm_logic::mocks::mock_external as near_mocks;
 
-pub const EXPECTED_ACCOUNT_STORAGE_USAGE: u64 = 722;
+pub const EXPECTED_ACCOUNT_STORAGE_USAGE: u64 = 681;
 
 pub struct TestContext<'a> {
     pub contract: StakeTokenContract,

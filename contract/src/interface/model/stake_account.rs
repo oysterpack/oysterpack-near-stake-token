@@ -16,8 +16,6 @@ pub struct StakeAccount {
     pub near: Option<TimestampedNearBalance>,
     /// account STAKE token balance
     pub stake: Option<TimestampedStakeBalance>,
-    /// STAKE is locked for a [transfer-call](crate::interface::fungible_token::TransferCall::transfer_call)
-    pub locked_stake: Option<TimestampedStakeBalance>,
 
     /// NEAR funds that have been deposited to be staked when the batch is run
     pub stake_batch: Option<StakeBatch>,

@@ -1,6 +1,5 @@
 pub mod account_management;
 pub mod contract_owner;
-pub mod fungible_token;
 pub mod operator;
 pub mod redeeming_workflow_callbacks;
 pub mod settings;

@@ -76,12 +76,7 @@
 //! The STAKE token contract [interfaces](crate::interface) are defined as traits:
 //! - [AccountManagement](crate::interface::AccountManagement)
 //! - [StakingService](crate::interface::StakingService)
-//! - [FungibleToken](crate::interface::FungibleToken)
-//!   - supports following token transfer protocols:
-//!     - [simple](crate::interface::SimpleTransfer) (NEP-21)
-//!     - [vault based](crate::interface::VaultBasedTransfer) (NEP-122)
-//!     - [transfer-call](crate::interface::TransferCall) (NEP-136)
-//!     - [confirm-transfer](crate::interface::ConfirmTransfer) (NEP-110)
+//! - [FungibleTokenCore](crate::interface::FungibleTokenCore)
 //! - [Operator](crate::interface::Operator)
 //! - [ContractOwner](crate::interface::ContractOwner)
 //!
@@ -118,11 +113,11 @@ use crate::{
     domain::{
         Account, BatchId, BlockHeight, RedeemLock, RedeemStakeBatch, RedeemStakeBatchReceipt,
         StakeBatch, StakeBatchReceipt, StakeTokenValue, StorageUsage, TimestampedNearBalance,
-        TimestampedStakeBalance, Vault, VaultId, YoctoNear,
+        TimestampedStakeBalance, YoctoNear,
     },
     near::storage_keys::{
         ACCOUNTS_KEY_PREFIX, REDEEM_STAKE_BATCH_RECEIPTS_KEY_PREFIX,
-        STAKE_BATCH_RECEIPTS_KEY_PREFIX, VAULTS_KEY_PREFIX,
+        STAKE_BATCH_RECEIPTS_KEY_PREFIX,
     },
 };
 use near_sdk::{
@@ -212,10 +207,6 @@ pub struct StakeTokenContract {
     run_stake_batch_locked: bool,
     run_redeem_stake_batch_lock: Option<RedeemLock>,
 
-    /// for NEP-122 - vault-based fungible token
-    vaults: LookupMap<VaultId, Vault>,
-    vault_id_sequence: VaultId,
-
     #[cfg(test)]
     #[borsh_skip]
     env: near_env::Env,
@@ -261,8 +252,6 @@ impl StakeTokenContract {
             run_stake_batch_locked: false,
             run_redeem_stake_batch_lock: None,
 
-            vaults: LookupMap::new(VAULTS_KEY_PREFIX.to_vec()),
-            vault_id_sequence: VaultId::default(),
             #[cfg(test)]
             env: near_env::Env::default(),
         };

@@ -7,4 +7,3 @@
 pub const ACCOUNTS_KEY_PREFIX: [u8; 1] = [0];
 pub const STAKE_BATCH_RECEIPTS_KEY_PREFIX: [u8; 1] = [1];
 pub const REDEEM_STAKE_BATCH_RECEIPTS_KEY_PREFIX: [u8; 1] = [2];
-pub const VAULTS_KEY_PREFIX: [u8; 1] = [3];

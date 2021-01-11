@@ -134,7 +134,6 @@ impl AccountManagement for StakeTokenContract {
                     storage_escrow: account.storage_escrow.into(),
                     near: account.near.map(Into::into),
                     stake: account.stake.map(Into::into),
-                    locked_stake: account.locked_stake.map(Into::into),
                     stake_batch: account.stake_batch.map(Into::into),
                     next_stake_batch: account.next_stake_batch.map(Into::into),
                     redeem_stake_batch,
@@ -249,7 +248,7 @@ mod test_register_account {
 
         let account_storage_usage = env::storage_usage() - storage_before_registering_account;
         assert_eq!(
-            account_storage_usage, 120,
+            account_storage_usage, 119,
             "account storage usage changed !!! If the change is expected, then update the assert"
         );
 

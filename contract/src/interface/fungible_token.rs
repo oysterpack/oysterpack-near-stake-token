@@ -1,428 +1,301 @@
-use crate::domain::{self, Gas};
-use near_sdk::json_types::{ValidAccountId, U128};
-#[allow(unused_imports)]
-use near_sdk::AccountId;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    ext_contract,
+    json_types::{ValidAccountId, U128},
     serde::{Deserialize, Serialize},
-    Promise,
+    Promise, PromiseOrValue,
 };
-use std::collections::HashMap;
+use std::{
+    cmp::Ordering,
+    fmt::{self, Display, Formatter},
+    ops::{Deref, DerefMut},
+};
 
-/// - Fungible token supports 1 or more [`TransferProtocol`]s as specified per [`Metadata`]
-/// - Accounts must register with the token contract and pay for account storage fees.
-///   - account storage fees are escrowed and refunded when the account unregisters
-///   - account chooses the transfer protocol to use as transfer recipient
-pub trait FungibleToken {
-    fn metadata(&self) -> Metadata;
-
-    /// Returns total supply.
-    /// MUST equal to total_amount_of_token_minted - total_amount_of_token_burned
-    fn total_supply(&self) -> U128;
-
-    /// Returns the token balance for `holder` account
-    fn balance(&self, account_id: ValidAccountId) -> U128;
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(crate = "near_sdk::serde")]
-pub struct Metadata {
-    pub name: String,
-    pub symbol: String,
-
-    /// URL to additional resources about the token.
-    pub reference: Option<String>,
-
-    /// the smallest part of the token that’s (denominated in e18) not divisible
-    /// In other words, the granularity is the smallest amount of tokens (in the internal denomination)
-    /// which MAY be minted, sent or burned at any time.
-    /// - The following rules MUST be applied regarding the granularity:
-    /// - The granularity value MUST be set at creation time.
-    /// - The granularity value MUST NOT be changed, ever.
-    /// - The granularity value MUST be greater than or equal to 1.
-    /// - All balances MUST be a multiple of the granularity.
-    /// - Any amount of tokens (in the internal denomination) minted, sent or burned MUST be a
-    ///   multiple of the granularity value.
-    /// - Any operation that would result in a balance that’s not a multiple of the granularity value
-    ///   MUST be considered invalid, and the transaction MUST revert.
+/// Defines the standard interface for the core Fungible Token contract
+/// - [NEP-141](https://github.com/near/NEPs/issues/141)
+///
+/// The core standard supports the following features:
+/// - [simple token transfers](FungibleTokenCore::ft_transfer)
+/// - [token transfers between contracts](FungibleTokenCore::ft_transfer_call)
+/// - [burning tokens](FungibleTokenCore::ft_burn)
+/// - accounting for [total token supply](FungibleTokenCore::ft_total_supply) and
+///   [account balances](FungibleTokenCore::ft_balance_of)
+///
+/// ## Notes
+/// - it doesn't include token metadata standard that will be covered by a separate NEP, because the
+///   metadata may evolve.
+/// - it also doesn't include account registration standard that also should be covered by a separate
+///   NEP because it can be reused for other contract.
+///
+/// ### Security
+/// Requirement for accept attached deposits (#\[payable\])
+/// Due to the nature of function-call permission access keys on NEAR protocol, the method that
+/// requires an attached deposit can't be called by the restricted access key. If the token contract
+/// requires an attached deposit of at least 1 yoctoNEAR on transfer methods, then the function-call
+/// restricted access key will not be able to call them without going through the wallet confirmation.
+/// This prevents some attacks like fishing through an authorization to a token contract.
+///
+/// This 1 yoctoNEAR is not enforced by this standard, but is encouraged to do. While ability to
+/// receive attached deposit is enforced by this token.
+///
+/// ### Transfer Call Refunds
+/// If the receiver contract is malicious or incorrectly implemented, then the receiver's promise
+/// result may be invalid and the required balance may not be available on the receiver's account.
+/// In this case the refund can't be provided provided to the sender. This is prevented by #122
+/// standard that locks funds into a temporary vault and prevents receiver from overspending the
+/// funds and later retuning invalid value. But if this flaw exist in this standard, it's not an
+/// issue for the sender account. It only affects the transfer amount and the receiver's account
+/// balance. The receiver can't overspend tokens from the sender outside of sent amount, so this
+/// standard should be considered as safe as #122
+///
+pub trait FungibleTokenCore {
+    /// Enables simple transfer between accounts.
     ///
-    /// NOTE: Most tokens SHOULD be fully partition-able. I.e., this function SHOULD return 1 unless
-    ///       there is a good reason for not allowing any fraction of the token.
-    pub granularity: u8,
-
-    /// Transfer protocols that are supported by the token contract
-    pub supported_transfer_protocols: Vec<TransferProtocol>,
-}
-
-impl Metadata {
-    /// Each token must have 18 digits precision (decimals)
-    pub const DECIMALS: u8 = 18;
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(crate = "near_sdk::serde")]
-pub struct TransferProtocol {
-    /// Suggested protocol names:
-    /// - simple - NEP-21
-    /// - allowance - NEP 21
-    /// - vault_transfer - NEP-122
-    /// - transfer_and_notify - NEP-136
-    pub name: String,
-    /// - each protocol defines min amount of gas required, excluding gas required to cover `msg` `memo`
-    pub gas: Gas,
-}
-
-impl TransferProtocol {
-    pub fn simple(gas: Gas) -> Self {
-        Self {
-            name: "simple".to_string(),
-            gas,
-        }
-    }
-
-    pub fn allowance(gas: Gas) -> Self {
-        Self {
-            name: "allowance".to_string(),
-            gas,
-        }
-    }
-
-    pub fn vault_transfer(gas: Gas) -> Self {
-        Self {
-            name: "vault_transfer".to_string(),
-            gas,
-        }
-    }
-
-    pub fn confirm_transfer(gas: Gas) -> Self {
-        Self {
-            name: "confirm_transfer".to_string(),
-            gas,
-        }
-    }
-
-    pub fn transfer_call(gas: Gas) -> Self {
-        Self {
-            name: "transfer_call".to_string(),
-            gas,
-        }
-    }
-}
-
-/// modeled after [NEP-21](https://github.com/near/NEPs/issues/21)
-pub trait SimpleTransfer {
-    /// Simple direct transfers between registered accounts.
+    /// - Transfers positive `amount` of tokens from the `env::predecessor_account_id` to `receiver_id`.
+    /// - Both accounts should be registered with the contract for transfer to succeed.
+    /// - Method is required to be able to accept attached deposits - to not panic on attached deposit.
+    ///   See security section of the standard.
     ///
-    /// Gas requirement: 5 TGas
-    /// Should be called by the balance owner.
-    /// Requires that the sender and the receiver accounts be registered.
-    ///
-    /// Actions:
-    /// - Transfers `amount` of tokens from `predecessor_id` to `recipient`.
-    ///
-    /// ## Transfer Headers
-    /// - used to add context to the transfer
-    /// - standard headers will be defined, but this also enables the protocol to be extended
-    ///   with custom headers
-    /// - proposed standard headers:
-    ///   - `msg`: is a message sent to the recipient. It might be used to send additional call
-    //      instructions.
-    ///   - `memo`: arbitrary data with no specified format used to link the transaction with an
-    ///     external event. If referencing a binary data, it should use base64 serialization.
-    /// - for simple transfer, the headers are logged as part of the [SimpleTransfer](crate::interface::fungible_token::events::SimpleTransfer]
-    ///   event
+    /// Arguments:
+    /// - `receiver_id` - the account ID of the receiver.
+    /// - `amount` - the amount of tokens to transfer. Should be a positive number in decimal string representation.
+    /// - `memo` - an optional string field in a free form to associate a memo with this transfer.
     ///
     /// ## Panics
-    /// - if predecessor account is not registered - sender account
-    /// - if recipient account is not registered
-    /// - if sender account is same as receiver account
-    /// - if account balance has insufficient funds for transfer
-    fn transfer(
-        &mut self,
-        recipient: ValidAccountId,
-        amount: U128,
-        headers: Option<HashMap<String, String>>,
-    );
-}
-
-/// modeled after [NEP-136](https://github.com/near/NEPs/issues/136)
-pub trait TransferCall {
-    /// Transfer `amount` of tokens from the predecessor account to a `recipient` contract.
-    /// The recipient contract MUST implement [TransferCallRecipient](crate::interface::fungible_token::ext_transfer_call_recipient)
-    /// interface. The tokens are transferred to the recipient account before calling the recipient
-    /// to notify them of the transfer. The notification is async, i.e., the transfer is committed
-    /// when `transfer_call` completes.
-    /// 1. sender initiates the transfer via [transfer_call](TransferCall::transfer_call)
-    /// 2. token transfers the funds from the sender's account to the recipient's account.
-    /// 3. The recipient contract is then notified of the transfer via
-    ///    [`FinalizeTransferCallback::finalize_ft_transfer`].
+    /// - if there is no attached deposit
+    /// - if either sender or receiver accounts are not registered
+    /// - if amount is zero
+    /// - if the sender account has insufficient funds to fulfill the request
     ///
-    /// ## Transfer Headers
-    /// - used to add context to the transfer
-    /// - standard headers will be defined, but this also enables the protocol to be extended
-    ///   with custom headers
-    /// - proposed standard headers:
-    ///   - `msg`: is a message sent to the recipient. It might be used to send additional call
-    //      instructions.
-    ///   - `memo`: arbitrary data with no specified format used to link the transaction with an
-    ///     external event. If referencing a binary data, it should use base64 serialization.
+    /// #\[payable\]
+    fn ft_transfer(&mut self, receiver_id: ValidAccountId, amount: TokenAmount, memo: Option<Memo>);
+
+    /// Transfer to a contract with a callback.
+    ///
+    /// Transfers positive `amount` of tokens from the `env::predecessor_account_id` to `receiver_id`
+    /// account. Then calls [`FungibleTokenReceiver::ft_on_transfer`] method on `receiver_id` contract
+    /// and attaches a callback to resolve this transfer.
+    /// [`FungibleTokenReceiver::ft_on_transfer`] method should return the amount of tokens used by
+    /// the receiver contract, the remaining tokens should be refunded to the `predecessor_account_id`
+    /// at the resolve transfer callback.
+    ///
+    /// Token contract should pass all the remaining unused gas to [`FungibleTokenReceiver::ft_on_transfer`]
+    ///
+    /// Malicious or invalid behavior by the receiver's contract:
+    /// - If the receiver contract promise fails or returns invalid value, the full transfer amount
+    ///   should be refunded.
+    /// - If the receiver contract overspent the tokens, and the `receiver_id` balance is lower
+    ///   than the required refund amount, the remaining balance should be refunded.
+    ///
+    /// Both accounts should be registered with the contract for transfer to succeed.
+    /// Method is required to be able to accept attached deposits - to not panic on attached deposit. See Security
+    /// section of the standard.
+    ///
+    /// Arguments:
+    /// - `receiver_id` - the account ID of the receiver contract. This contract will be called.
+    /// - `amount` - the amount of tokens to transfer. Should be a positive number in decimal string representation.
+    /// - `data` - a string message that will be passed to `ft_on_transfer` contract call.
+    /// - `memo` - an optional string field in a free form to associate a memo with this transfer.
+    /// Returns a promise to resolve transfer call which will return the used amount (see suggested trait to resolve
+    /// transfer).
     ///
     /// ## Panics
-    /// - if accounts are not registered
-    /// - insufficient funds
-    fn transfer_call(
+    /// - if there is no attached deposit
+    /// - if either sender or receiver accounts are not registered
+    /// - if amount is zero
+    /// - if the sender account has insufficient funds to fulfill the transfer request
+    ///
+    /// #\[payable\]
+    fn ft_transfer_call(
         &mut self,
-        recipient: ValidAccountId,
-        amount: U128,
-        headers: Option<HashMap<String, String>>,
+        receiver_id: ValidAccountId,
+        amount: TokenAmount,
+        data: Option<TransferCallData>,
+        memo: Option<Memo>,
     ) -> Promise;
+
+    /// Destroys specified amount of tokens from the predecessor account, reducing the total supply.
+    ///
+    /// # Panics
+    /// - if there is no attached deposit
+    /// - if account is not registered
+    /// - if amount is zero
+    /// - if the account has insufficient funds to fulfill the transfer request
+    ///
+    /// #\[payable\]
+    fn ft_burn(&mut self, amount: TokenAmount, memo: Option<Memo>);
+
+    fn ft_total_supply(&self) -> TokenAmount;
+
+    fn ft_balance_of(&self, account_id: ValidAccountId) -> TokenAmount;
 }
 
-/// Interface for recipient call on fungible-token transfers.
-/// - `token` is an account address of the token  - a smart-contract defining the token being transferred.
-/// - `from` is an address of a previous holder of the tokens being sent
-#[ext_contract(ext_transfer_call_recipient)]
-pub trait TransferCallRecipient {
-    fn on_transfer_call(
+/// Receiver of the Fungible Token for [`FungibleTokenCore::ft_transfer_call`] calls.
+pub trait FungibleTokenReceiver {
+    /// Callback to receive tokens.
+    ///
+    /// Called by fungible token contract `env::predecessor_account_id` after `transfer_call` was initiated by
+    /// `sender_id` of the given `amount` with the transfer message given in `msg` field.
+    /// The `amount` of tokens were already transferred to this contract account and ready to be used.
+    ///
+    /// The method should return the amount of tokens that are used/accepted by this contract from the transferred
+    /// amount. Examples:
+    /// - The transferred amount was `500`, the contract completely takes it and should return `500`.
+    /// - The transferred amount was `500`, but this transfer call only needs `450` for the action passed in the `msg`
+    ///   field, then the method should return `450`.
+    /// - The transferred amount was `500`, but the action in `msg` field has expired and the transfer should be
+    ///   cancelled. The method should return `0` or panic.
+    ///
+    /// Arguments:
+    /// - `sender_id` - the account ID that initiated the transfer.
+    /// - `amount` - the amount of tokens that were transferred to this account.
+    /// - `msg` - a string message that was passed with this transfer call.
+    ///
+    /// Returns the amount of tokens that are used/accepted by this contract from the transferred amount.
+    fn ft_on_transfer(
         &mut self,
-        from: ValidAccountId,
-        amount: U128,
-        headers: Option<HashMap<String, String>>,
-    );
+        sender_id: ValidAccountId,
+        amount: TokenAmount,
+        msg: Option<TransferCallData>,
+    ) -> PromiseOrValue<TokenAmount>;
 }
 
-/// modeled after [NEP-110](https://github.com/near/NEPs/issues/110)
-pub trait ConfirmTransfer {
-    /// Transfer `amount` of tokens from the predecessor account to a `recipient` contract.
-    /// The recipient contract MUST implement [TransferCallRecipient](crate::interface::fungible_token::ext_transfer_call_recipient)
-    /// interface. The tokens are deposited but locked in the recipient account until the transfer has
-    /// been confirmed by the recipient contract and then finalized. The transfer workflow steps are:
-    /// 1. sender initiates the transfer via [confirm_transfer](ConfirmTransfer::confirm_transfer)
-    /// 2. token transfers the funds from the sender's account to the recipient's account but locks
-    ///    the transfer amount on the recipient account. The locked tokens cannot be used until
-    ///    the recipient contract confirms the transfer.
-    /// 3. The recipient contract is then notified of the transfer via
-    ///    [on_transfer_call](crate::interface::fungible_token::ext_transfer_call_recipient::on_transfer_call).
-    /// 4. Once the transfer notification call completes, then the [`FinalizeTransferCallback::finalize_ft_transfer`]
-    ///    callback on the token contract is invoked to finalize the transfer. If the recipient contract
-    ///    successfully completed the transfer notification call, then the funds are unlocked
-    ///    via the [`FinalizeTransferCallback::finalize_ft_transfer`] callback. If the
-    ///    [on_transfer_call](crate::interface::fungible_token::ext_transfer_call_recipient::on_transfer_call) call fails
-    ///    for any reason, then the fund transfer is rolled back in the finalize callback.
+/// Suggested Trait to handle the callback on fungible token contract to resolve transfer.
+/// It's not a public interface, so fungible token contract can implement it differently.
+pub trait FungibleTokenCoreResolveTransferCall {
+    /// Callback to resolve transfer.
+    /// Private method (`env::predecessor_account_id == env::current_account_id`).
     ///
-    /// ## Transfer Headers
-    /// - used to add context to the transfer
-    /// - standard headers will be defined, but this also enables the protocol to be extended
-    ///   with custom headers
-    /// - proposed standard headers:
-    ///   - `msg`: is a message sent to the recipient. It might be used to send additional call
-    //      instructions.
-    ///   - `memo`: arbitrary data with no specified format used to link the transaction with an
-    ///     external event. If referencing a binary data, it should use base64 serialization.
+    /// Called after the receiver handles the transfer call and returns value of used amount in `U128`.
     ///
-    /// ## Panics
-    /// - if accounts are not registered
-    /// - insufficient funds
-    fn confirm_transfer(
-        &mut self,
-        recipient: ValidAccountId,
-        amount: U128,
-        headers: Option<HashMap<String, String>>,
-    ) -> Promise;
-}
-
-/// Token contract callback interface to finalize transfer-call based token transfer
-pub trait FinalizeTransferCallback {
-    /// Finalizes the token transfer
+    /// This method should get `used_amount` from the receiver's promise result and refund the remaining
+    /// `amount - used_amount` from the receiver's account back to the `sender_id` account.
+    /// Methods returns the amount tokens that were spent from `sender_id` after the refund
+    /// (`amount - min(receiver_balance, used_amount)`)
     ///
-    /// Actions:
-    /// - if the call [finalize_ft_transfer](crate::interface::fungible_token::ext_self_finalize_transfer_callback::finalize_ft_transfer)
-    ///    succeeds, then commit the transfer,i.e., unlock the balance on the recipient account
-    /// - else rollback the transfer by returning the locked balance to the sender
+    /// Arguments:
+    /// - `sender_id` - the account ID that initiated the transfer.
+    /// - `receiver_id` - the account ID of the receiver contract.
+    /// - `amount` - the amount of tokens that were transferred to receiver's account.
+    ///
+    /// Promise results:
+    /// - `used_amount` - the amount of tokens that were used by receiver's contract. Received from `on_ft_receive`.
+    ///   `used_amount` should be `U128` in range from `0` to `amount`. All other invalid values are considered to be
+    ///   equal to `0`.
+    ///
+    /// Returns the amount of tokens that were spent from the `sender_id` account. Note, this value might be different
+    /// from the `used_amount` returned by the receiver contract, in case the refunded balance is not available on the
+    /// receiver's account.
     ///
     /// #\[private\]
-    fn finalize_ft_transfer(&mut self, sender: AccountId, recipient: AccountId, amount: U128);
-}
-
-/// Interface for recipient call on fungible-token transfers.
-/// - `token` is an account address of the token  - a smart-contract defining the token being transferred.
-/// - `from` is an address of a previous holder of the tokens being sent
-#[ext_contract(ext_confirm_transfer_recipient)]
-pub trait ConfirmTransferRecipient {
-    fn on_confirm_transfer(
+    fn resolve_transfer_call(
         &mut self,
-        from: ValidAccountId,
-        amount: U128,
-        headers: Option<HashMap<String, String>>,
+        sender_id: ValidAccountId,
+        receiver_id: ValidAccountId,
+        amount: TokenAmount,
+        // NOTE: #[callback_result] is not supported yet and has to be handled using lower level interface.
+        //
+        // #[callback_result]
+        // used_amount: CallbackResult<TokenAmount>,
     );
 }
 
-#[ext_contract(ext_self_finalize_transfer_callback)]
-pub trait ExtFinalizeTransferCallback {
-    /// Finalizes the token transfer
-    ///
-    /// Actions:
-    /// - if the call [on_ft_receive](crate::interface::ext_transfer_call_recipient::on_ft_receive)
-    ///    succeeds, then commit the transfer,i.e., unlock the balance on the recipient account
-    /// - else rollback the transfer by returning the locked balance to the sender
-    ///
-    /// #[private]
-    fn finalize_ft_transfer(&mut self, sender: AccountId, recipient: AccountId, amount: U128);
-}
-
-/// modeled after [NEP-122 vault based fungible token standard](https://github.com/near/NEPs/issues/122)
-/// - all token owners must be registered with the contract, which implies that token transfers can
-///   only be between registered accounts
-///   - this removes the need to require an attached deposit on each transfer because the accounts
-///     are pre-registered
-///   - eliminates transfers to non-existent accounts
-/// - `transfer_raw` has been moved to [`SimpleTransfer::transfer`]
-/// - `payload` has been replaced with `msg` and `memo` optional args
-pub trait VaultBasedTransfer {
-    /// Transfer to a contract with payload
-    /// Gas requirement: 40+ TGas or 40000000000000 Gas.
-    /// Consumes: 30 TGas and the remaining gas is passed to the `recipient` (at least 10 TGas)
-    /// Should be called by the balance owner.
-    /// Returns a promise, that will result in the unspent balance from the transfer `amount`.
-    ///
-    /// Actions:
-    /// - Withdraws `amount` from the `predecessor_id` account.
-    /// - Creates a new local safe with a new unique `safe_id` with the following content:
-    ///     `{sender_id: predecessor_id, amount: amount, recipient: recipient}`
-    /// - Saves this safe to the storage.
-    /// - Calls on `recipient` method `on_token_receive(sender_id: predecessor_id, amount, safe_id, payload)`/
-    /// - Attaches a self callback to this promise `resolve_safe(safe_id, sender_id)`
-    ///
-    /// ## Panics
-    /// - if predecessor account is not registered
-    /// - if recipient account is not registered
-    /// - if sender account is same as receiver account
-    /// - if account balance has insufficient funds for transfer
-    fn transfer_with_vault(
-        &mut self,
-        recipient: ValidAccountId,
-        amount: U128,
-        headers: Option<HashMap<String, String>>,
-    ) -> Promise;
-
-    /// Withdraws from a given vault and transfers the funds to the specified receiver account ID.
-    ///
-    /// Gas requirement: 5 TGas
-    /// Should be called by the contract that owns a given safe.
-    ///
-    /// Actions:
-    /// - checks that the safe with `vault_id` exists and `predecessor_id == vault.recipient`
-    /// - withdraws `amount` from the vault or panics if `vault.amount < amount`
-    /// - deposits `amount` on the `recipient`
-    ///
-    /// ## panics
-    /// - if predecessor account is not registered
-    /// - if predecessor account does not own the vault
-    /// - if recipient account is not registered
-    /// - if vault balance has insufficient funds for transfer
-    fn withdraw_from_vault(&mut self, vault_id: VaultId, recipient: ValidAccountId, amount: U128);
-}
-
-/// implements required callbacks defined in [ExtResolveVaultCallback](crate::interface::fungible_token::ext_self_resolve_vault_callback)
-pub trait ResolveVaultCallback {
-    /// Resolves a given vault, i.e., transfers any remaining vault balance to the sender account
-    /// and then deletes the vault. Returns the vault remaining balance.
-    ///
-    /// Gas requirement: 5 TGas
-    ///
-    /// Actions:
-    /// - Reads safe with `safe_id`
-    /// - Deposits remaining `safe.amount` to `sender_id`
-    /// - Deletes the safe
-    /// - Returns the total withdrawn amount from the safe `original_amount - safe.amount`.
-    /// #\[private\]
-    ///
-    /// ## Panics
-    /// - if not called by self as callback
-    /// - following panics should never happen (if they do, then there is a bug in the code)
-    ///   - if the sender account is not registered
-    ///   - if the vault does not exist
-    fn resolve_vault(&mut self, vault_id: VaultId, sender_id: AccountId) -> U128;
-}
-
-/// Must be implemented by contracts that support [VaultBasedTransfer] token transfers
-#[ext_contract(ext_token_receiver)]
-pub trait ExtTokenVaultReceiver {
-    /// Called when a given amount of tokens is locked in a safe by a given sender with payload.
-    /// Gas requirements: 2+ BASE
-    /// Should be called by the fungible token contract
-    ///
-    /// This methods should withdraw tokens from the safe and act on them. When this method returns a value, the
-    /// safe will be released and the unused tokens from the safe will be returned to the sender.
-    /// There are bunch of options what the contract can do. E.g.
-    /// - Option 1: withdraw and account internally
-    ///     - Increase inner balance by `amount` for the `sender_id` of a token contract ID `predecessor_id`.
-    ///     - Promise call `withdraw_from_safe(safe_id, recipient: env::current_account_id(), amount)` to withdraw the amount to this contract
-    ///     - Return the promise
-    /// - Option 2: Simple redirect to another account
-    ///     - Promise call `withdraw_from_safe(safe_id, recipient: ANOTHER_ACCOUNT_ID, amount)` to withdraw to `ANOTHER_ACCOUNT_ID`
-    ///     - Return the promise
-    /// - Option 3: Partial redirect to another account (e.g. with commission)
-    ///     - Promise call `withdraw_from_safe(safe_id, recipient: ANOTHER_ACCOUNT_ID, amount: ANOTHER_AMOUNT)` to withdraw to `ANOTHER_ACCOUNT_ID`
-    ///     - Chain with (using .then) promise call `withdraw_from_safe(safe_id, recipient: env::current_account_id(), amount: amount - ANOTHER_AMOUNT)` to withdraw to self
-    ///     - Return the 2nd promise
-    /// - Option 4: redirect some of the payments and call another contract `NEW_RECEIVER_ID`
-    ///     - Promise call `withdraw_from_safe(safe_id, recipient: current_account_id, amount)` to withdraw the amount to this contract
-    ///     - Chain with promise call `transfer_with_safe(recipient: recipient, amount: SOME_AMOUNT, payload: NEW_PAYLOAD)`
-    ///     - Chain with the promise call to this contract to handle callback (in case we want to refund).
-    ///     - Return the callback promise.
-    fn on_receive_with_vault(
-        &mut self,
-        sender_id: AccountId,
-        amount: U128,
-        vault_id: VaultId,
-        headers: Option<HashMap<String, String>>,
-    );
-}
-
-#[ext_contract(ext_self_resolve_vault_callback)]
-pub trait ExtResolveVaultCallback {
-    /// Resolves a given vault - transfers vault remoining balance back to sender account and deletes
-    /// the vault.
-    ///
-    /// Gas requirement: 5 TGas or 5000000000000 Gas
-    /// A callback. Should be called by this fungible token contract (`current_account_id`)
-    /// Returns the remaining balance.
-    ///
-    /// Actions:
-    /// - Reads safe with `safe_id`
-    /// - Deposits remaining `safe.amount` to `sender_id`
-    /// - Deletes the safe
-    /// - Returns the total withdrawn amount from the safe `original_amount - safe.amount`.
-    /// #[private]
-    fn resolve_vault(&mut self, vault_id: VaultId, sender_id: AccountId) -> U128;
-}
-
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
-pub struct VaultId(pub U128);
+pub struct TokenAmount(pub U128);
 
-impl From<u128> for VaultId {
+impl From<u128> for TokenAmount {
     fn from(value: u128) -> Self {
         Self(value.into())
     }
 }
 
-impl From<domain::VaultId> for VaultId {
-    fn from(id: domain::VaultId) -> Self {
-        Self(id.0.into())
+impl TokenAmount {
+    pub fn value(&self) -> u128 {
+        self.0 .0
     }
 }
 
-pub mod events {
-    use std::collections::HashMap;
+impl Deref for TokenAmount {
+    type Target = u128;
 
-    #[derive(Debug)]
-    pub struct Transfer<'a> {
-        pub from: &'a str,
-        pub to: &'a str,
-        pub amount: u128,
-        pub headers: Option<&'a HashMap<String, String>>,
+    fn deref(&self) -> &Self::Target {
+        &self.0 .0
+    }
+}
+
+impl DerefMut for TokenAmount {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0 .0
+    }
+}
+
+impl Display for TokenAmount {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.0 .0.fmt(f)
+    }
+}
+
+impl PartialOrd for TokenAmount {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.value().partial_cmp(&other.value())
+    }
+}
+
+impl Ord for TokenAmount {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.value().cmp(&other.value())
+    }
+}
+
+impl Eq for TokenAmount {}
+
+/// > Similarly to bank transfer and payment orders, the memo argument allows to reference transfer
+/// > to other event (on-chain or off-chain). It is a schema less, so user can use it to reference
+/// > an external document, invoice, order ID, ticket ID, or other on-chain transaction. With memo
+/// > you can set a transfer reason, often required for compliance.
+/// >
+/// > This is also useful and very convenient for implementing FATA (Financial Action Task Force)
+/// > guidelines (section 7(b) ). Especially a requirement for VASPs (Virtual Asset Service Providers)
+/// > to collect and transfer customer information during transactions. VASP is any entity which
+/// > provides to a user token custody, management, exchange or investment services.
+/// > With ERC-20 (and NEP-21) it is not possible to do it in atomic way. With memo field, we can
+/// > provide such reference in the same transaction and atomically bind it to the money transfer.
+///
+/// - https://github.com/near/NEPs/issues/136
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(crate = "near_sdk::serde")]
+pub struct Memo(pub String);
+
+impl Deref for Memo {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Display for Memo {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+/// > The mint, send and burn processes can all make use of a data and operatorData fields which are
+/// > passed to any movement (mint, send or burn). Those fields may be empty for simple use cases,
+/// > or they may contain valuable information related to the movement of tokens, similar to
+/// > information attached to a bank transfer by the sender or the bank itself.
+/// > The use of a data field is equally present in other standard proposals such as EIP-223, and
+/// > was requested by multiple members of the community who reviewed this standard.
+/// >
+/// - https://eips.ethereum.org/EIPS/eip-777#data
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(crate = "near_sdk::serde")]
+pub struct TransferCallData(pub Vec<u8>);
+
+impl Deref for TransferCallData {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
