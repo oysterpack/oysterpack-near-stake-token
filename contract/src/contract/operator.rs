@@ -1,4 +1,5 @@
 //required in order for near_bindgen macro to work outside of lib.rs
+use crate::interface::ContractOwner;
 use crate::*;
 use crate::{
     domain::RedeemLock,
@@ -37,6 +38,11 @@ impl Operator for StakeTokenContract {
             pending_withdrawal: self.pending_withdrawal(),
             run_stake_batch_locked: self.run_stake_batch_locked,
             run_redeem_stake_batch_lock: self.run_redeem_stake_batch_lock,
+            owner_available_balance: self.owner_balance(),
+            initial_storage_usage: self.initial_contract_storage_usage.into(),
+            storage_usage_growth: (env::storage_usage()
+                - self.initial_contract_storage_usage.value())
+            .into(),
         }
     }
 
@@ -169,6 +175,7 @@ mod test {
 
         let contract_settings = default_contract_settings();
         let contract = StakeTokenContract::new(None, contract_settings);
+        context.storage_usage += contract.try_to_vec().unwrap().len() as u64;
 
         context.predecessor_account_id = contract.operator_id.clone();
         testing_env!(context.clone());

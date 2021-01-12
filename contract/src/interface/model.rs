@@ -1,5 +1,6 @@
 mod config;
 pub mod contract_state;
+mod owner_balance;
 mod redeem_stake_batch;
 mod redeem_stake_batch_receipt;
 mod stake_account;
@@ -10,6 +11,7 @@ mod timestamped_near_balance;
 mod timestamped_stake_balance;
 
 pub use config::*;
+pub use owner_balance::*;
 pub use redeem_stake_batch::RedeemStakeBatch;
 pub use redeem_stake_batch_receipt::RedeemStakeBatchReceipt;
 pub use stake_account::StakeAccount;
@@ -130,5 +132,21 @@ impl From<domain::BlockTimeHeight> for BlockTimeHeight {
             block_timestamp: value.block_timestamp().into(),
             epoch_height: value.epoch_height().into(),
         }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(crate = "near_sdk::serde")]
+pub struct StorageUsage(pub U64);
+
+impl From<domain::StorageUsage> for StorageUsage {
+    fn from(value: domain::StorageUsage) -> Self {
+        value.0.into()
+    }
+}
+
+impl From<u64> for StorageUsage {
+    fn from(value: u64) -> Self {
+        Self(value.into())
     }
 }

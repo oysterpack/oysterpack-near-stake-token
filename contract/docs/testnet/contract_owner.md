@@ -3,6 +3,8 @@
 near view stake.oysterpack.testnet owner_id
 
 near view stake.oysterpack.testnet owner_balance
+
+near view stake.oysterpack.testnet owner_starting_balance
 ```
 
 ### Stateful fun calls

@@ -1,4 +1,4 @@
-use crate::interface::{AccountManagement, ContractOwner, StakingService, YoctoNear};
+use crate::interface::{AccountManagement, ContractOwner, OwnerBalance, StakingService, YoctoNear};
 //required in order for near_bindgen macro to work outside of lib.rs
 use crate::errors::contract_owner::{
     INSUFFICIENT_FUNDS_FOR_OWNER_STAKING, INSUFFICIENT_FUNDS_FOR_OWNER_WITHDRAWAL,
@@ -24,7 +24,7 @@ impl ContractOwner for StakeTokenContract {
         self.owner_id.clone()
     }
 
-    fn owner_balance(&self) -> YoctoNear {
+    fn owner_balance(&self) -> OwnerBalance {
         let customer_batched_stake_deposits = self
             .stake_batch
             .map_or(0, |batch| batch.balance().amount().value())
@@ -32,24 +32,35 @@ impl ContractOwner for StakeTokenContract {
                 .next_stake_batch
                 .map_or(0, |batch| batch.balance().amount().value());
 
-        let total_account_storage_escrow =
-            self.total_registered_accounts().0 * self.account_storage_fee().value();
-
-        let contract_storage_usage_cost =
-            env::storage_usage() as u128 * self.config.storage_cost_per_byte().value();
+        let contract_storage_usage_cost = self.initial_contract_storage_usage.value() as u128
+            * self.config.storage_cost_per_byte().value();
 
         let owner_balance = env::account_balance()
             - self.total_near.amount().value()
             - self.near_liquidity_pool.value()
             - customer_batched_stake_deposits
-            - total_account_storage_escrow
+            - self.total_account_storage_escrow.value()
             - contract_storage_usage_cost;
 
-        if owner_balance > YOCTO {
-            (owner_balance - YOCTO).into()
+        let owner_balance = if owner_balance > YOCTO {
+            owner_balance - YOCTO
         } else {
-            0.into()
+            0
+        };
+
+        OwnerBalance {
+            available_balance: owner_balance.into(),
+            contract_account_balance: env::account_balance().into(),
+            user_accounts_near_balance: self.total_near.amount().into(),
+            near_liquidity: self.near_liquidity_pool.into(),
+            customer_batched_stake_deposits: customer_batched_stake_deposits.into(),
+            total_account_storage_escrow: self.total_account_storage_escrow.into(),
+            contract_storage_usage_cost: contract_storage_usage_cost.into(),
         }
+    }
+
+    fn owner_starting_balance(&self) -> YoctoNear {
+        self.owner_starting_balance.into()
     }
 
     fn transfer_ownership(&mut self, new_owner: ValidAccountId) {
@@ -75,7 +86,7 @@ impl ContractOwner for StakeTokenContract {
         assert!(owner_balance.value() > 0, "owner balance is zero");
         self.deposit_near_for_account_to_stake(&mut account, owner_balance.value().into());
         self.save_registered_account(&account);
-        owner_balance
+        owner_balance.available_balance
     }
 
     fn stake_owner_balance(&mut self, amount: YoctoNear) {
@@ -94,7 +105,7 @@ impl ContractOwner for StakeTokenContract {
         self.assert_predecessor_is_owner();
         let owner_balance = self.owner_balance();
         Promise::new(self.owner_id.clone()).transfer(owner_balance.value());
-        owner_balance
+        owner_balance.available_balance
     }
 
     fn withdraw_owner_balance(&mut self, amount: YoctoNear) {
@@ -138,11 +149,24 @@ mod test {
         );
 
         testing_env!(context.clone());
-        assert_eq!(contract.owner_balance(), (YOCTO * 59).into());
+        assert_eq!(
+            contract.owner_balance().available_balance.value(),
+            (YOCTO * 100)
+                - (contract.initial_contract_storage_usage.value() as u128
+                    * contract.config.storage_cost_per_byte().0)
+                - (YOCTO)
+        );
 
         contract.total_near.credit((YOCTO * 50).into());
         testing_env!(context.clone());
-        assert_eq!(contract.owner_balance(), (YOCTO * 9).into());
+        assert_eq!(
+            contract.owner_balance().available_balance.value(),
+            (YOCTO * 100)
+                - (contract.initial_contract_storage_usage.value() as u128
+                    * contract.config.storage_cost_per_byte().0)
+                - (YOCTO * 50)
+                - (YOCTO)
+        );
     }
 
     #[test]
@@ -172,14 +196,38 @@ mod test {
 
         context.storage_usage = 400u64 * 1000u64; // 400 KB
         testing_env!(context.clone());
-        assert_eq!(contract.owner_balance(), (56 * YOCTO).into());
+        assert_eq!(
+            contract.owner_balance().available_balance.value(),
+            (YOCTO * 100)
+                - (contract.initial_contract_storage_usage.value() as u128
+                    * contract.config.storage_cost_per_byte().0)
+                - (YOCTO * 3)
+                - (YOCTO)
+        );
 
         contract.total_near.credit((10 * YOCTO).into());
         testing_env!(context.clone());
-        assert_eq!(contract.owner_balance(), (46 * YOCTO).into());
+        assert_eq!(
+            contract.owner_balance().available_balance.value(),
+            (YOCTO * 100)
+                - (contract.initial_contract_storage_usage.value() as u128
+                    * contract.config.storage_cost_per_byte().0)
+                - (YOCTO * 3)
+                - contract.total_near.amount().value()
+                - (YOCTO)
+        );
 
         contract.near_liquidity_pool = YOCTO.into();
-        assert_eq!(contract.owner_balance(), (45 * YOCTO).into());
+        assert_eq!(
+            contract.owner_balance().available_balance.value(),
+            (YOCTO * 100)
+                - (contract.initial_contract_storage_usage.value() as u128
+                    * contract.config.storage_cost_per_byte().0)
+                - (YOCTO * 3)
+                - contract.total_near.amount().value()
+                - contract.near_liquidity_pool.value()
+                - (YOCTO)
+        );
     }
 
     #[test]

@@ -35,6 +35,7 @@ impl AccountManagement for StakeTokenContract {
         );
 
         let account_storage_fee = self.account_storage_fee().into();
+        self.total_account_storage_escrow += account_storage_fee;
         let account = Account::new(account_storage_fee);
         assert!(
             self.save_account(&Hash::from(&env::predecessor_account_id()), &account),
@@ -56,6 +57,7 @@ impl AccountManagement for StakeTokenContract {
             None => panic!(ACCOUNT_NOT_REGISTERED),
             Some(account) => {
                 assert!(!account.has_funds(), UNREGISTER_REQUIRES_ZERO_BALANCES);
+                self.total_account_storage_escrow -= account.storage_escrow.amount();
                 // refund the escrowed storage fee
                 Promise::new(account_id).transfer(account.storage_escrow.amount().value());
             }
@@ -247,6 +249,11 @@ mod test_register_account {
             account.storage_escrow.amount(),
             contract.account_storage_fee().into()
         );
+
+        assert_eq!(
+            contract.total_account_storage_escrow,
+            account.storage_escrow.amount()
+        )
     }
 
     #[test]
@@ -307,6 +314,10 @@ mod test_unregister_account {
         let test_context = TestContext::with_registered_account(None);
         let mut contract = test_context.contract;
 
+        assert_eq!(
+            contract.total_account_storage_escrow,
+            contract.account_storage_fee().into()
+        );
         contract.unregister_account();
         assert!(!contract.account_registered(test_context.account_id.try_into().unwrap()));
         let receipts = deserialize_receipts(&get_created_receipts());
@@ -320,6 +331,7 @@ mod test_unregister_account {
             }
             _ => panic!("expected account storage fee to be refunded"),
         }
+        assert_eq!(contract.total_account_storage_escrow, 0.into());
     }
 
     #[test]

@@ -136,6 +136,8 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 pub struct StakeTokenContract {
     /// contract owner
     owner_id: AccountId,
+    owner_starting_balance: YoctoNear,
+
     /// Operator is allowed to perform operator actions on the contract
     /// TODO: support multiple operator and role management
     operator_id: AccountId,
@@ -144,9 +146,14 @@ pub struct StakeTokenContract {
     /// when the config was last changed
     /// the block info can be looked up via its block index: https://docs.near.org/docs/api/rpc#block
     config_change_block_height: BlockHeight,
+
     /// how much storage the account needs to pay for when registering an account
     /// - dynamically computed when the contract is deployed
     account_storage_usage: StorageUsage,
+    /// we need to track the storage escrow balance because we can't assume storage staking cost will
+    /// remain constant on NEAR
+    total_account_storage_escrow: YoctoNear,
+    initial_contract_storage_usage: StorageUsage,
 
     accounts: LookupMap<Hash, Account>,
     accounts_len: u128,
@@ -217,7 +224,6 @@ impl StakeTokenContract {
     /// ## Notes
     /// - when the contract is deployed it will measure account storage usage
     /// - owner account ID defaults to the operator account ID
-    #[payable]
     #[init]
     pub fn new(owner_id: Option<ValidAccountId>, settings: ContractSettings) -> Self {
         assert!(!env::state_exists(), "contract is already initialized");
@@ -227,7 +233,9 @@ impl StakeTokenContract {
         let operator_id: AccountId = settings.operator_id.into();
         let mut contract = Self {
             owner_id: owner_id.map_or(operator_id.clone(), |account_id| account_id.into()),
-            operator_id: operator_id,
+            owner_starting_balance: env::account_balance().into(),
+
+            operator_id,
 
             config: settings.config.unwrap_or_else(Config::default),
             config_change_block_height: env::block_index().into(),
@@ -252,9 +260,18 @@ impl StakeTokenContract {
             run_stake_batch_locked: false,
             run_redeem_stake_batch_lock: None,
 
+            total_account_storage_escrow: 0.into(),
+            initial_contract_storage_usage: 0.into(), // computed after contract is created - see below
+
             #[cfg(test)]
             env: near_env::Env::default(),
         };
+
+        // compute initial_contract_storage_usage
+        // the contract state is not yet saved to storage - measure it's storage usage manually by
+        // serializing its state via borsh
+        contract.initial_contract_storage_usage =
+            (env::storage_usage() + contract.try_to_vec().unwrap().len() as u64).into();
 
         // compute account storage usage
         {
@@ -427,5 +444,10 @@ mod test {
         assert!(contract.redeem_stake_batch.is_none());
 
         assert_eq!(contract.owner_id, contract.operator_id);
+
+        println!(
+            "initial_contract_storage_usage = {:?}",
+            contract.initial_contract_storage_usage
+        );
     }
 }

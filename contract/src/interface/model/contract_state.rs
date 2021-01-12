@@ -1,4 +1,4 @@
-use crate::interface::BlockHeight;
+use crate::interface::{BlockHeight, OwnerBalance, StorageUsage};
 use crate::{
     domain::RedeemLock,
     interface::{
@@ -41,4 +41,11 @@ pub struct ContractState {
 
     pub run_stake_batch_locked: bool,
     pub run_redeem_stake_batch_lock: Option<RedeemLock>,
+
+    pub owner_available_balance: OwnerBalance,
+    /// total contract storage usage = [initial_storage_usage](ContractState::initial_storage_usage) + [storage_usage_growth](ContractState::storage_usage_growth)
+    pub initial_storage_usage: StorageUsage,
+    /// how much storage usage has grown since the contract was deployed
+    /// - contract storage should be covered by the account storage fees that are escrowed
+    pub storage_usage_growth: StorageUsage,
 }
