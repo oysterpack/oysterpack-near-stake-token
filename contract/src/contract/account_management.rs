@@ -64,6 +64,8 @@ impl AccountManagement for StakeTokenContract {
 
     /// returns the required account storage fee that needs to be attached to the account registration
     /// contract function call in yoctoNEAR
+    ///
+    /// NOTE: this is dynamic based on the storage cost per byte specified in the config
     fn account_storage_fee(&self) -> interface::YoctoNear {
         let fee = self.config.storage_cost_per_byte().value()
             * self.account_storage_usage.value() as u128;
@@ -71,7 +73,7 @@ impl AccountManagement for StakeTokenContract {
     }
 
     fn account_registered(&self, account_id: ValidAccountId) -> bool {
-        self.accounts.get(&Hash::from(account_id)).is_some()
+        self.accounts.contains_key(&Hash::from(account_id))
     }
 
     fn total_registered_accounts(&self) -> U128 {

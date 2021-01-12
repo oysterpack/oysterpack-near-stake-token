@@ -134,7 +134,7 @@ mod test {
 
         assert_eq!(
             env::account_balance(),
-            (YOCTO + 100) + contract.account_storage_fee().value()
+            (YOCTO * 100) + contract.account_storage_fee().value()
         );
 
         testing_env!(context.clone());

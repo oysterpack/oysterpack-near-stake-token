@@ -16,7 +16,6 @@ use std::{
 /// The core standard supports the following features:
 /// - [simple token transfers](FungibleTokenCore::ft_transfer)
 /// - [token transfers between contracts](FungibleTokenCore::ft_transfer_call)
-/// - [burning tokens](FungibleTokenCore::ft_burn)
 /// - accounting for [total token supply](FungibleTokenCore::ft_total_supply) and
 ///   [account balances](FungibleTokenCore::ft_balance_of)
 ///
@@ -109,20 +108,9 @@ pub trait FungibleTokenCore {
         &mut self,
         receiver_id: ValidAccountId,
         amount: TokenAmount,
-        data: Option<TransferCallData>,
+        data: TransferCallData,
         memo: Option<Memo>,
     ) -> Promise;
-
-    /// Destroys specified amount of tokens from the predecessor account, reducing the total supply.
-    ///
-    /// # Panics
-    /// - if there is no attached deposit
-    /// - if account is not registered
-    /// - if amount is zero
-    /// - if the account has insufficient funds to fulfill the transfer request
-    ///
-    /// #\[payable\]
-    fn ft_burn(&mut self, amount: TokenAmount, memo: Option<Memo>);
 
     fn ft_total_supply(&self) -> TokenAmount;
 
@@ -155,7 +143,7 @@ pub trait FungibleTokenReceiver {
         &mut self,
         sender_id: ValidAccountId,
         amount: TokenAmount,
-        msg: Option<TransferCallData>,
+        data: TransferCallData,
     ) -> PromiseOrValue<TokenAmount>;
 }
 
@@ -290,12 +278,18 @@ impl Display for Memo {
 /// - https://eips.ethereum.org/EIPS/eip-777#data
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
-pub struct TransferCallData(pub Vec<u8>);
+pub struct TransferCallData(pub String);
 
 impl Deref for TransferCallData {
-    type Target = [u8];
+    type Target = str;
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl Display for TransferCallData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
     }
 }

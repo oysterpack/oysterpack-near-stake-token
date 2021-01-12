@@ -1,5 +1,6 @@
 extern crate oysterpack_near_stake_token;
 
+mod account_management_client;
 mod test_utils;
 
 use near_sdk::{serde_json::json, PendingContractTx};
@@ -9,6 +10,9 @@ use oysterpack_near_stake_token::{
     interface::{self, StakingService},
     near::NO_DEPOSIT,
 };
+
+use account_management_client::*;
+use oysterpack_near_stake_token::domain::TGAS;
 
 lazy_static! {
     static ref WASM_BYTES: &'static [u8] =
@@ -40,6 +44,41 @@ fn near_sdk_issue_262_near_bindgen_does_not_detect_pub_visibility_from_trait() {
     assert!(res.is_ok());
     let staking_pool_id: String = res.unwrap_json();
     assert_eq!(staking_pool_id, "astro-stakers.poolv1.near");
+}
+
+#[test]
+fn account_management_sim_test() {
+    let ctx = test_utils::create_context();
+    let contract = ctx.contract;
+    let contract_account_id = contract.user_account.account_id.as_str();
+
+    assert_eq!(
+        total_registered_accounts(contract_account_id, &ctx.contract_operator),
+        0
+    );
+
+    assert!(lookup_account(
+        contract_account_id,
+        &ctx.contract_operator,
+        &ctx.contract_operator.account_id
+    )
+    .is_none());
+
+    assert!(!account_registered(
+        contract_account_id,
+        &ctx.contract_operator,
+        &ctx.contract_operator.account_id
+    ));
+
+    // trying to register the operator account with no deposit should fail
+    let result = register_account(
+        contract_account_id,
+        &ctx.contract_operator,
+        0.into(),
+        TGAS * 10,
+    );
+    println!("{:#?}", result);
+    assert!(!result.is_ok());
 }
 
 #[test]

@@ -754,65 +754,77 @@ impl StakeTokenContract {
     pub(crate) fn apply_receipt_funds_for_view(&self, account: &Account) -> Account {
         let mut account = account.clone();
 
-        if let Some(batch) = account.stake_batch {
-            if let Some(receipt) = self.stake_batch_receipts.get(&batch.id()) {
+        {
+            fn apply_stake_credit(
+                account: &mut Account,
+                batch: StakeBatch,
+                receipt: StakeBatchReceipt,
+            ) {
                 let staked_near = batch.balance().amount();
                 let stake = receipt.stake_token_value().near_to_stake(staked_near);
                 account.apply_stake_credit(stake);
-                account.stake_batch = None;
+            }
+
+            if let Some(batch) = account.stake_batch {
+                if let Some(receipt) = self.stake_batch_receipts.get(&batch.id()) {
+                    apply_stake_credit(&mut account, batch, receipt);
+                    account.stake_batch = None;
+                }
+            }
+
+            if let Some(batch) = account.next_stake_batch {
+                if let Some(receipt) = self.stake_batch_receipts.get(&batch.id()) {
+                    apply_stake_credit(&mut account, batch, receipt);
+                    account.next_stake_batch = None;
+                }
             }
         }
 
-        if let Some(batch) = account.next_stake_batch {
-            if let Some(receipt) = self.stake_batch_receipts.get(&batch.id()) {
-                let staked_near = batch.balance().amount();
-                let stake = receipt.stake_token_value().near_to_stake(staked_near);
-                account.apply_stake_credit(stake);
-                account.next_stake_batch = None;
+        {
+            fn apply_near_credit(
+                account: &mut Account,
+                batch: RedeemStakeBatch,
+                receipt: domain::RedeemStakeBatchReceipt,
+            ) {
+                let redeemed_stake = batch.balance().amount();
+                let near = receipt.stake_token_value().stake_to_near(redeemed_stake);
+                account.apply_near_credit(near);
             }
-        }
 
-        if let Some(RedeemLock::PendingWithdrawal) = self.run_redeem_stake_batch_lock {
-            // NEAR funds cannot be claimed from a receipt that is pending withdrawal from the staking pool
-            let batch_pending_withdrawal_id = self.redeem_stake_batch.as_ref().unwrap().id();
+            if let Some(RedeemLock::PendingWithdrawal) = self.run_redeem_stake_batch_lock {
+                // NEAR funds cannot be claimed from a receipt that is pending withdrawal from the staking pool
+                let batch_pending_withdrawal_id = self.redeem_stake_batch.as_ref().unwrap().id();
 
-            if let Some(batch) = account.redeem_stake_batch {
-                if batch_pending_withdrawal_id != batch.id() {
+                if let Some(batch) = account.redeem_stake_batch {
+                    if batch_pending_withdrawal_id != batch.id() {
+                        if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
+                            apply_near_credit(&mut account, batch, receipt);
+                            account.redeem_stake_batch = None
+                        }
+                    }
+                }
+
+                if let Some(batch) = account.next_redeem_stake_batch {
+                    if batch_pending_withdrawal_id != batch.id() {
+                        if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
+                            apply_near_credit(&mut account, batch, receipt);
+                            account.next_redeem_stake_batch = None
+                        }
+                    }
+                }
+            } else {
+                if let Some(batch) = account.redeem_stake_batch {
                     if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
-                        let redeemed_stake = batch.balance().amount();
-                        let near = receipt.stake_token_value().stake_to_near(redeemed_stake);
-                        account.apply_near_credit(near);
+                        apply_near_credit(&mut account, batch, receipt);
                         account.redeem_stake_batch = None
                     }
                 }
-            }
 
-            if let Some(batch) = account.next_redeem_stake_batch {
-                if batch_pending_withdrawal_id != batch.id() {
+                if let Some(batch) = account.next_redeem_stake_batch {
                     if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
-                        let redeemed_stake = batch.balance().amount();
-                        let near = receipt.stake_token_value().stake_to_near(redeemed_stake);
-                        account.apply_near_credit(near);
+                        apply_near_credit(&mut account, batch, receipt);
                         account.next_redeem_stake_batch = None
                     }
-                }
-            }
-        } else {
-            if let Some(batch) = account.redeem_stake_batch {
-                if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
-                    let redeemed_stake = batch.balance().amount();
-                    let near = receipt.stake_token_value().stake_to_near(redeemed_stake);
-                    account.apply_near_credit(near);
-                    account.redeem_stake_batch = None
-                }
-            }
-
-            if let Some(batch) = account.next_redeem_stake_batch {
-                if let Some(receipt) = self.redeem_stake_batch_receipts.get(&batch.id()) {
-                    let redeemed_stake = batch.balance().amount();
-                    let near = receipt.stake_token_value().stake_to_near(redeemed_stake);
-                    account.apply_near_credit(near);
-                    account.next_redeem_stake_batch = None
                 }
             }
         }
@@ -865,8 +877,8 @@ impl StakeTokenContract {
         // move the next batch into the current batch as long as the contract is not locked and the
         // funds for the current batch have been claimed
         //
-        // NOTE: while the contract is locked for running a stake batch, all deposits must go into the
-        // the next batch
+        // NOTE: while the contract is locked for running a stake batch, all deposits must go into
+        //       the next batch
         if !self.run_stake_batch_locked && account.stake_batch.is_none() {
             account.stake_batch = account.next_stake_batch.take();
         }

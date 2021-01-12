@@ -10,8 +10,8 @@
 //! the STAKE token value increases. In other words, STAKE tokens appreciate in NEAR token value over
 //! time.
 //!
-//! When redeeming STAKE tokens for NEAR, the STAKE token contract also helps to add liquidity for withdrawing your unstaked
-//! NEAR tokens (see below for more details)
+//! When redeeming STAKE tokens for NEAR, the STAKE token contract also helps to add liquidity for
+//! withdrawing your unstaked NEAR tokens (see below for more details)
 //!
 //! # STAKE Token Vision
 //! > harness the Internet of value - everything on the internet can take on the proerties of money
