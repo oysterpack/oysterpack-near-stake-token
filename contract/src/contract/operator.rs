@@ -46,28 +46,28 @@ impl Operator for StakeTokenContract {
         }
     }
 
-    fn config(&self) -> Config {
-        self.config.clone()
+    fn config(&self) -> interface::Config {
+        self.config.into()
     }
 
-    fn reset_config_default(&mut self) -> Config {
+    fn reset_config_default(&mut self) -> interface::Config {
         self.assert_predecessor_is_operator();
         self.config = Config::default();
-        self.config.clone()
+        self.config.into()
     }
 
-    fn update_config(&mut self, config: interface::Config) -> Config {
+    fn update_config(&mut self, config: interface::Config) -> interface::Config {
         self.assert_predecessor_is_operator();
         self.config.merge(config);
         self.config_change_block_height = env::block_index().into();
-        self.config.clone()
+        self.config.into()
     }
 
-    fn force_update_config(&mut self, config: interface::Config) -> Config {
+    fn force_update_config(&mut self, config: interface::Config) -> interface::Config {
         self.assert_predecessor_is_operator();
         self.config.force_merge(config);
         self.config_change_block_height = env::block_index().into();
-        self.config.clone()
+        self.config.into()
     }
 
     fn release_run_stake_batch_lock(&mut self) {
@@ -175,7 +175,9 @@ mod test {
 
         let contract_settings = default_contract_settings();
         let contract = StakeTokenContract::new(None, contract_settings);
-        context.storage_usage += contract.try_to_vec().unwrap().len() as u64;
+        const CONTRACT_STATE_STORAGE_OVERHEAD: u64 = 45;
+        context.storage_usage +=
+            contract.try_to_vec().unwrap().len() as u64 + CONTRACT_STATE_STORAGE_OVERHEAD;
 
         context.predecessor_account_id = contract.operator_id.clone();
         testing_env!(context.clone());

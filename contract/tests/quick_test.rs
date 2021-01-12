@@ -7,9 +7,9 @@ use primitive_types::U256;
 #[test]
 fn quick_test() {
     let balance_history: Vec<u128> = vec![
-        71047001935946621500000000,
-        71047061507686286000000000, // register account
-        71047124161239871100000000, // register account
+        72145722678713040200000000,
+        72145780435590802700000000, // register account
+        72145841274282485800000000, // register account
     ];
 
     let mut i = 0;
@@ -34,6 +34,4 @@ fn quick_test() {
 
         i += 1;
     }
-
-    println!("{}", 68100000000000000000000_u128 as f64 / YOCTO as f64);
 }

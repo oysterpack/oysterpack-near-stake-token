@@ -1,4 +1,7 @@
-use crate::domain::{Gas, YoctoNear};
+use crate::{
+    config,
+    interface::{Gas, YoctoNear},
+};
 use near_sdk::serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -13,7 +16,6 @@ pub struct Config {
 pub struct GasConfig {
     pub staking_pool: Option<StakingPoolGasConfig>,
     pub callbacks: Option<CallBacksGasConfig>,
-    pub vault_ft: Option<VaultFungibleTokenGasConfig>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -41,18 +43,51 @@ pub struct CallBacksGasConfig {
     pub on_redeeming_stake_post_withdrawal: Option<Gas>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(crate = "near_sdk::serde")]
-pub struct VaultFungibleTokenGasConfig {
-    pub min_gas_for_receiver: Option<Gas>,
-    pub transfer_with_vault: Option<Gas>,
-    pub resolve_vault: Option<Gas>,
+impl From<config::Config> for Config {
+    fn from(value: config::Config) -> Self {
+        Self {
+            storage_cost_per_byte: Some(value.storage_cost_per_byte().into()),
+            gas_config: Some(value.gas_config().into()),
+        }
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(crate = "near_sdk::serde")]
-pub struct FungibleTokenTransferCallGasConfig {
-    pub min_gas_for_receiver: Option<Gas>,
-    pub transfer_call: Option<Gas>,
-    pub finalize_ft_transfer: Option<Gas>,
+impl From<config::GasConfig> for GasConfig {
+    fn from(value: config::GasConfig) -> Self {
+        Self {
+            staking_pool: Some(value.staking_pool().into()),
+            callbacks: Some(value.callbacks().into()),
+        }
+    }
+}
+
+impl From<config::StakingPoolGasConfig> for StakingPoolGasConfig {
+    fn from(value: config::StakingPoolGasConfig) -> Self {
+        Self {
+            deposit_and_stake: Some(value.deposit_and_stake().into()),
+            deposit: Some(value.deposit().into()),
+            stake: Some(value.stake().into()),
+            unstake: Some(value.unstake().into()),
+            withdraw: Some(value.withdraw().into()),
+            get_account: Some(value.get_account().into()),
+        }
+    }
+}
+
+impl From<config::CallBacksGasConfig> for CallBacksGasConfig {
+    fn from(value: config::CallBacksGasConfig) -> Self {
+        Self {
+            on_run_stake_batch: Some(value.on_run_stake_batch().into()),
+            on_deposit_and_stake: Some(value.on_deposit_and_stake().into()),
+            on_unstake: Some(value.on_unstake().into()),
+            unlock: Some(value.unlock().into()),
+            on_run_redeem_stake_batch: Some(value.on_run_redeem_stake_batch().into()),
+            on_redeeming_stake_pending_withdrawal: Some(
+                value.on_redeeming_stake_pending_withdrawal().into(),
+            ),
+            on_redeeming_stake_post_withdrawal: Some(
+                value.on_redeeming_stake_post_withdrawal().into(),
+            ),
+        }
+    }
 }

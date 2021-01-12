@@ -21,6 +21,7 @@ lazy_static! {
 
 /// https://github.com/near/near-sdk-rs/issues/262
 #[test]
+#[ignore]
 fn near_sdk_issue_262_near_bindgen_does_not_detect_pub_visibility_from_trait() {
     let ctx = test_utils::create_context();
     let contract = ctx.contract;
@@ -47,6 +48,7 @@ fn near_sdk_issue_262_near_bindgen_does_not_detect_pub_visibility_from_trait() {
 }
 
 #[test]
+#[ignore]
 fn account_management_sim_test() {
     let ctx = test_utils::create_context();
     let contract = ctx.contract;

@@ -33,12 +33,12 @@ impl Config {
         }
     }
 
-    pub fn storage_cost_per_byte(&self) -> &YoctoNear {
-        &self.storage_cost_per_byte
+    pub fn storage_cost_per_byte(&self) -> YoctoNear {
+        self.storage_cost_per_byte
     }
 
-    pub fn gas_config(&self) -> &GasConfig {
-        &self.gas_config
+    pub fn gas_config(&self) -> GasConfig {
+        self.gas_config
     }
 
     /// ## Panics
@@ -89,25 +89,15 @@ fn assert_gas_range(gas: Gas, min: u8, max: u8, field: &str) {
 pub struct GasConfig {
     staking_pool: StakingPoolGasConfig,
     callbacks: CallBacksGasConfig,
-    vault_ft: VaultFungibleTokenGasConfig,
-    transfer_call_ft: FungibleTokenTransferCallGasConfig,
 }
 
 impl GasConfig {
-    pub fn staking_pool(&self) -> &StakingPoolGasConfig {
-        &self.staking_pool
+    pub fn staking_pool(&self) -> StakingPoolGasConfig {
+        self.staking_pool
     }
 
-    pub fn callbacks(&self) -> &CallBacksGasConfig {
-        &self.callbacks
-    }
-
-    pub fn vault_fungible_token(&self) -> &VaultFungibleTokenGasConfig {
-        &self.vault_ft
-    }
-
-    pub fn transfer_call_fungible_token(&self) -> &FungibleTokenTransferCallGasConfig {
-        &self.transfer_call_ft
+    pub fn callbacks(&self) -> CallBacksGasConfig {
+        self.callbacks
     }
 
     /// if validate is true, then merge performs some sanity checks on the config to
@@ -121,9 +111,6 @@ impl GasConfig {
         }
         if let Some(config) = config.staking_pool {
             self.staking_pool.merge(config, validate);
-        }
-        if let Some(config) = config.vault_ft {
-            self.vault_ft.merge(config, validate);
         }
 
         if validate {
@@ -159,8 +146,6 @@ impl Default for GasConfig {
         Self {
             staking_pool: Default::default(),
             callbacks: Default::default(),
-            vault_ft: Default::default(),
-            transfer_call_ft: Default::default(),
         }
     }
 }
@@ -216,36 +201,42 @@ impl StakingPoolGasConfig {
 
     pub fn merge(&mut self, config: interface::StakingPoolGasConfig, validate: bool) {
         if let Some(gas) = config.get_account {
+            let gas = gas.into();
             if validate {
                 assert_gas_range(gas, 5, 10, "staking_pool::get_account");
             }
             self.get_account = gas;
         }
         if let Some(gas) = config.deposit_and_stake {
+            let gas = gas.into();
             if validate {
                 assert_gas_range(gas, 40, 75, "staking_pool::deposit_and_stake");
             }
             self.deposit_and_stake = gas;
         }
         if let Some(gas) = config.deposit {
+            let gas = gas.into();
             if validate {
                 assert_gas_range(gas, 5, 20, "staking_pool::deposit");
             }
             self.deposit = gas;
         }
         if let Some(gas) = config.stake {
+            let gas = gas.into();
             if validate {
                 assert_gas_range(gas, 40, 75, "staking_pool::stake");
             }
             self.stake = gas;
         }
         if let Some(gas) = config.unstake {
+            let gas = gas.into();
             if validate {
                 assert_gas_range(gas, 40, 75, "staking_pool::unstake");
             }
             self.unstake = gas;
         }
         if let Some(gas) = config.withdraw {
+            let gas = gas.into();
             if validate {
                 assert_gas_range(gas, 40, 75, "staking_pool::withdraw");
             }
@@ -272,36 +263,42 @@ pub struct CallBacksGasConfig {
 impl CallBacksGasConfig {
     pub fn merge(&mut self, config: interface::CallBacksGasConfig, validate: bool) {
         if let Some(gas) = config.on_run_stake_batch {
+            let gas = gas.into();
             if validate {
                 assert_gas_range(gas, 70, 150, "callbacks::on_run_stake_batch");
             }
             self.on_run_stake_batch = gas;
         }
         if let Some(gas) = config.on_deposit_and_stake {
+            let gas = gas.into();
             if validate {
                 assert_gas_range(gas, 5, 10, "callbacks::on_deposit_and_stake");
             }
             self.on_deposit_and_stake = gas;
         }
         if let Some(gas) = config.on_unstake {
+            let gas = gas.into();
             if validate {
                 assert_gas_range(gas, 5, 10, "callbacks::on_unstake");
             }
             self.on_unstake = gas;
         }
         if let Some(gas) = config.unlock {
+            let gas = gas.into();
             if validate {
                 assert_gas_range(gas, 5, 10, "callbacks::unlock");
             }
             self.unlock = gas;
         }
         if let Some(gas) = config.on_run_redeem_stake_batch {
+            let gas = gas.into();
             if validate {
                 assert_gas_range(gas, 70, 100, "callbacks::on_run_redeem_stake_batch");
             }
             self.on_run_redeem_stake_batch = gas;
         }
         if let Some(gas) = config.on_redeeming_stake_pending_withdrawal {
+            let gas = gas.into();
             if validate {
                 assert_gas_range(
                     gas,
@@ -313,6 +310,7 @@ impl CallBacksGasConfig {
             self.on_redeeming_stake_pending_withdrawal = gas;
         }
         if let Some(gas) = config.on_redeeming_stake_post_withdrawal {
+            let gas = gas.into();
             if validate {
                 assert_gas_range(gas, 5, 10, "callbacks::on_redeeming_stake_post_withdrawal");
             }
@@ -366,150 +364,23 @@ impl Default for CallBacksGasConfig {
     }
 }
 
-#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, Copy)]
-#[serde(crate = "near_sdk::serde")]
-pub struct VaultFungibleTokenGasConfig {
-    min_gas_for_receiver: Gas,
-
-    /// We need to create 2 promises with dependencies and with some basic compute to write to the state.
-    transfer_with_vault: Gas,
-    resolve_vault: Gas,
-}
-
-impl VaultFungibleTokenGasConfig {
-    pub fn merge(&mut self, config: interface::VaultFungibleTokenGasConfig, validate: bool) {
-        if let Some(gas) = config.min_gas_for_receiver {
-            if validate {
-                assert_gas_range(gas, 10, 20, "vault_ft::min_gas_for_receiver");
-            }
-            self.min_gas_for_receiver = gas;
-        }
-        if let Some(gas) = config.transfer_with_vault {
-            if validate {
-                assert_gas_range(gas, 20, 30, "vault_ft::transfer_with_vault");
-            }
-            self.transfer_with_vault = gas;
-        }
-        if let Some(gas) = config.resolve_vault {
-            if validate {
-                assert_gas_range(gas, 5, 10, "vault_ft::resolve_vault");
-            }
-            self.resolve_vault = gas;
-        }
-    }
-
-    pub fn min_gas_for_receiver(&self) -> Gas {
-        self.min_gas_for_receiver
-    }
-
-    pub fn resolve_vault(&self) -> Gas {
-        self.resolve_vault
-    }
-
-    pub fn transfer_with_vault(&self) -> Gas {
-        self.transfer_with_vault
-    }
-}
-
-impl Default for VaultFungibleTokenGasConfig {
-    fn default() -> Self {
-        Self {
-            min_gas_for_receiver: GAS_FOR_PROMISE + GAS_BASE_COMPUTE,
-            transfer_with_vault: (GAS_FOR_PROMISE * 2) + GAS_FOR_DATA_DEPENDENCY + GAS_BASE_COMPUTE,
-            resolve_vault: GAS_BASE_COMPUTE,
-        }
-    }
-}
-
-#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, Copy)]
-#[serde(crate = "near_sdk::serde")]
-pub struct FungibleTokenTransferCallGasConfig {
-    min_gas_for_receiver: Gas,
-
-    /// We need to create 2 promises with dependencies and with some basic compute to write to the state.
-    transfer_call: Gas,
-    finalize_ft_transfer: Gas,
-}
-
-impl FungibleTokenTransferCallGasConfig {
-    pub fn merge(&mut self, config: interface::FungibleTokenTransferCallGasConfig, validate: bool) {
-        if let Some(gas) = config.min_gas_for_receiver {
-            if validate {
-                assert_gas_range(gas, 10, 20, "transfer_call::min_gas_for_receiver");
-            }
-            self.min_gas_for_receiver = gas;
-        }
-        if let Some(gas) = config.transfer_call {
-            if validate {
-                assert_gas_range(gas, 20, 30, "transfer_call::transfer_call");
-            }
-            self.transfer_call = gas;
-        }
-        if let Some(gas) = config.finalize_ft_transfer {
-            if validate {
-                assert_gas_range(gas, 5, 10, "transfer_call::finalize_ft_transfer");
-            }
-            self.finalize_ft_transfer = gas;
-        }
-    }
-
-    pub fn min_gas_for_receiver(&self) -> Gas {
-        self.min_gas_for_receiver
-    }
-
-    pub fn transfer_call(&self) -> Gas {
-        self.transfer_call
-    }
-
-    pub fn finalize_ft_transfer(&self) -> Gas {
-        self.finalize_ft_transfer
-    }
-}
-
-impl Default for FungibleTokenTransferCallGasConfig {
-    fn default() -> Self {
-        Self {
-            min_gas_for_receiver: GAS_BASE_COMPUTE,
-            transfer_call: (GAS_FOR_PROMISE * 2) + GAS_FOR_DATA_DEPENDENCY + GAS_BASE_COMPUTE,
-            finalize_ft_transfer: GAS_BASE_COMPUTE,
-        }
-    }
-}
-
 #[cfg(test)]
 mod test {
 
     use super::*;
 
     #[test]
-    fn vault_ft_gas_config_merge_success() {
-        let mut config = VaultFungibleTokenGasConfig::default();
-
-        config.merge(
-            interface::VaultFungibleTokenGasConfig {
-                min_gas_for_receiver: Some(TGAS * 11),
-                transfer_with_vault: Some(TGAS * 21),
-                resolve_vault: Some(TGAS * 6),
-            },
-            true,
-        );
-        assert_eq!(config.min_gas_for_receiver, TGAS * 11);
-        assert_eq!(config.transfer_with_vault, TGAS * 21);
-        assert_eq!(config.resolve_vault, TGAS * 6);
-    }
-
-    #[test]
     fn callbacks_gas_config_merge_success() {
         let mut config = CallBacksGasConfig::default();
         config.merge(
             interface::CallBacksGasConfig {
-                on_run_stake_batch: Some(TGAS * 71),
-                on_deposit_and_stake: Some(TGAS * 6),
-                on_unstake: Some(TGAS * 7),
-                unlock: Some(TGAS * 8),
-                on_run_redeem_stake_batch: Some(TGAS * 72),
-                on_redeeming_stake_pending_withdrawal: Some(TGAS * 73),
-                on_redeeming_stake_post_withdrawal: Some(TGAS * 9),
+                on_run_stake_batch: Some((TGAS * 71).into()),
+                on_deposit_and_stake: Some((TGAS * 6).into()),
+                on_unstake: Some((TGAS * 7).into()),
+                unlock: Some((TGAS * 8).into()),
+                on_run_redeem_stake_batch: Some((TGAS * 72).into()),
+                on_redeeming_stake_pending_withdrawal: Some((TGAS * 73).into()),
+                on_redeeming_stake_post_withdrawal: Some((TGAS * 9).into()),
             },
             true,
         );
@@ -527,12 +398,12 @@ mod test {
         let mut config = StakingPoolGasConfig::default();
         config.merge(
             interface::StakingPoolGasConfig {
-                deposit_and_stake: Some(TGAS * 71),
+                deposit_and_stake: Some((TGAS * 71).into()),
                 deposit: None,
                 stake: None,
-                unstake: Some(TGAS * 72),
-                withdraw: Some(TGAS * 73),
-                get_account: Some(TGAS * 7),
+                unstake: Some((TGAS * 72).into()),
+                withdraw: Some((TGAS * 73).into()),
+                get_account: Some((TGAS * 7).into()),
             },
             true,
         );

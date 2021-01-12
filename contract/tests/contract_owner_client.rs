@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use near_sdk::json_types::U128;
 use near_sdk::{serde_json::json, PendingContractTx};
 use near_sdk_sim::*;

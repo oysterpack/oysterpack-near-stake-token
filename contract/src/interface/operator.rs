@@ -1,7 +1,4 @@
-use crate::{
-    config,
-    interface::{self, model::contract_state::ContractState},
-};
+use crate::interface::{model::contract_state::ContractState, Config};
 use near_sdk::Promise;
 
 /// provides functions to support DevOps
@@ -10,13 +7,13 @@ pub trait Operator {
     /// - useful for monitoring and debugging
     fn contract_state(&self) -> ContractState;
 
-    fn config(&self) -> config::Config;
+    fn config(&self) -> Config;
 
     /// resets the config to default settings
     ///
     /// ## Panics
     /// if not invoked by the operator account
-    fn reset_config_default(&mut self) -> config::Config;
+    fn reset_config_default(&mut self) -> Config;
 
     /// merges in config changes
     /// - performs basic validation to prevent mis-configurations
@@ -27,7 +24,7 @@ pub trait Operator {
     /// ## Panics
     /// - if not invoked by the operator account
     /// - if config validation fails
-    fn update_config(&mut self, config: interface::Config) -> config::Config;
+    fn update_config(&mut self, config: Config) -> Config;
 
     /// merges in config changes with no validations run
     /// - the purpose to allow config to be updated without validation is in case the assumptions
@@ -36,7 +33,7 @@ pub trait Operator {
     ///
     /// ## Panics
     /// - if not invoked by the operator account
-    fn force_update_config(&mut self, config: interface::Config) -> config::Config;
+    fn force_update_config(&mut self, config: Config) -> Config;
 
     /// unlocks the contract
     ///

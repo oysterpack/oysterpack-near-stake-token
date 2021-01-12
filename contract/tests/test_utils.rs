@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 extern crate oysterpack_near_stake_token;
 
 use near_sdk_sim::*;

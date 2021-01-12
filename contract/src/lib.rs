@@ -269,9 +269,13 @@ impl StakeTokenContract {
 
         // compute initial_contract_storage_usage
         // the contract state is not yet saved to storage - measure it's storage usage manually by
-        // serializing its state via borsh
-        contract.initial_contract_storage_usage =
-            (env::storage_usage() + contract.try_to_vec().unwrap().len() as u64).into();
+        // serializing its state via borsh. In addition to the serialized bytes, there is some storage
+        // overhead - which was determined to be 45 from sim tests
+        let state_storage_overhead = 45;
+        contract.initial_contract_storage_usage = (env::storage_usage()
+            + contract.try_to_vec().unwrap().len() as u64
+            + state_storage_overhead)
+            .into();
 
         // compute account storage usage
         {

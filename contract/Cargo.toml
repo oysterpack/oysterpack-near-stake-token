@@ -10,6 +10,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 near-sdk = { git = "https://github.com/near/near-sdk-rs",  tag = "2.3.0" }
 primitive-types = "^0.7.3"
+borsh = "^0.8.0"
 
 [dev-dependencies]
 quickcheck = "0.9"

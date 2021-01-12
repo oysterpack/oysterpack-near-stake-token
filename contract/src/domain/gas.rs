@@ -1,3 +1,4 @@
+use crate::interface;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
@@ -27,6 +28,12 @@ pub const TGAS: Gas = Gas(1_000_000_000_000);
 impl From<u64> for Gas {
     fn from(value: u64) -> Self {
         Self(value)
+    }
+}
+
+impl From<interface::Gas> for Gas {
+    fn from(value: interface::Gas) -> Self {
+        Self(value.0 .0)
     }
 }
 
