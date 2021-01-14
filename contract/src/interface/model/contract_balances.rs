@@ -25,6 +25,7 @@ pub struct ContractBalances {
     /// total balance that has been escrowed to pay for user account storage
     pub total_account_storage_escrow: YoctoNear,
 
+    pub contract_owner_balance: YoctoNear,
     /// contract earnings that have been accumulated but not yet staked
     ///
     /// NOTE: earnings are distributed when funds are staked, i.e.,

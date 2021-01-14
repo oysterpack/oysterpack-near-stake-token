@@ -1,7 +1,10 @@
-use crate::interface::{BlockHeight, BlockTimestamp, ContractBalances, ContractFinancials};
+use crate::interface::{
+    BlockHeight, BlockTimestamp, ContractBalances, ContractFinancials, EarningsDistribution,
+};
 
 //required in order for near_bindgen macro to work outside of lib.rs
 use crate::config::CONTRACT_MIN_OPERATIONAL_BALANCE;
+use crate::near::log;
 use crate::*;
 use near_sdk::near_bindgen;
 
@@ -23,6 +26,7 @@ impl ContractFinancials for StakeTokenContract {
             contract_owner_storage_usage_cost: self.contract_owner_storage_usage_cost().into(),
             contract_owner_available_balance: self.owner_available_balance().into(),
 
+            contract_owner_balance: self.contract_owner_balance.into(),
             contract_earnings: self.contract_earnings().into(),
             contract_owner_earnings: self.contract_owner_earnings().into(),
             user_accounts_earnings: self.user_accounts_earnings().into(),
@@ -69,7 +73,20 @@ impl StakeTokenContract {
         .into()
     }
 
+    /// returns how much gas rewards the contract has accumulated
     pub fn contract_earnings(&self) -> YoctoNear {
+        println!(
+            r#"
+        {}
+        {}
+        {}
+        {}
+        "#,
+            env::account_balance(),
+            self.contract_owner_balance.value(),
+            self.total_user_accounts_balance().value(),
+            self.collected_earnings.value()
+        );
         (env::account_balance()
             - self.contract_owner_balance.value()
             - self.total_user_accounts_balance().value()
@@ -77,11 +94,20 @@ impl StakeTokenContract {
         .into()
     }
 
+    pub fn total_earnings(&self) -> YoctoNear {
+        self.contract_earnings() + self.collected_earnings
+    }
+
+    /// percentage of earnings from contract gas rewards and collected earnings that are allotted to
+    /// the contract owner
     pub fn contract_owner_earnings(&self) -> YoctoNear {
-        let contract_earning = self.contract_earnings().value();
+        self.contract_owner_share(self.total_earnings())
+    }
+
+    fn contract_owner_share(&self, amount: YoctoNear) -> YoctoNear {
         let contract_owner_earnings_percentage =
             self.config.contract_owner_earnings_percentage() as u128;
-        (contract_earning / 100 * contract_owner_earnings_percentage).into()
+        (amount.value() / 100 * contract_owner_earnings_percentage).into()
     }
 
     pub fn user_accounts_earnings(&self) -> YoctoNear {
@@ -101,5 +127,29 @@ impl StakeTokenContract {
         } else {
             0.into()
         }
+    }
+
+    pub fn distribute_earnings(&mut self) {
+        let contract_owner_earnings = self.contract_owner_earnings();
+        let user_accounts_earnings = self.user_accounts_earnings();
+
+        self.contract_owner_balance = self
+            .contract_owner_balance
+            .saturating_add(contract_owner_earnings.value())
+            .into();
+
+        // funds added to liquidity pool distributes earnings to the user
+        self.near_liquidity_pool = self
+            .near_liquidity_pool
+            .saturating_add(user_accounts_earnings.value())
+            .into();
+
+        // collected earnings have been distributed
+        self.collected_earnings = 0.into();
+
+        log(EarningsDistribution {
+            contract_owner_earnings: contract_owner_earnings.into(),
+            user_accounts_earnings: user_accounts_earnings.into(),
+        })
     }
 }

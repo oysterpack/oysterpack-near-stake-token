@@ -36,12 +36,15 @@ impl<'a> TestContext<'a> {
     pub fn with_registered_account(contract_settings: Option<ContractSettings>) -> Self {
         let mut context = new_context(ACCOUNT_ID);
         context.is_view = false;
-        context.attached_deposit = YOCTO;
         testing_env!(context.clone());
 
         let contract_settings = contract_settings.unwrap_or_else(default_contract_settings);
         let mut contract = StakeTokenContract::new(None, contract_settings);
+
+        context.attached_deposit = YOCTO;
+        testing_env!(context.clone());
         contract.register_account();
+        context.account_balance += contract.account_storage_fee().value();
 
         context.attached_deposit = 0;
         testing_env!(context.clone());
@@ -76,7 +79,7 @@ pub fn new_context(predecessor_account_id: &str) -> VMContext {
         epoch_height: 0,
         block_index: 0,
         block_timestamp: 0,
-        account_balance: 100 * YOCTO,
+        account_balance: 10000 * YOCTO,
         account_locked_balance: 0,
         storage_usage: 400 * 1000,
         attached_deposit: 0,

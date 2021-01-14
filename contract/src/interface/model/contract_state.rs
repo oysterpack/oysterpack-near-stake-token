@@ -3,7 +3,7 @@ use crate::{
     domain::RedeemLock,
     interface::{
         BatchId, BlockTimeHeight, RedeemStakeBatch, RedeemStakeBatchReceipt, StakeBatch,
-        StakeTokenValue, TimestampedNearBalance, TimestampedStakeBalance, YoctoNear,
+        StakeTokenValue, TimestampedNearBalance, TimestampedStakeBalance,
     },
 };
 use near_sdk::{
@@ -24,8 +24,6 @@ pub struct ContractState {
 
     pub total_unstaked_near: TimestampedNearBalance,
     pub total_stake_supply: TimestampedStakeBalance,
-
-    pub near_liquidity_pool: YoctoNear,
 
     /// STAKE token value snapshot that was last taken when processing a batch
     pub stake_token_value: StakeTokenValue,

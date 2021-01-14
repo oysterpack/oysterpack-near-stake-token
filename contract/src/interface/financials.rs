@@ -14,3 +14,9 @@ pub trait ContractFinancials {
     /// #\[payable\]
     fn deposit_earnings(&mut self) -> YoctoNear;
 }
+
+#[derive(Debug)]
+pub struct EarningsDistribution {
+    pub contract_owner_earnings: u128,
+    pub user_accounts_earnings: u128,
+}

@@ -18,7 +18,6 @@ impl Operator for StakeTokenContract {
             registered_accounts_count: self.total_registered_accounts().clone(),
             total_unstaked_near: self.total_near.into(),
             total_stake_supply: self.total_stake.into(),
-            near_liquidity_pool: self.near_liquidity_pool.into(),
             stake_token_value: self.stake_token_value.into(),
             batch_id_sequence: self.batch_id_sequence.into(),
             stake_batch: self.stake_batch.map(interface::StakeBatch::from),

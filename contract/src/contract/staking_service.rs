@@ -79,6 +79,8 @@ impl StakingService for StakeTokenContract {
 
         self.run_stake_batch_locked = true;
 
+        self.distribute_earnings();
+
         if self.is_liquidity_needed() {
             self.staking_pool_promise()
                 .get_account()
@@ -86,7 +88,7 @@ impl StakingService for StakeTokenContract {
                 .then(self.invoke_on_run_stake_batch())
                 .then(self.invoke_release_run_stake_batch_lock())
         } else {
-            // if no liquidity is needed, then lets stake it
+            // if liquidity is not needed, then lets stake it
             // NOTE: liquidity belongs to the stakers - some will leak over when we withdraw all from
             //       the staking pool because of the shares rounding issue on the staking pool side
             let stake_amount = batch.balance().amount() + self.near_liquidity_pool;
@@ -2276,6 +2278,7 @@ mod test {
         context.attached_deposit = YOCTO;
         testing_env!(context.clone());
         contract.deposit();
+        context.account_balance += context.attached_deposit;
 
         context.attached_deposit = 0;
         testing_env!(context.clone());
@@ -2344,7 +2347,6 @@ mod test {
         let contract = &mut test_context.contract;
 
         context.attached_deposit = YOCTO;
-        context.account_balance = 100 * YOCTO;
         testing_env!(context.clone());
         contract.deposit();
 
@@ -2473,6 +2475,7 @@ mod test {
             context.attached_deposit = staked_near_amount;
             testing_env!(context.clone());
             contract.deposit();
+            context.account_balance += context.attached_deposit;
 
             {
                 context.attached_deposit = 0;
