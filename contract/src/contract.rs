@@ -1,5 +1,6 @@
 pub mod account_management;
 pub mod contract_owner;
+pub mod financials;
 pub mod operator;
 pub mod redeeming_workflow_callbacks;
 pub mod settings;

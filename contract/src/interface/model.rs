@@ -1,6 +1,6 @@
 mod config;
+mod contract_balances;
 pub mod contract_state;
-mod owner_balance;
 mod redeem_stake_batch;
 mod redeem_stake_batch_receipt;
 mod stake_account;
@@ -11,7 +11,7 @@ mod timestamped_near_balance;
 mod timestamped_stake_balance;
 
 pub use config::*;
-pub use owner_balance::*;
+pub use contract_balances::*;
 pub use redeem_stake_batch::RedeemStakeBatch;
 pub use redeem_stake_batch_receipt::RedeemStakeBatchReceipt;
 pub use stake_account::StakeAccount;

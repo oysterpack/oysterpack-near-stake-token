@@ -68,7 +68,8 @@ near call $STAKING_POOL withdraw_all --accountId stake.oysterpack.testnet --gas 
 ```
 
 1000000000000000000000000     = 1 NEAR
-1999999999999999999999999
+18231057211591279614232
+
 
 1000000000000                 = 1 TGas
 22372533024614

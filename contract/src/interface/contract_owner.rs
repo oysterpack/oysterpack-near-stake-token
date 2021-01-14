@@ -1,30 +1,9 @@
-use crate::interface::{OwnerBalance, YoctoNear};
+use crate::interface::YoctoNear;
 use near_sdk::json_types::ValidAccountId;
 use near_sdk::AccountId;
 
 pub trait ContractOwner {
     fn owner_id(&self) -> AccountId;
-
-    /// returns the contract's NEAR balance that is owned and available for withdrawal minus 1 NEAR
-    ///
-    /// ## Notes
-    /// - owner balance accumulates contract transaction fee rewards
-    /// - 1 NEAR is left behind as a safety measure to make sure the contract has enough balance to
-    ///   function
-    ///
-    /// <pre>
-    /// balance computation = env::account_balance()
-    ///   - total_customer_accounts_unstaked_balance
-    ///   - customer_batched_stake_deposits
-    ///   - total_account_storage_escrow
-    ///   - contract_storage_usage_cost
-    ///   - liquidity added for pending withdrawal
-    ///   - 1 NEAR
-    /// </pre>
-    fn owner_balance(&self) -> OwnerBalance;
-
-    /// returns the initial contract account balance - which belongs to the contract owner
-    fn owner_starting_balance(&self) -> YoctoNear;
 
     /// The new owner must have a registered account to protect against accounts that do not exist
     ///

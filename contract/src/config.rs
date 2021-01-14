@@ -1,3 +1,4 @@
+use crate::near::YOCTO;
 use crate::{
     domain::{Gas, YoctoNear, TGAS},
     interface,
@@ -7,11 +8,20 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
 };
 
+/// min contract balance required above the contract's locked balance used for storage staking to
+/// ensure the contract is operational
+pub const CONTRACT_MIN_OPERATIONAL_BALANCE: YoctoNear = YoctoNear(YOCTO);
+
 #[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, Copy)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Config {
     storage_cost_per_byte: YoctoNear,
     gas_config: GasConfig,
+
+    /// percentage of contract gas rewards that are distributed to the contract owner
+    /// - the rest of the contract earnings are staked to boost the staking rewards for user accounts
+    /// - must be a number between 0-100
+    contract_owner_earnings_percentage: u8,
 }
 
 impl Default for Config {
@@ -21,24 +31,25 @@ impl Default for Config {
             // https://docs.near.org/docs/concepts/storage
             storage_cost_per_byte: 100_000_000_000_000_000_000.into(),
             gas_config: GasConfig::default(),
+            contract_owner_earnings_percentage: 50,
         }
     }
 }
 
 impl Config {
-    pub fn new(storage_cost_per_byte: YoctoNear, gas_config: GasConfig) -> Self {
-        Self {
-            storage_cost_per_byte,
-            gas_config,
-        }
-    }
-
     pub fn storage_cost_per_byte(&self) -> YoctoNear {
         self.storage_cost_per_byte
     }
 
     pub fn gas_config(&self) -> GasConfig {
         self.gas_config
+    }
+
+    /// percentage of contract gas rewards that are distributed to the contract owner
+    /// - the rest of the contract earnings are staked to boost the staking rewards for user accounts
+    /// - must be a number between 0-100
+    pub fn contract_owner_earnings_percentage(&self) -> u8 {
+        self.contract_owner_earnings_percentage
     }
 
     /// ## Panics

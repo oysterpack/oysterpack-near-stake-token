@@ -9,6 +9,10 @@ use near_sdk::serde::{Deserialize, Serialize};
 pub struct Config {
     pub storage_cost_per_byte: Option<YoctoNear>,
     pub gas_config: Option<GasConfig>,
+    /// percentage of contract gas rewards that are distributed to the contract owner
+    /// - the rest of the contract earnings are staked to boost the staking rewards for user accounts
+    /// - must be a number between 0-100
+    pub contract_owner_earnings_percentage: Option<u8>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -48,6 +52,7 @@ impl From<config::Config> for Config {
         Self {
             storage_cost_per_byte: Some(value.storage_cost_per_byte().into()),
             gas_config: Some(value.gas_config().into()),
+            contract_owner_earnings_percentage: Some(value.contract_owner_earnings_percentage()),
         }
     }
 }

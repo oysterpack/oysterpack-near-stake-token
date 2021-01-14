@@ -21,6 +21,32 @@ pub struct TestContext {
     pub settings: ContractSettings,
 }
 
+impl TestContext {
+    pub fn master_account(&self) -> &UserAccount {
+        &self.master_account
+    }
+
+    pub fn contract_owner(&self) -> &UserAccount {
+        &self.contract_owner
+    }
+
+    pub fn contract_operator(&self) -> &UserAccount {
+        &self.contract_operator
+    }
+
+    pub fn contract(&self) -> &ContractAccount<StakeTokenContractContract> {
+        &self.contract
+    }
+
+    pub fn contract_account_id(&self) -> &str {
+        self.contract.user_account.account_id.as_str()
+    }
+
+    pub fn settings(&self) -> &ContractSettings {
+        &self.settings
+    }
+}
+
 pub fn create_context() -> TestContext {
     let master_account = init_simulator(None);
     let contract_owner = master_account.create_user("oysterpack".to_string(), 1000 * YOCTO);

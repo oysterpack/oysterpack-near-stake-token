@@ -10,11 +10,21 @@
 //! the STAKE token value increases. In other words, STAKE tokens appreciate in NEAR token value over
 //! time.
 //!
+//! In addition, the contract provides the following yield boosting levers:
+//! 1. the contract owner can share a percentage of the contract's gas rewards with STAKE ser accounts
+//!    to boost yield. When funds are staked, contract gas earning will be distributed to STAKE users
+//!    by staking the NEAR funds into the staking pool, which increases the staked NEAR balance, which
+//!    increases the STAKE token value.
+//!
+//! 2. the contract supports collecting earnings from other contracts into the STAKE token contract.
+//!    The collected earnings are pooled with the STAKE Token contract gas earnings and distributed
+//!    to the contract owner and user accounts.
+//!
 //! When redeeming STAKE tokens for NEAR, the STAKE token contract also helps to add liquidity for
 //! withdrawing your unstaked NEAR tokens (see below for more details)
 //!
 //! # STAKE Token Vision
-//! > harness the Internet of value - everything on the internet can take on the proerties of money
+//! > harness the Internet of value - everything on the internet can take on the properties of money
 //!
 //! Leverage NEAR as a digital currency beyond being a utility token for the NEAR network to pay for
 //! transaction gas and storage usage. NEAR is designed to be scalable and fast with very low and
@@ -47,7 +57,7 @@
 //! be withdrawn.
 //!
 //! ## STAKE Token Benefits
-//! 1. NEAR token asset value is maximized through staking.
+//! 1. NEAR token asset value is maximized through staking and gas earnings profit sharing.
 //! 2. Transforms staked NEAR into tradeable digital asset, i.e., into a fungible token.
 //! 3. Provides more incentive to stake NEAR, which helps to further strengthen and secure the network
 //!    by providing more economic incentive to validators.
@@ -79,6 +89,7 @@
 //! - [FungibleTokenCore](crate::interface::FungibleTokenCore)
 //! - [Operator](crate::interface::Operator)
 //! - [ContractOwner](crate::interface::ContractOwner)
+//! - [ContractFinancials](crate::interface::ContractFinancials)
 //!
 //! See each of the interfaces for details.
 //!
@@ -136,10 +147,19 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 pub struct StakeTokenContract {
     /// contract owner
     owner_id: AccountId,
-    owner_starting_balance: YoctoNear,
+
+    /// contract owner balance pays for contract storage separate from user account storage fees
+    /// - this means part of the contract owner balance is always locked to cover `contract_initial_storage_usage`
+    contract_owner_balance: YoctoNear,
+    /// initial contract storage usage is recorded to track the amount of storage that the contract
+    /// owner is responsible to pay for. In addition, it is useful to track and monitor storage usage
+    /// growth.
+    /// - storage is the most important resource to manage and track on NEAR
+    contract_initial_storage_usage: StorageUsage,
+    /// the contract is designed to collect deposits which will be staked to boost STAKE value for user accounts
+    collected_earnings: YoctoNear,
 
     /// Operator is allowed to perform operator actions on the contract
-    /// TODO: support multiple operator and role management
     operator_id: AccountId,
 
     config: Config,
@@ -153,7 +173,6 @@ pub struct StakeTokenContract {
     /// we need to track the storage escrow balance because we can't assume storage staking cost will
     /// remain constant on NEAR
     total_account_storage_escrow: YoctoNear,
-    initial_contract_storage_usage: StorageUsage,
 
     accounts: LookupMap<Hash, Account>,
     accounts_len: u128,
@@ -233,7 +252,7 @@ impl StakeTokenContract {
         let operator_id: AccountId = settings.operator_id.into();
         let mut contract = Self {
             owner_id: owner_id.map_or(operator_id.clone(), |account_id| account_id.into()),
-            owner_starting_balance: env::account_balance().into(),
+            contract_owner_balance: env::account_balance().into(),
 
             operator_id,
 
@@ -261,7 +280,8 @@ impl StakeTokenContract {
             run_redeem_stake_batch_lock: None,
 
             total_account_storage_escrow: 0.into(),
-            initial_contract_storage_usage: 0.into(), // computed after contract is created - see below
+            contract_initial_storage_usage: 0.into(), // computed after contract is created - see below
+            collected_earnings: 0.into(),
 
             #[cfg(test)]
             env: near_env::Env::default(),
@@ -272,7 +292,7 @@ impl StakeTokenContract {
         // serializing its state via borsh. In addition to the serialized bytes, there is some storage
         // overhead - which was determined to be 45 from sim tests
         let state_storage_overhead = 45;
-        contract.initial_contract_storage_usage = (env::storage_usage()
+        contract.contract_initial_storage_usage = (env::storage_usage()
             + contract.try_to_vec().unwrap().len() as u64
             + state_storage_overhead)
             .into();
@@ -298,6 +318,11 @@ impl StakeTokenContract {
         }
 
         contract
+    }
+
+    // TODO: remove - added to provide example for https://github.com/near/near-sdk-rs/issues/262
+    pub fn get_staking_pool_id(&self) -> AccountId {
+        self.staking_pool_id.clone()
     }
 }
 
@@ -451,7 +476,7 @@ mod test {
 
         println!(
             "initial_contract_storage_usage = {:?}",
-            contract.initial_contract_storage_usage
+            contract.contract_initial_storage_usage
         );
     }
 }

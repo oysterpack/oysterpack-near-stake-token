@@ -1,66 +1,18 @@
-use crate::interface::{AccountManagement, ContractOwner, OwnerBalance, StakingService, YoctoNear};
+use crate::interface::{AccountManagement, ContractFinancials, ContractOwner, YoctoNear};
 //required in order for near_bindgen macro to work outside of lib.rs
 use crate::errors::contract_owner::{
     INSUFFICIENT_FUNDS_FOR_OWNER_STAKING, INSUFFICIENT_FUNDS_FOR_OWNER_WITHDRAWAL,
     TRANSFER_TO_NON_REGISTERED_ACCOUNT,
 };
 use crate::interface::contract_owner::events::OwnershipTransferred;
-use crate::near::{log, YOCTO};
+use crate::near::log;
 use crate::*;
 use near_sdk::{json_types::ValidAccountId, near_bindgen, Promise};
-
-// TODO: remove
-//       - added to show example for https://github.com/near/near-sdk-rs/issues/262
-#[near_bindgen]
-impl StakeTokenContract {
-    pub fn get_staking_pool_id(&self) -> AccountId {
-        self.staking_pool_id()
-    }
-}
 
 #[near_bindgen]
 impl ContractOwner for StakeTokenContract {
     fn owner_id(&self) -> AccountId {
         self.owner_id.clone()
-    }
-
-    fn owner_balance(&self) -> OwnerBalance {
-        let customer_batched_stake_deposits = self
-            .stake_batch
-            .map_or(0, |batch| batch.balance().amount().value())
-            + self
-                .next_stake_batch
-                .map_or(0, |batch| batch.balance().amount().value());
-
-        let contract_storage_usage_cost = self.initial_contract_storage_usage.value() as u128
-            * self.config.storage_cost_per_byte().value();
-
-        let owner_balance = env::account_balance()
-            - self.total_near.amount().value()
-            - self.near_liquidity_pool.value()
-            - customer_batched_stake_deposits
-            - self.total_account_storage_escrow.value()
-            - contract_storage_usage_cost;
-
-        let owner_balance = if owner_balance > YOCTO {
-            owner_balance - YOCTO
-        } else {
-            0
-        };
-
-        OwnerBalance {
-            available_balance: owner_balance.into(),
-            contract_account_balance: env::account_balance().into(),
-            user_accounts_near_balance: self.total_near.amount().into(),
-            near_liquidity: self.near_liquidity_pool.into(),
-            customer_batched_stake_deposits: customer_batched_stake_deposits.into(),
-            total_account_storage_escrow: self.total_account_storage_escrow.into(),
-            contract_storage_usage_cost: contract_storage_usage_cost.into(),
-        }
-    }
-
-    fn owner_starting_balance(&self) -> YoctoNear {
-        self.owner_starting_balance.into()
     }
 
     fn transfer_ownership(&mut self, new_owner: ValidAccountId) {
@@ -82,19 +34,23 @@ impl ContractOwner for StakeTokenContract {
     fn stake_all_owner_balance(&mut self) -> YoctoNear {
         self.assert_predecessor_is_owner();
         let mut account = self.registered_account(&self.owner_id);
-        let owner_balance = self.owner_balance();
-        assert!(owner_balance.value() > 0, "owner balance is zero");
-        self.deposit_near_for_account_to_stake(&mut account, owner_balance.value().into());
+        let balances = self.balances();
+        let owner_available_balance = balances.contract_owner_available_balance;
+        assert!(owner_available_balance.value() > 0, "owner balance is zero");
+        self.deposit_near_for_account_to_stake(
+            &mut account,
+            owner_available_balance.value().into(),
+        );
         self.save_registered_account(&account);
-        owner_balance.available_balance
+        owner_available_balance
     }
 
     fn stake_owner_balance(&mut self, amount: YoctoNear) {
         self.assert_predecessor_is_owner();
         let mut account = self.registered_account(&self.owner_id);
-        let owner_balance = self.owner_balance();
+        let owner_available_balance = self.balances().contract_owner_available_balance;
         assert!(
-            owner_balance.value() >= amount.value(),
+            owner_available_balance.value() >= amount.value(),
             INSUFFICIENT_FUNDS_FOR_OWNER_STAKING
         );
         self.deposit_near_for_account_to_stake(&mut account, amount.into());
@@ -103,16 +59,16 @@ impl ContractOwner for StakeTokenContract {
 
     fn withdraw_all_owner_balance(&mut self) -> YoctoNear {
         self.assert_predecessor_is_owner();
-        let owner_balance = self.owner_balance();
-        Promise::new(self.owner_id.clone()).transfer(owner_balance.value());
-        owner_balance.available_balance
+        let owner_available_balance = self.balances().contract_owner_available_balance;
+        Promise::new(self.owner_id.clone()).transfer(owner_available_balance.value());
+        owner_available_balance
     }
 
     fn withdraw_owner_balance(&mut self, amount: YoctoNear) {
         self.assert_predecessor_is_owner();
-        let owner_balance = self.owner_balance();
+        let owner_available_balance = self.balances().contract_owner_available_balance;
         assert!(
-            owner_balance.value() >= amount.value(),
+            owner_available_balance.value() >= amount.value(),
             INSUFFICIENT_FUNDS_FOR_OWNER_WITHDRAWAL
         );
         Promise::new(self.owner_id.clone()).transfer(amount.value());
@@ -122,113 +78,12 @@ impl ContractOwner for StakeTokenContract {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::interface::ContractFinancials;
     use crate::near::YOCTO;
     use crate::test_utils::*;
     use near_sdk::test_utils::get_created_receipts;
     use near_sdk::{testing_env, MockedBlockchain};
     use std::convert::TryFrom;
-
-    #[test]
-    fn owner_balance_has_funds() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.account_balance = YOCTO * 100;
-        context.is_view = false;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-
-        context.attached_deposit = contract.account_storage_fee().value();
-        testing_env!(context.clone());
-        contract.register_account();
-
-        assert_eq!(
-            env::account_balance(),
-            (YOCTO * 100) + contract.account_storage_fee().value()
-        );
-
-        testing_env!(context.clone());
-        assert_eq!(
-            contract.owner_balance().available_balance.value(),
-            (YOCTO * 100)
-                - (contract.initial_contract_storage_usage.value() as u128
-                    * contract.config.storage_cost_per_byte().0)
-                - (YOCTO)
-        );
-
-        contract.total_near.credit((YOCTO * 50).into());
-        testing_env!(context.clone());
-        assert_eq!(
-            contract.owner_balance().available_balance.value(),
-            (YOCTO * 100)
-                - (contract.initial_contract_storage_usage.value() as u128
-                    * contract.config.storage_cost_per_byte().0)
-                - (YOCTO * 50)
-                - (YOCTO)
-        );
-    }
-
-    #[test]
-    fn owner_balance_has_funds_with_pending_stake_batches_and_near_balance_and_liquidity() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.account_balance = YOCTO * 100;
-        context.is_view = false;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-        context.attached_deposit = contract.account_storage_fee().value();
-        testing_env!(context.clone());
-        contract.register_account();
-
-        *contract.batch_id_sequence += 1;
-        contract.stake_batch = Some(domain::StakeBatch::new(
-            contract.batch_id_sequence,
-            YOCTO.into(),
-        ));
-        *contract.batch_id_sequence += 1;
-        contract.next_stake_batch = Some(domain::StakeBatch::new(
-            contract.batch_id_sequence,
-            (YOCTO * 2).into(),
-        ));
-
-        context.storage_usage = 400u64 * 1000u64; // 400 KB
-        testing_env!(context.clone());
-        assert_eq!(
-            contract.owner_balance().available_balance.value(),
-            (YOCTO * 100)
-                - (contract.initial_contract_storage_usage.value() as u128
-                    * contract.config.storage_cost_per_byte().0)
-                - (YOCTO * 3)
-                - (YOCTO)
-        );
-
-        contract.total_near.credit((10 * YOCTO).into());
-        testing_env!(context.clone());
-        assert_eq!(
-            contract.owner_balance().available_balance.value(),
-            (YOCTO * 100)
-                - (contract.initial_contract_storage_usage.value() as u128
-                    * contract.config.storage_cost_per_byte().0)
-                - (YOCTO * 3)
-                - contract.total_near.amount().value()
-                - (YOCTO)
-        );
-
-        contract.near_liquidity_pool = YOCTO.into();
-        assert_eq!(
-            contract.owner_balance().available_balance.value(),
-            (YOCTO * 100)
-                - (contract.initial_contract_storage_usage.value() as u128
-                    * contract.config.storage_cost_per_byte().0)
-                - (YOCTO * 3)
-                - contract.total_near.amount().value()
-                - contract.near_liquidity_pool.value()
-                - (YOCTO)
-        );
-    }
 
     #[test]
     fn transfer_ownership_success() {
@@ -290,7 +145,7 @@ mod test {
         let mut context = test_context.context.clone();
         let contract = &mut test_context.contract;
 
-        let owner_balance = contract.owner_balance();
+        let owner_available_balance = contract.balances().contract_owner_available_balance;
 
         context.predecessor_account_id = contract.owner_id();
         testing_env!(context.clone());
@@ -301,7 +156,7 @@ mod test {
         println!("{:#?}", receipt);
         assert_eq!(receipt.receiver_id, contract.owner_id());
         if let Action::Transfer { deposit } = receipt.actions.first().unwrap() {
-            assert_eq!(owner_balance.value(), *deposit);
+            assert_eq!(owner_available_balance.value(), *deposit);
         } else {
             panic!("expected transfer action");
         }
