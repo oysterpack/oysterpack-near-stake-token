@@ -3,10 +3,7 @@ use crate::domain::YoctoStake;
 use crate::*;
 use crate::{
     domain::{self, YoctoNear},
-    errors::{
-        illegal_state::STAKE_BATCH_SHOULD_EXIST,
-        staking_pool_failures::{GET_ACCOUNT_FAILURE, STAKING_POOL_CALL_FAILED},
-    },
+    errors::illegal_state::STAKE_BATCH_SHOULD_EXIST,
     ext_staking_workflow_callbacks,
     interface::staking_service::events::{NearLiquidityAdded, PendingWithdrawalCleared, Staked},
     near::{log, NO_DEPOSIT},
@@ -36,8 +33,6 @@ impl StakeTokenContract {
         // in the batch processing workflow
         // - if the callback was called by itself, and the batch is not present, then there is a bug
         let batch = self.stake_batch.expect(STAKE_BATCH_SHOULD_EXIST);
-
-        assert!(self.promise_result_succeeded(), GET_ACCOUNT_FAILURE);
 
         let is_liquidity_needed = self.is_liquidity_needed();
         let unstaked_balance = staking_pool_account.unstaked_balance.0;
@@ -82,7 +77,6 @@ impl StakeTokenContract {
         #[callback] staking_pool_account: StakingPoolAccount,
     ) {
         let batch = self.stake_batch.take().expect(STAKE_BATCH_SHOULD_EXIST);
-        assert!(self.promise_result_succeeded(), STAKING_POOL_CALL_FAILED);
 
         if let Some(near_liquidity) = near_liquidity {
             if near_liquidity.value() > 0 {
@@ -679,34 +673,5 @@ mod test {
                 panic!("expected check_deposit function call")
             }
         }
-    }
-
-    /// Given the promise result failed for getting the staked balance
-    /// Then the callback fails
-    #[test]
-    #[should_panic(expected = "failed to get account info from staking pool")]
-    fn on_run_stake_batch_promise_result_fails() {
-        let mut test_context = TestContext::with_registered_account(None);
-        let mut context = test_context.context.clone();
-        let contract = &mut test_context.contract;
-
-        context.attached_deposit = 100 * YOCTO;
-        testing_env!(context.clone());
-        contract.deposit();
-        contract.stake();
-
-        assert!(contract.run_stake_batch_locked);
-
-        // callback can only be invoked from itself
-        context.predecessor_account_id = context.current_account_id.clone();
-        testing_env!(context.clone());
-        set_env_with_failed_promise_result(contract);
-        let staking_pool_account = StakingPoolAccount {
-            account_id: context.predecessor_account_id,
-            unstaked_balance: 0.into(),
-            staked_balance: 0.into(),
-            can_withdraw: true,
-        };
-        contract.on_run_stake_batch(staking_pool_account);
     }
 }

@@ -24,11 +24,22 @@ impl ContractOwner for StakeTokenContract {
 
         let previous_owner = self.owner_id.clone();
         self.owner_id = new_owner.into();
+        self.operator_id = self.owner_id.clone();
 
         log(OwnershipTransferred {
             from: &previous_owner,
             to: &self.owner_id,
         });
+    }
+
+    fn set_operator_id(&mut self, account_id: ValidAccountId) {
+        self.assert_predecessor_is_owner();
+        assert!(
+            self.account_registered(account_id.clone()),
+            TRANSFER_TO_NON_REGISTERED_ACCOUNT,
+        );
+
+        self.operator_id = account_id.into();
     }
 
     fn stake_all_owner_balance(&mut self) -> YoctoNear {
@@ -87,56 +98,67 @@ mod test {
 
     #[test]
     fn transfer_ownership_success() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.account_balance = 100 * YOCTO;
-        context.is_view = false;
-        testing_env!(context.clone());
+        let mut ctx = TestContext::with_registered_account(None);
+        let mut context = ctx.context.clone();
+        let contract = &mut ctx.contract;
 
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-
-        context.attached_deposit = YOCTO;
-        testing_env!(context.clone());
-        contract.register_account();
+        let new_owner = ctx.account_id;
 
         context.predecessor_account_id = contract.owner_id.clone();
         testing_env!(context.clone());
-        contract.transfer_ownership(ValidAccountId::try_from(account_id).unwrap());
-        assert_eq!(&contract.owner_id, account_id)
+
+        contract.transfer_ownership(ValidAccountId::try_from(new_owner).unwrap());
+        assert_eq!(&contract.owner_id, new_owner);
+        assert_eq!(contract.operator_id, new_owner);
+    }
+
+    #[test]
+    fn set_operator_id() {
+        let mut ctx = TestContext::with_registered_account(None);
+        let mut context = ctx.context.clone();
+        let contract = &mut ctx.contract;
+
+        context.predecessor_account_id = contract.owner_id.clone();
+        testing_env!(context.clone());
+
+        contract.set_operator_id(ValidAccountId::try_from(ctx.account_id).unwrap());
+        assert_eq!(contract.operator_id, ctx.account_id);
+    }
+
+    #[test]
+    #[should_panic(expected = "contract call is only allowed by the contract owner")]
+    fn set_operator_id_invoked_by_non_owner() {
+        let mut ctx = TestContext::with_registered_account(None);
+        let mut context = ctx.context.clone();
+        let contract = &mut ctx.contract;
+
+        context.predecessor_account_id = ctx.account_id.to_string();
+        testing_env!(context.clone());
+
+        contract.set_operator_id(ValidAccountId::try_from(ctx.account_id).unwrap());
+        assert_eq!(contract.operator_id, ctx.account_id);
     }
 
     #[test]
     #[should_panic(expected = "contract ownership can only be transferred to a registered account")]
     fn transfer_ownership_to_non_registered_account() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.account_balance = 100 * YOCTO;
-        context.is_view = false;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
+        let mut ctx = TestContext::new(None);
+        let mut context = ctx.context.clone();
+        let contract = &mut ctx.contract;
 
         context.predecessor_account_id = contract.owner_id.clone();
         testing_env!(context.clone());
-        contract.transfer_ownership(ValidAccountId::try_from(account_id).unwrap());
+        contract.transfer_ownership(ValidAccountId::try_from(ctx.account_id).unwrap());
     }
 
     #[test]
     #[should_panic(expected = "contract call is only allowed by the contract owner")]
     fn transfer_ownership_from_non_owner() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.account_balance = 100 * YOCTO;
-        context.is_view = false;
-        testing_env!(context.clone());
+        let mut ctx = TestContext::with_registered_account(None);
+        let contract = &mut ctx.contract;
 
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-
-        testing_env!(context.clone());
-        contract.transfer_ownership(ValidAccountId::try_from(account_id).unwrap());
+        testing_env!(ctx.context.clone());
+        contract.transfer_ownership(ValidAccountId::try_from(ctx.account_id).unwrap());
     }
 
     #[test]

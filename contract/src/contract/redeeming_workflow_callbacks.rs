@@ -15,7 +15,6 @@ use crate::{
     },
     ext_redeeming_workflow_callbacks,
     interface::BatchId,
-    interface::Operator,
     near::NO_DEPOSIT,
 };
 use near_sdk::{env, near_bindgen, Promise, PromiseOrValue};
@@ -89,7 +88,9 @@ impl StakeTokenContract {
                 UNSTAKED_FUNDS_NOT_AVAILABLE_FOR_WITHDRAWAL
             );
 
-            self.withdraw_all_funds_from_staking_pool()
+            self.staking_pool_promise()
+                .withdraw_all()
+                .promise()
                 .then(self.invoke_on_redeeming_stake_post_withdrawal())
                 .into()
         } else {

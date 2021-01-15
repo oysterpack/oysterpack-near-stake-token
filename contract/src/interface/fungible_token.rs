@@ -108,7 +108,7 @@ pub trait FungibleTokenCore {
         &mut self,
         receiver_id: ValidAccountId,
         amount: TokenAmount,
-        data: TransferCallData,
+        data: TransferCallMessage,
         memo: Option<Memo>,
     ) -> Promise;
 
@@ -143,7 +143,7 @@ pub trait FungibleTokenReceiver {
         &mut self,
         sender_id: ValidAccountId,
         amount: TokenAmount,
-        data: TransferCallData,
+        data: TransferCallMessage,
     ) -> PromiseOrValue<TokenAmount>;
 }
 
@@ -278,9 +278,9 @@ impl Display for Memo {
 /// - https://eips.ethereum.org/EIPS/eip-777#data
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
-pub struct TransferCallData(pub String);
+pub struct TransferCallMessage(pub String);
 
-impl Deref for TransferCallData {
+impl Deref for TransferCallMessage {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
@@ -288,7 +288,7 @@ impl Deref for TransferCallData {
     }
 }
 
-impl Display for TransferCallData {
+impl Display for TransferCallMessage {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
     }

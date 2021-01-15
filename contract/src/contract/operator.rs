@@ -6,7 +6,7 @@ use crate::{
     interface::{contract_state::ContractState, AccountManagement},
     interface::{Operator, StakingService},
 };
-use near_sdk::{near_bindgen, Promise};
+use near_sdk::near_bindgen;
 
 #[near_bindgen]
 impl Operator for StakeTokenContract {
@@ -80,10 +80,6 @@ impl Operator for StakeTokenContract {
         if let Some(RedeemLock::Unstaking) = self.run_redeem_stake_batch_lock {
             self.run_redeem_stake_batch_lock = None
         }
-    }
-
-    fn withdraw_all_funds_from_staking_pool(&self) -> Promise {
-        self.staking_pool_promise().withdraw_all().promise()
     }
 }
 

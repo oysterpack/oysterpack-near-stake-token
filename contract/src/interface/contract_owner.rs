@@ -5,12 +5,21 @@ use near_sdk::AccountId;
 pub trait ContractOwner {
     fn owner_id(&self) -> AccountId;
 
-    /// The new owner must have a registered account to protect against accounts that do not exist
+    /// The new owner must have a registered account to protect against accounts that do not exist.
+    /// When the ownership is transferred, the new owner becomes the operator.
     ///
     /// ## Panics
     /// - if the predecessor account is not the owner account
     /// - new owner account must be registered
     fn transfer_ownership(&mut self, new_owner: ValidAccountId);
+
+    /// Assigns the operator role to the specified account.
+    /// The new operator must have a registered account to protect against accounts that do not exist.
+    ///
+    /// ## Panics
+    /// - if the predecessor account is not the owner account
+    /// - new operator account must be registered
+    fn set_operator_id(&mut self, account_id: ValidAccountId);
 
     /// Deposits the owner's balance into the owners STAKE account
     ///
