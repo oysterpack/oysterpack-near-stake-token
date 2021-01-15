@@ -23,11 +23,11 @@ fn near_sdk_issue_262_near_bindgen_does_not_detect_pub_visibility_from_trait() {
 
     // `staking_pool_id` is defined on the `StakingService` trait which the contract implements
     // but the method is not publicly visible on `StakeTokenContractContract`
-    // let res = view!(contract.staking_pool_id());  // will not compile
+    // let res = view!(contract.staking_pool_id()); // will not compile
 
     // but it is there if invoked via the "low level" approach:
     let res = ctx.contract_operator.view(PendingContractTx::new(
-        &contract.user_account.account_id,
+        &contract.user_account.account_id(),
         "staking_pool_id",
         json!({}),
         true,
