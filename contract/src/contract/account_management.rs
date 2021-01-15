@@ -220,7 +220,7 @@ mod test_register_account {
         contract.register_account();
 
         // the txn should have created a Transfer receipt to refund the storage fee over payment
-        let receipts = deserialize_receipts(&get_created_receipts());
+        let receipts = deserialize_receipts();
         assert_eq!(receipts.len(), 1);
         let receipt = &receipts[0];
         match receipt.actions.first().unwrap() {
@@ -304,7 +304,6 @@ mod test_unregister_account {
     use crate::interface::AccountManagement;
     use crate::near::YOCTO;
     use crate::test_utils::*;
-    use near_sdk::test_utils::get_created_receipts;
     use near_sdk::{testing_env, MockedBlockchain};
     use std::convert::TryInto;
     use std::ops::DerefMut;
@@ -320,7 +319,7 @@ mod test_unregister_account {
         );
         contract.unregister_account();
         assert!(!contract.account_registered(test_context.account_id.try_into().unwrap()));
-        let receipts = deserialize_receipts(&get_created_receipts());
+        let receipts = deserialize_receipts();
         // account storage fee should have been refunded
         assert_eq!(receipts.len(), 1);
         let receipt = &receipts[0];

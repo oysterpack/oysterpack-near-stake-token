@@ -75,23 +75,11 @@ impl StakeTokenContract {
 
     /// returns how much gas rewards the contract has accumulated
     pub fn contract_earnings(&self) -> YoctoNear {
-        println!(
-            r#"
-        {}
-        {}
-        {}
-        {}
-        "#,
-            env::account_balance(),
-            self.contract_owner_balance.value(),
-            self.total_user_accounts_balance().value(),
-            self.collected_earnings.value()
-        );
-        (env::account_balance()
-            - self.contract_owner_balance.value()
-            - self.total_user_accounts_balance().value()
-            - self.collected_earnings.value())
-        .into()
+        env::account_balance()
+            .saturating_sub(self.contract_owner_balance.value())
+            .saturating_sub(self.total_user_accounts_balance().value())
+            .saturating_sub(self.collected_earnings.value())
+            .into()
     }
 
     pub fn total_earnings(&self) -> YoctoNear {

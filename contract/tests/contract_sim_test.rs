@@ -23,7 +23,8 @@ use financials_client::*;
 use oysterpack_near_stake_token::config::CONTRACT_MIN_OPERATIONAL_BALANCE;
 use oysterpack_near_stake_token::domain::TGAS;
 use oysterpack_near_stake_token::interface::contract_state::ContractState;
-use oysterpack_near_stake_token::interface::{Config, ContractBalances};
+use oysterpack_near_stake_token::interface::{Config, ContractBalances, YoctoNear};
+use oysterpack_near_stake_token::near::YOCTO;
 use test_utils::*;
 
 lazy_static! {
@@ -35,10 +36,10 @@ lazy_static! {
 fn sim_test() {
     let ctx = test_utils::create_context();
     let contract = ctx.contract();
-    let contract_account_id: &str = contract.user_account.account_id.as_str();
+    let contract_account_id: &str = &contract.user_account.account_id();
     let user = &ctx.contract_operator;
 
-    let (initial_contract_state, initial_config, initial_contract_balances) =
+    let (_initial_contract_state, _initial_config, _initial_contract_balances) =
         check_initial_state(contract_account_id, user);
     check_no_accounts_registered(contract_account_id, user);
 
@@ -46,10 +47,14 @@ fn sim_test() {
 }
 
 fn register_account_for_contract_owner(ctx: &TestContext) {
+    println!("###########################################");
+    println!("### register_account_for_contract_owner ###");
+
     let account_storage_fee = account_management_client::account_storage_fee(
         ctx.contract_account_id(),
         ctx.master_account(),
     );
+    println!("account_storage_fee = {}", account_storage_fee);
     let gas = TGAS * 10;
     let result = account_management_client::register_account(
         ctx.contract_account_id(),
@@ -57,7 +62,11 @@ fn register_account_for_contract_owner(ctx: &TestContext) {
         account_storage_fee.into(),
         gas,
     );
+    println!("{:#?}", result);
     result.assert_success();
+
+    println!("=== register_account_for_contract_owner === PASSED");
+    println!("==================================================")
 }
 
 fn check_initial_state(
@@ -83,14 +92,22 @@ fn check_initial_state(
 }
 
 fn check_no_accounts_registered(contract_account_id: &str, user: &UserAccount) {
+    println!("####################################");
+    println!("### check_no_accounts_registered ###");
+
     assert_eq!(
         account_management_client::total_registered_accounts(contract_account_id, user),
         0
     );
-    assert!(
-        account_management_client::lookup_account(contract_account_id, user, &user.account_id)
-            .is_none()
-    );
+    assert!(account_management_client::lookup_account(
+        contract_account_id,
+        user,
+        &user.account_id()
+    )
+    .is_none());
+
+    println!("=== check_no_accounts_registered === PASSED");
+    println!("===========================================")
 }
 
 fn check_contract_state_after_deployment(contract_state: &ContractState) {

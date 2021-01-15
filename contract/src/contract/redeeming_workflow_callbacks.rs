@@ -209,7 +209,7 @@ mod test {
         test_utils::*,
     };
     use near_sdk::json_types::U128;
-    use near_sdk::{serde::Deserialize, serde_json, test_utils::*, testing_env, MockedBlockchain};
+    use near_sdk::{serde::Deserialize, serde_json, testing_env, MockedBlockchain};
 
     #[derive(Deserialize)]
     #[serde(crate = "near_sdk::serde")]
@@ -247,7 +247,7 @@ mod test {
             can_withdraw: true,
         };
         contract.on_run_redeem_stake_batch(staking_pool_account.clone());
-        let receipts = deserialize_receipts(&get_created_receipts());
+        let receipts = deserialize_receipts();
         assert_eq!(receipts.len(), 2);
         {
             let receipt = &receipts[0];
@@ -334,7 +334,7 @@ mod test {
             can_withdraw: true,
         };
         contract.on_run_redeem_stake_batch(staking_pool_account.clone());
-        let receipts = deserialize_receipts(&get_created_receipts());
+        let receipts = deserialize_receipts();
         assert_eq!(receipts.len(), 2);
         {
             let receipt = &receipts[0];
@@ -413,7 +413,7 @@ mod test {
             can_withdraw: true,
         };
         contract.on_run_redeem_stake_batch(staking_pool_account);
-        let receipts = deserialize_receipts(&get_created_receipts());
+        let receipts = deserialize_receipts();
         assert_eq!(receipts.len(), 2);
         {
             let receipt = &receipts[0];
@@ -621,7 +621,7 @@ mod test {
             can_withdraw: true,
         };
         contract.on_redeeming_stake_pending_withdrawal(staking_pool_account);
-        let receipts = deserialize_receipts(&get_created_receipts());
+        let receipts = deserialize_receipts();
         println!("{:#?}", receipts);
         assert_eq!(receipts.len(), 2);
         {

@@ -1,11 +1,11 @@
 use crate::interface::{AccountManagement, YoctoNear};
 use crate::near_env::Env;
 use crate::{near::*, ContractSettings, StakeTokenContract};
+use near_sdk::test_utils::get_created_receipts;
 use near_sdk::{
     serde::{Deserialize, Serialize},
     serde_json, testing_env, AccountId, MockedBlockchain, PromiseResult, VMContext,
 };
-use near_vm_logic::mocks::mock_external as near_mocks;
 
 pub const EXPECTED_ACCOUNT_STORAGE_USAGE: u64 = 681;
 
@@ -112,8 +112,8 @@ pub enum Action {
     },
 }
 
-pub fn deserialize_receipts(receipts: &[near_mocks::Receipt]) -> Vec<Receipt> {
-    receipts
+pub fn deserialize_receipts() -> Vec<Receipt> {
+    get_created_receipts()
         .iter()
         .map(|receipt| {
             let json = serde_json::to_string_pretty(receipt).unwrap();

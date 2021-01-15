@@ -4,6 +4,7 @@ extern crate oysterpack_near_stake_token;
 
 use near_sdk_sim::*;
 
+use near_sdk::AccountId;
 use near_sdk_sim::errors::TxExecutionError;
 use near_sdk_sim::transaction::ExecutionStatus;
 use oysterpack_near_stake_token::{near::YOCTO, ContractSettings, StakeTokenContractContract};
@@ -17,6 +18,7 @@ pub struct TestContext {
     pub master_account: UserAccount,
     pub contract: ContractAccount<StakeTokenContractContract>,
     pub contract_owner: UserAccount,
+    pub contract_account_id: AccountId,
     pub contract_operator: UserAccount,
     pub settings: ContractSettings,
 }
@@ -39,7 +41,7 @@ impl TestContext {
     }
 
     pub fn contract_account_id(&self) -> &str {
-        self.contract.user_account.account_id.as_str()
+        &self.contract_account_id
     }
 
     pub fn settings(&self) -> &ContractSettings {
@@ -54,7 +56,7 @@ pub fn create_context() -> TestContext {
 
     let settings = ContractSettings::new(
         "astro-stakers.poolv1.near".to_string(),
-        contract_operator.account_id.clone(),
+        contract_operator.account_id(),
         None,
     );
 
@@ -70,10 +72,11 @@ pub fn create_context() -> TestContext {
         // init method
         init_method: new(None, settings.clone())
     );
-
+    let contract_account_id = contract.user_account.account_id();
     TestContext {
         master_account,
         contract,
+        contract_account_id,
         contract_owner,
         contract_operator,
         settings,

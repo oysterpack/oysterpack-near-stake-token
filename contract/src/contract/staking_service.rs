@@ -1188,7 +1188,7 @@ mod test_stake {
     use super::*;
 
     use crate::{near::YOCTO, test_utils::*};
-    use near_sdk::{test_utils::*, testing_env, MockedBlockchain};
+    use near_sdk::{testing_env, MockedBlockchain};
 
     /// Given the contract has a stake batch
     /// And the contract is not locked
@@ -1219,7 +1219,7 @@ mod test_stake {
             context.prepaid_gas - env::used_gas()
         );
 
-        let receipts: Vec<Receipt> = deserialize_receipts(&get_created_receipts());
+        let receipts: Vec<Receipt> = deserialize_receipts();
         assert_eq!(receipts.len(), 3);
 
         {
@@ -1299,7 +1299,7 @@ mod test_stake {
         testing_env!(context.clone());
         contract.stake();
 
-        let receipts = deserialize_receipts(&get_created_receipts());
+        let receipts = deserialize_receipts();
         assert_eq!(receipts.len(), 3);
 
         {
@@ -1387,7 +1387,7 @@ mod test_withdraw_from_stake_batch {
     use super::*;
 
     use crate::{interface::AccountManagement, near::YOCTO, test_utils::*};
-    use near_sdk::{json_types::ValidAccountId, test_utils::*, testing_env, MockedBlockchain};
+    use near_sdk::{json_types::ValidAccountId, testing_env, MockedBlockchain};
     use std::convert::TryFrom;
 
     /// Given an account has deposited funds into a stake batch
@@ -1408,7 +1408,7 @@ mod test_withdraw_from_stake_batch {
         contract.withdraw_from_stake_batch(YOCTO.into());
 
         {
-            let receipts = deserialize_receipts(&get_created_receipts());
+            let receipts = deserialize_receipts();
             println!("{:#?}", &receipts);
             assert_eq!(receipts.len(), 1);
             let receipt = receipts.first().unwrap();
@@ -1446,7 +1446,7 @@ mod test_withdraw_from_stake_batch {
         contract.withdraw_from_stake_batch(context.attached_deposit.into());
 
         {
-            let receipts = deserialize_receipts(&get_created_receipts());
+            let receipts = deserialize_receipts();
             assert_eq!(receipts.len(), 1);
             let receipt = receipts.first().unwrap();
             assert_eq!(receipt.receiver_id, test_context.account_id);
@@ -1481,7 +1481,7 @@ mod test_withdraw_from_stake_batch {
         contract.withdraw_from_stake_batch(YOCTO.into());
 
         {
-            let receipts = deserialize_receipts(&get_created_receipts());
+            let receipts = deserialize_receipts();
             println!("{:#?}", &receipts);
             assert_eq!(receipts.len(), 1);
             let receipt = receipts.first().unwrap();
@@ -1521,7 +1521,7 @@ mod test_withdraw_from_stake_batch {
         contract.withdraw_from_stake_batch(context.attached_deposit.into());
 
         {
-            let receipts = deserialize_receipts(&get_created_receipts());
+            let receipts = deserialize_receipts();
             assert_eq!(receipts.len(), 1);
             let receipt = receipts.first().unwrap();
             assert_eq!(receipt.receiver_id, test_context.account_id);
@@ -1543,7 +1543,7 @@ mod test_withdraw_all_from_stake_batch {
     use super::*;
 
     use crate::{interface::AccountManagement, near::YOCTO, test_utils::*};
-    use near_sdk::{json_types::ValidAccountId, test_utils::*, testing_env, MockedBlockchain};
+    use near_sdk::{json_types::ValidAccountId, testing_env, MockedBlockchain};
     use std::convert::TryFrom;
 
     /// Given an account has deposited funds into the next stake batch
@@ -1565,7 +1565,7 @@ mod test_withdraw_all_from_stake_batch {
         contract.withdraw_all_from_stake_batch();
 
         {
-            let receipts = deserialize_receipts(&get_created_receipts());
+            let receipts = deserialize_receipts();
             assert_eq!(receipts.len(), 1);
             let receipt = receipts.first().unwrap();
             assert_eq!(receipt.receiver_id, test_context.account_id);
@@ -1600,7 +1600,7 @@ mod test_withdraw_all_from_stake_batch {
         contract.withdraw_all_from_stake_batch();
 
         {
-            let receipts = deserialize_receipts(&get_created_receipts());
+            let receipts = deserialize_receipts();
             assert_eq!(receipts.len(), 1);
             let receipt = receipts.first().unwrap();
             assert_eq!(receipt.receiver_id, test_context.account_id);
@@ -1639,7 +1639,7 @@ mod test_withdraw_all_from_stake_batch {
         contract.withdraw_all_from_stake_batch();
 
         {
-            let receipts = deserialize_receipts(&get_created_receipts());
+            let receipts = deserialize_receipts();
             assert_eq!(receipts.len(), 1);
             let receipt = receipts.first().unwrap();
             assert_eq!(receipt.receiver_id, test_context.account_id);
@@ -1678,7 +1678,7 @@ mod test_withdraw_all_from_stake_batch {
         contract.withdraw_all_from_stake_batch();
 
         {
-            let receipts = deserialize_receipts(&get_created_receipts());
+            let receipts = deserialize_receipts();
             assert_eq!(receipts.len(), 1);
             let receipt = receipts.first().unwrap();
             assert_eq!(receipt.receiver_id, test_context.account_id);
@@ -1865,7 +1865,7 @@ mod test {
         near::YOCTO,
         test_utils::*,
     };
-    use near_sdk::{json_types::ValidAccountId, test_utils::*, testing_env, MockedBlockchain};
+    use near_sdk::{json_types::ValidAccountId, testing_env, MockedBlockchain};
     use std::convert::{TryFrom, TryInto};
 
     /// Given the contract is not locked
@@ -2411,7 +2411,7 @@ mod test {
             context.prepaid_gas - env::used_gas()
         );
 
-        let receipts: Vec<Receipt> = deserialize_receipts(&get_created_receipts());
+        let receipts: Vec<Receipt> = deserialize_receipts();
         assert_eq!(receipts.len(), 3);
 
         {

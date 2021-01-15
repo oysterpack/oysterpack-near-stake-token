@@ -92,7 +92,6 @@ mod test {
     use crate::interface::ContractFinancials;
     use crate::near::YOCTO;
     use crate::test_utils::*;
-    use near_sdk::test_utils::get_created_receipts;
     use near_sdk::{testing_env, MockedBlockchain};
     use std::convert::TryFrom;
 
@@ -172,7 +171,7 @@ mod test {
         context.predecessor_account_id = contract.owner_id();
         testing_env!(context.clone());
         contract.withdraw_all_owner_balance();
-        let receipts = deserialize_receipts(&get_created_receipts());
+        let receipts = deserialize_receipts();
         assert_eq!(receipts.len(), 1);
         let receipt = receipts.first().unwrap();
         println!("{:#?}", receipt);
@@ -193,7 +192,7 @@ mod test {
         context.predecessor_account_id = contract.owner_id();
         testing_env!(context.clone());
         contract.withdraw_owner_balance(YOCTO.into());
-        let receipts = deserialize_receipts(&get_created_receipts());
+        let receipts = deserialize_receipts();
         assert_eq!(receipts.len(), 1);
         let receipt = receipts.first().unwrap();
         println!("{:#?}", receipt);

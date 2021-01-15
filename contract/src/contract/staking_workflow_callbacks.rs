@@ -303,7 +303,7 @@ mod test {
         };
         contract.on_run_stake_batch(staking_pool_account);
 
-        let receipts: Vec<Receipt> = deserialize_receipts(&get_created_receipts());
+        let receipts: Vec<Receipt> = deserialize_receipts();
         assert_eq!(receipts.len(), 2);
 
         {
@@ -430,7 +430,7 @@ mod test {
         contract.on_run_stake_batch(staking_pool_account);
         assert_eq!(contract.near_liquidity_pool.value(), 0);
 
-        let receipts: Vec<Receipt> = deserialize_receipts(&get_created_receipts());
+        let receipts: Vec<Receipt> = deserialize_receipts();
         assert_eq!(receipts.len(), 2);
 
         {
@@ -565,7 +565,7 @@ mod test {
         // successfully with the staking pool
         assert_eq!(contract.near_liquidity_pool.value(), 0);
 
-        let receipts: Vec<Receipt> = deserialize_receipts(&get_created_receipts());
+        let receipts: Vec<Receipt> = deserialize_receipts();
         assert_eq!(receipts.len(), 2);
 
         {
