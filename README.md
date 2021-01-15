@@ -9,6 +9,17 @@ The STAKE token transforms your staked NEAR into a tradeable asset. STAKE token 
 stake earnings. As staking rewards are earned, the STAKE token value increases. STAKE tokens appreciate in NEAR token 
 value over time.
 
+STAKE token value is pegged to NEAR token value and stake earnings. As staking rewards are earned,
+the STAKE token value increases. In other words, STAKE tokens appreciate in NEAR token value over
+time. In addition, the contract provides the following yield boosting levers:
+1. the contract owner can share a percentage of the contract's gas rewards with STAKE user accounts
+   to boost yield. When funds are staked, contract gas earning will be distributed to STAKE users
+   by staking the NEAR funds into the staking pool, which increases the staked NEAR balance, which
+   increases the STAKE token value.
+2. the contract supports collecting earnings from other contracts into the STAKE token contract.
+   The collected earnings are pooled with the STAKE Token contract gas earnings and distributed
+   to the contract owner and user accounts.
+
 When redeeming STAKE tokens for NEAR, the STAKE token contract also helps to add liquidity for withdrawing your unstaked 
 NEAR tokens (see below for more details)
 

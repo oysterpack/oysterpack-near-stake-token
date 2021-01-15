@@ -11,7 +11,7 @@
 //! time.
 //!
 //! In addition, the contract provides the following yield boosting levers:
-//! 1. the contract owner can share a percentage of the contract's gas rewards with STAKE ser accounts
+//! 1. the contract owner can share a percentage of the contract's gas rewards with STAKE user accounts
 //!    to boost yield. When funds are staked, contract gas earning will be distributed to STAKE users
 //!    by staking the NEAR funds into the staking pool, which increases the staked NEAR balance, which
 //!    increases the STAKE token value.
