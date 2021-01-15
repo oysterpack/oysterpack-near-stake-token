@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 extern crate oysterpack_near_stake_token;
+extern crate staking_pool_mock;
 
 use near_sdk_sim::*;
 
@@ -8,10 +9,13 @@ use near_sdk::AccountId;
 use near_sdk_sim::errors::TxExecutionError;
 use near_sdk_sim::transaction::ExecutionStatus;
 use oysterpack_near_stake_token::{near::YOCTO, ContractSettings, StakeTokenContractContract};
+use staking_pool_mock::StakingPoolContract;
 
 lazy_static! {
     static ref WASM_BYTES: &'static [u8] =
         include_bytes!("../res/oysterpack_near_stake_token.wasm").as_ref();
+    static ref STAKING_POOL_WASM_BYTES: &'static [u8] =
+        include_bytes!("../res/staking_pool_mock.wasm").as_ref();
 }
 
 pub struct TestContext {
@@ -55,7 +59,7 @@ pub fn create_context() -> TestContext {
     let contract_operator = contract_owner.create_user("operator".to_string(), 10 * YOCTO);
 
     let settings = ContractSettings::new(
-        "astro-stakers.poolv1.near".to_string(),
+        "astro-stakers-poolv1".to_string(),
         contract_operator.account_id(),
         None,
     );
@@ -73,6 +77,21 @@ pub fn create_context() -> TestContext {
         init_method: new(None, settings.clone())
     );
     let contract_account_id = contract.user_account.account_id();
+
+    // deploy staking pool contract mock
+    deploy!(
+        // Contract Proxy
+        contract: StakingPoolContract,
+        // Contract account id
+        contract_id: "astro-stakers-poolv1",
+        // Bytes of contract
+        bytes: &STAKING_POOL_WASM_BYTES,
+        // User deploying the contract,
+        signer_account: master_account,
+        // init method
+        init_method: new()
+    );
+
     TestContext {
         master_account,
         contract,

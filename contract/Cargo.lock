@@ -1388,6 +1388,7 @@ dependencies = [
  "primitive-types 0.7.3",
  "quickcheck",
  "quickcheck_macros",
+ "staking-pool-mock",
 ]
 
 [[package]]
@@ -1876,6 +1877,15 @@ name = "spin"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
+
+[[package]]
+name = "staking-pool-mock"
+version = "0.1.0"
+dependencies = [
+ "near-sdk",
+ "near-vm-logic 2.2.0",
+ "primitive-types 0.7.3",
+]
 
 [[package]]
 name = "static_assertions"

@@ -19,6 +19,8 @@ near-vm-logic = "^2.2.0"
 
 near-sdk-sim = { git = "https://github.com/near/near-sdk-rs",  tag = "2.4.0" }
 
+staking-pool-mock = {path="staking-pool-mock"}
+
 [profile.release]
 codegen-units = 1
 # Tell `rustc` to optimize for small code size.
@@ -30,4 +32,4 @@ panic = "abort"
 overflow-checks = true
 
 [workspace]
-members = []
+members = ["staking-pool-mock"]

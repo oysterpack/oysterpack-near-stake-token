@@ -5,6 +5,8 @@ extern crate oysterpack_near_stake_token;
 mod account_management_client;
 mod financials_client;
 mod operator_client;
+mod staking_pool_client;
+mod staking_service_client;
 mod test_utils;
 
 use near_sdk::{
@@ -25,12 +27,9 @@ use oysterpack_near_stake_token::domain::TGAS;
 use oysterpack_near_stake_token::interface::contract_state::ContractState;
 use oysterpack_near_stake_token::interface::{Config, ContractBalances, YoctoNear};
 use oysterpack_near_stake_token::near::YOCTO;
+use staking_service_client::*;
+use std::convert::TryInto;
 use test_utils::*;
-
-lazy_static! {
-    static ref WASM_BYTES: &'static [u8] =
-        include_bytes!("../res/oysterpack_near_stake_token.wasm").as_ref();
-}
 
 #[test]
 fn sim_test() {
@@ -39,11 +38,49 @@ fn sim_test() {
     let contract_account_id: &str = &contract.user_account.account_id();
     let user = &ctx.contract_operator;
 
+    let mut staking_service = StakingServiceClient::new(contract_account_id);
+    let mut staking_pool = new_staking_pool_client(&ctx, &staking_service);
+
     let (_initial_contract_state, _initial_config, _initial_contract_balances) =
         check_initial_state(contract_account_id, user);
     check_no_accounts_registered(contract_account_id, user);
 
     register_account_for_contract_owner(&ctx);
+    test_deposit(&ctx, &mut staking_service);
+}
+
+fn test_deposit(ctx: &TestContext, staking_service: &mut StakingServiceClient) {
+    println!("####################");
+    println!("### test_deposit ###");
+
+    let user = &ctx.contract_owner;
+
+    let deposit_amount: interface::YoctoNear = YOCTO.into();
+    let batch_id = staking_service.deposit(user, deposit_amount.clone());
+    println!(
+        "funds were deposited and staked - batch_id = {:?}",
+        batch_id
+    );
+
+    // TODO
+    // 1. get batch receipt
+    // 2. claim receipts
+    // 3. verify receipt has been deleted
+
+    println!("=== test_deposit === PASSED");
+    println!("===========================");
+}
+
+fn new_staking_pool_client(
+    ctx: &TestContext,
+    staking_service_client: &StakingServiceClient,
+) -> staking_pool_client::StakingPoolClient {
+    let contract = ctx.contract();
+    let contract_account_id: &str = &contract.user_account.account_id();
+    let user = &ctx.contract_operator;
+
+    let staking_pool_id = staking_service_client.staking_pool_id(user);
+    staking_pool_client::StakingPoolClient::new(staking_pool_id, contract_account_id.to_string())
 }
 
 fn register_account_for_contract_owner(ctx: &TestContext) {
@@ -66,7 +103,7 @@ fn register_account_for_contract_owner(ctx: &TestContext) {
     result.assert_success();
 
     println!("=== register_account_for_contract_owner === PASSED");
-    println!("==================================================")
+    println!("==================================================");
 }
 
 fn check_initial_state(
