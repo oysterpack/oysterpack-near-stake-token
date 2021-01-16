@@ -34,7 +34,6 @@ impl Operator for StakeTokenContract {
                     self.redeem_stake_batch_receipt(batch.id().into()),
                 )
             }),
-            pending_withdrawal: self.pending_withdrawal(),
             run_stake_batch_locked: self.run_stake_batch_locked,
             run_redeem_stake_batch_lock: self.run_redeem_stake_batch_lock,
             balances: self.balances(),

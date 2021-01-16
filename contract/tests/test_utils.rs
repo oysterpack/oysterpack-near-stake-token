@@ -16,7 +16,9 @@ use near_sdk_sim::{
     runtime::{init_runtime, RuntimeStandalone},
     transaction::ExecutionStatus,
 };
-use oysterpack_near_stake_token::{near::YOCTO, ContractSettings, StakeTokenContractContract};
+use oysterpack_near_stake_token::{
+    interface::StakeAccount, near::YOCTO, ContractSettings, StakeTokenContractContract,
+};
 use staking_pool_mock::StakingPoolContract;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
@@ -68,6 +70,24 @@ impl TestContext {
 
     pub fn settings(&self) -> &ContractSettings {
         &self.settings
+    }
+
+    pub fn registered_stake_accounts(&self) -> HashMap<String, StakeAccount> {
+        self.users
+            .values()
+            .fold(HashMap::new(), |mut accounts, user| {
+                if let Some(account) = self
+                    .account_management
+                    .lookup_account(self.master_account(), &user.account_id())
+                {
+                    accounts.insert(user.account_id().clone(), account);
+                }
+                accounts
+            })
+    }
+
+    pub fn process_all_transactions(&self) {
+        self.runtime.borrow_mut().process_all().unwrap();
     }
 }
 

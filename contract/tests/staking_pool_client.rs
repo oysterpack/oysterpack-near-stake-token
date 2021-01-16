@@ -61,3 +61,9 @@ pub struct StakingPoolAccount {
     /// Whether the unstaked balance is available for withdrawal now.
     pub can_withdraw: bool,
 }
+
+impl StakingPoolAccount {
+    pub fn total_balance(&self) -> u128 {
+        self.staked_balance.0 + self.unstaked_balance.0
+    }
+}

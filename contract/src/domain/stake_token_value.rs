@@ -96,8 +96,8 @@ impl StakeTokenValue {
 
         // convert back to check if we loss any precision
         let stake_value = near_value * total_stake_supply / total_staked_near_balance;
-
-        (near_value + (stake - stake_value)).as_u128().into()
+        let remainder = stake - stake_value;
+        (near_value + remainder).as_u128().into()
     }
 }
 

@@ -2,8 +2,8 @@ use crate::interface::{BlockHeight, ContractBalances, StorageUsage};
 use crate::{
     domain::RedeemLock,
     interface::{
-        BatchId, BlockTimeHeight, RedeemStakeBatch, RedeemStakeBatchReceipt, StakeBatch,
-        StakeTokenValue, TimestampedNearBalance, TimestampedStakeBalance,
+        BatchId, BlockTimeHeight, RedeemStakeBatch, StakeBatch, StakeTokenValue,
+        TimestampedNearBalance, TimestampedStakeBalance,
     },
 };
 use near_sdk::{
@@ -35,7 +35,6 @@ pub struct ContractState {
 
     pub redeem_stake_batch: Option<RedeemStakeBatch>,
     pub next_redeem_stake_batch: Option<RedeemStakeBatch>,
-    pub pending_withdrawal: Option<RedeemStakeBatchReceipt>,
 
     pub run_stake_batch_locked: bool,
     pub run_redeem_stake_batch_lock: Option<RedeemLock>,

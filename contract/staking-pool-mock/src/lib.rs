@@ -103,8 +103,7 @@ impl StakingPool {
 
 impl StakingPool {
     fn save_account(&mut self, account: &StakingPoolAccount) {
-        self.accounts
-            .insert(&env::predecessor_account_id(), account);
+        self.accounts.insert(&account.account_id, account);
     }
 }
 

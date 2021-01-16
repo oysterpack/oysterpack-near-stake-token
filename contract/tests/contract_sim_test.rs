@@ -1,4 +1,4 @@
-#![allow(unused_imports)]
+#![allow(unused_imports, unreachable_code, unused_variables)]
 
 //! before running the simulation test, make sure the wasm files are built for the STAKE token contrac
 //! and the mock staking pool contract
@@ -26,20 +26,23 @@ use near_sdk::{
 use near_sdk_sim::*;
 
 use oysterpack_near_stake_token::{
-    interface::{self, StakingService},
-    near::NO_DEPOSIT,
+    config::CONTRACT_MIN_OPERATIONAL_BALANCE,
+    domain::TGAS,
+    interface::{
+        self, contract_state::ContractState, BatchId, Config, ContractBalances, StakeAccount,
+        StakeBatch, StakingService, YoctoNear,
+    },
+    near::{NO_DEPOSIT, YOCTO},
 };
 
 use account_management_client::*;
 use financials_client::*;
-use oysterpack_near_stake_token::config::CONTRACT_MIN_OPERATIONAL_BALANCE;
-use oysterpack_near_stake_token::domain::TGAS;
-use oysterpack_near_stake_token::interface::contract_state::ContractState;
-use oysterpack_near_stake_token::interface::{BatchId, Config, ContractBalances, YoctoNear};
-use oysterpack_near_stake_token::interface::{StakeAccount, StakeBatch};
-use oysterpack_near_stake_token::near::YOCTO;
+use primitive_types::U256;
 use staking_service_client::*;
-use std::convert::TryInto;
+
+use std::{collections::HashMap, convert::TryInto};
+
+use near_sdk_sim::transaction::ExecutionStatus;
 use test_utils::*;
 
 #[test]
@@ -56,23 +59,25 @@ fn sim_test() {
 
     // simulates the entire work from depositing to unstaking and withdrawing
     deposit_funds_for_each_user_account(&ctx);
+    let stake_accounts = ctx.registered_stake_accounts();
     stake(&ctx);
-    check_user_accounts_after_deposits_are_staked(&ctx);
+    check_user_accounts_after_deposits_are_staked(&ctx, &stake_accounts);
 
     redeem_all_stake_for_each_user_account(&ctx);
-    check_user_accounts_after_redeeming_all_stake(&ctx);
-
+    // check_user_accounts_after_redeeming_all_stake(&ctx);
+    //
     unstake(&ctx);
-    check_pending_withdrawal(&ctx);
-    check_user_accounts_after_redeemed_stake_is_unstaked(&ctx);
+    // check_pending_withdrawal(&ctx);
+    // check_user_accounts_after_redeemed_stake_is_unstaked(&ctx);
 
     unstake(&ctx); // while pending withdrawal
-    check_pending_withdrawal(&ctx);
+                   // check_pending_withdrawal(&ctx);
     unlock_funds_in_staking_pool(&ctx);
 
     unstake(&ctx); // unstaked NEAR should be withdrawn
-    check_state_after_all_redeemed_and_withdrawn(&ctx);
-    check_user_accounts_after_redeem_stake_batch_completed(&ctx);
+
+    // check_state_after_all_redeemed_and_withdrawn(&ctx);
+    // check_user_accounts_after_redeem_stake_batch_completed(&ctx);
 }
 
 fn check_user_accounts_after_redeem_stake_batch_completed(ctx: &TestContext) {
@@ -99,20 +104,16 @@ fn unlock_funds_in_staking_pool(ctx: &TestContext) {
     println!("#####################################");
     println!("### unlock_funds_in_staking_pool ####");
 
-    unimplemented!();
+    let mut account = ctx.staking_pool.get_account(ctx.master_account());
+    account.can_withdraw = true;
+    ctx.staking_pool
+        .update_account(ctx.master_account(), account);
+    ctx.process_all_transactions();
+    let account = ctx.staking_pool.get_account(ctx.master_account());
+    assert!(account.can_withdraw);
 
     println!("=== unlock_funds_in_staking_pool ===");
     println!("====================================");
-}
-
-fn unstake(ctx: &TestContext) {
-    println!("################");
-    println!("### unstake ####");
-
-    unimplemented!();
-
-    println!("=== unstake ===");
-    println!("===============");
 }
 
 fn check_user_accounts_after_redeemed_stake_is_unstaked(ctx: &TestContext) {
@@ -149,17 +150,94 @@ fn redeem_all_stake_for_each_user_account(ctx: &TestContext) {
     println!("###############################################");
     println!("### redeem_all_stake_for_each_user_account ####");
 
-    unimplemented!();
+    for user in ctx.users.values() {
+        let account: StakeAccount = ctx
+            .account_management
+            .lookup_account(ctx.master_account(), &user.account_id())
+            .unwrap();
+        let batch_id: Option<BatchId> = ctx.staking_service.redeem_all(user);
+        match account.stake.as_ref() {
+            Some(stake) => {
+                let batch_id = batch_id.unwrap();
+                let account: StakeAccount = ctx
+                    .account_management
+                    .lookup_account(ctx.master_account(), &user.account_id())
+                    .unwrap();
+                let batch = account.redeem_stake_batch.unwrap();
+                assert_eq!(batch.id, batch_id);
+                assert_eq!(batch.balance.amount, stake.amount);
+                assert!(
+                    account.stake.is_none(),
+                    "after redeeming all STAKE, then all STAKE should be moved into batch"
+                );
+            }
+            None => assert!(batch_id.is_none()),
+        }
+    }
 
     println!("=== redeem_all_stake_for_each_user_account ===");
     println!("==============================================");
 }
 
-fn check_user_accounts_after_deposits_are_staked(ctx: &TestContext) {
+fn check_user_accounts_after_deposits_are_staked(
+    ctx: &TestContext,
+    accounts_before_staking: &HashMap<String, StakeAccount>,
+) {
     println!("######################################################");
     println!("### check_user_accounts_after_deposits_are_staked ####");
 
-    unimplemented!();
+    fn stake_balance(stake_accounts: &HashMap<String, StakeAccount>, user: &UserAccount) -> u128 {
+        stake_accounts
+            .get(&user.account_id())
+            .as_ref()
+            .unwrap()
+            .stake
+            .as_ref()
+            .map_or(0, |balance| balance.amount.value())
+    }
+
+    let contract_state = ctx.operator.contract_state(&ctx.master_account);
+    for user in ctx.users.values() {
+        let receipt_before_claimed = ctx
+            .staking_service
+            .stake_batch_receipt(
+                &ctx.master_account,
+                contract_state.batch_id_sequence.clone(),
+            )
+            .unwrap();
+        ctx.staking_service.claim_receipts(user);
+
+        let amount_claimed = if let Some(receipt_after_claimed) =
+            ctx.staking_service.stake_batch_receipt(
+                &ctx.master_account,
+                contract_state.batch_id_sequence.clone(),
+            ) {
+            receipt_before_claimed.staked_near.value() - receipt_after_claimed.staked_near.value()
+        } else {
+            receipt_before_claimed.staked_near.value()
+        };
+
+        let stake_value = (U256::from(amount_claimed)
+            * U256::from(contract_state.stake_token_value.value.value())
+            / U256::from(YOCTO))
+        .as_u128();
+
+        let stake_account = ctx
+            .account_management
+            .lookup_account(&ctx.master_account, &user.account_id())
+            .unwrap();
+        assert_eq!(
+            stake_account.stake.unwrap().amount.value(),
+            stake_value + stake_balance(accounts_before_staking, user)
+        );
+    }
+
+    assert!(ctx
+        .staking_service
+        .stake_batch_receipt(
+            &ctx.master_account,
+            contract_state.batch_id_sequence.clone(),
+        ).is_none(), "after all funds have been claimed from the receipt, then it should be deleted from storage");
 
     println!("=== check_user_accounts_after_deposits_are_staked ===");
     println!("=====================================================");
@@ -208,27 +286,88 @@ fn stake(ctx: &TestContext) {
     println!("##############");
     println!("### stake ####");
 
-    let contract_state = ctx.operator.contract_state(&ctx.master_account);
-    match contract_state.stake_batch {
+    let initial_contract_state = ctx.operator.contract_state(&ctx.master_account);
+    match initial_contract_state.stake_batch {
         None => println!("there is no stake batch to stake"),
-        Some(_) => {
+        Some(batch) => {
             let result: ExecutionResult = ctx.staking_service.stake(&ctx.contract_operator);
             result.assert_success();
 
-            ctx.runtime.borrow_mut().process_all().unwrap();
-            ctx.runtime.borrow_mut().produce_blocks(10).unwrap();
-            ctx.runtime.borrow_mut().process_all().unwrap();
+            ctx.process_all_transactions();
 
             let contract_state: ContractState = ctx.operator.contract_state(&ctx.master_account);
             assert!(
                 contract_state.stake_batch.is_none(),
                 "stake batch should have been cleared"
             );
+
+            let receipt = ctx
+                .staking_service
+                .stake_batch_receipt(&ctx.master_account, contract_state.batch_id_sequence)
+                .unwrap();
+            assert_eq!(batch.balance.amount, receipt.staked_near);
+            assert_eq!(
+                contract_state.total_stake_supply.amount.value(),
+                initial_contract_state.total_stake_supply.amount.value()
+                    + receipt.stake_minted.value()
+            );
+
+            let staking_pool_account = ctx.staking_pool.get_account(&ctx.master_account);
+            assert_eq!(
+                staking_pool_account.total_balance(),
+                contract_state
+                    .stake_token_value
+                    .total_staked_near_balance
+                    .value()
+            )
         }
     }
 
     println!("=== stake ===");
     println!("=============");
+}
+
+fn unstake(ctx: &TestContext) {
+    println!("################");
+    println!("### unstake ####");
+
+    let initial_contract_state: ContractState = ctx.operator.contract_state(&ctx.master_account);
+    let account_before_unstaking = ctx.contract().user_account.account();
+    ctx.operator.contract_state(&ctx.master_account);
+    match initial_contract_state.run_redeem_stake_batch_lock {
+        None => {
+            if let Some(batch) = initial_contract_state.redeem_stake_batch {
+                let result: ExecutionResult = ctx.staking_service.unstake(&ctx.contract_operator);
+                result.assert_success();
+                println!("*** unstaked");
+                ctx.process_all_transactions();
+                let account_after_unstaking = ctx.contract().user_account.account();
+                let gas_rewards = account_after_unstaking.amount - account_before_unstaking.amount;
+                println!("gas_rewards = {}", gas_rewards);
+
+                ctx.operator.contract_state(&ctx.master_account);
+            }
+        }
+        Some(_) => {
+            let staking_pool_account = ctx.staking_pool.get_account(ctx.master_account());
+            let result: ExecutionResult = ctx.staking_service.unstake(&ctx.contract_operator);
+            if staking_pool_account.can_withdraw {
+                result.assert_success();
+            } else {
+                assert!(!result.is_ok());
+                if let ExecutionStatus::Failure(err) = &result.outcome().status {
+                    let err_msg = format!("{:?}", err);
+                    assert!(err_msg
+                        .contains("unstaked NEAR funds are not yet available for withdrawal"));
+                } else {
+                    panic!("expected unstake to fail because the unstaked NEAR is not yet available for withdrawal")
+                }
+            }
+        }
+    }
+
+    println!("=== unstake ===");
+    println!("===============");
 }
 
 fn register_contract_owner_account(ctx: &TestContext) {
