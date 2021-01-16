@@ -81,13 +81,20 @@ impl Sub for YoctoNear {
     type Output = YoctoNear;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        YoctoNear(self.0 - rhs.0)
+        YoctoNear(
+            self.0
+                .checked_sub(rhs.0)
+                .expect("attempt to subtract with overflow"),
+        )
     }
 }
 
 impl SubAssign for YoctoNear {
     fn sub_assign(&mut self, rhs: Self) {
-        self.0 -= rhs.0
+        self.0 = self
+            .0
+            .checked_sub(rhs.0)
+            .expect("attempt to subtract with overflow")
     }
 }
 
@@ -95,13 +102,20 @@ impl Add for YoctoNear {
     type Output = YoctoNear;
 
     fn add(self, rhs: Self) -> Self::Output {
-        YoctoNear(self.0 + rhs.0)
+        YoctoNear(
+            self.0
+                .checked_add(rhs.0)
+                .expect("attempt to add with overflow"),
+        )
     }
 }
 
 impl AddAssign for YoctoNear {
     fn add_assign(&mut self, rhs: Self) {
-        self.0 += rhs.0
+        self.0 = self
+            .0
+            .checked_add(rhs.0)
+            .expect("attempt to add with overflow")
     }
 }
 

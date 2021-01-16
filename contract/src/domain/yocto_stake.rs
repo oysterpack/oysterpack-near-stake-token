@@ -80,13 +80,20 @@ impl Sub for YoctoStake {
     type Output = YoctoStake;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        YoctoStake(self.0 - rhs.0)
+        YoctoStake(
+            self.0
+                .checked_sub(rhs.0)
+                .expect("attempt to subtract with overflow"),
+        )
     }
 }
 
 impl SubAssign for YoctoStake {
     fn sub_assign(&mut self, rhs: Self) {
-        self.0 -= rhs.0
+        self.0 = self
+            .0
+            .checked_sub(rhs.0)
+            .expect("attempt to subtract with overflow")
     }
 }
 
@@ -94,12 +101,19 @@ impl Add for YoctoStake {
     type Output = YoctoStake;
 
     fn add(self, rhs: Self) -> Self::Output {
-        YoctoStake(self.0 + rhs.0)
+        YoctoStake(
+            self.0
+                .checked_add(rhs.0)
+                .expect("attempt to add with overflow"),
+        )
     }
 }
 
 impl AddAssign for YoctoStake {
     fn add_assign(&mut self, rhs: Self) {
-        self.0 += rhs.0
+        self.0 = self
+            .0
+            .checked_add(rhs.0)
+            .expect("attempt to add with overflow")
     }
 }
