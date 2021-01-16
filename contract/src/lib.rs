@@ -57,10 +57,13 @@
 //! be withdrawn.
 //!
 //! ## STAKE Token Benefits
-//! 1. NEAR token asset value is maximized through staking and gas earnings profit sharing.
+//! 1. NEAR token asset value is maximized through staking and gas earnings profit sharing. The more
+//!    the contract and token is used, the more it's worth.
 //! 2. Transforms staked NEAR into tradeable digital asset, i.e., into a fungible token.
 //! 3. Provides more incentive to stake NEAR, which helps to further strengthen and secure the network
 //!    by providing more economic incentive to validators.
+//! 4. Can be used to collect income streams from contracts - transforming contracts into income
+//!    producing assets.
 //!
 //! # Contract Key Features and High Level Design
 //! - Contract users must register with the account in order to use it. Users must pay an upfront
