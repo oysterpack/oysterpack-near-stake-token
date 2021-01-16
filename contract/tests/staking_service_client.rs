@@ -1,5 +1,8 @@
+#![allow(dead_code)]
+
 use near_sdk::{serde_json::json, AccountId, PendingContractTx};
 use near_sdk_sim::*;
+use oysterpack_near_stake_token::near::NO_DEPOSIT;
 use oysterpack_near_stake_token::{
     domain::{YoctoNear, TGAS},
     interface,
@@ -23,7 +26,6 @@ impl StakingServiceClient {
             json!({}),
             true,
         ));
-
         result.unwrap_json()
     }
 
@@ -33,9 +35,17 @@ impl StakingServiceClient {
             amount.value(),
             TGAS.value() * 10,
         );
-
         println!("deposit: {:#?}", result);
-
         result.unwrap_json()
+    }
+
+    pub fn stake(&self, user: &UserAccount) -> ExecutionResult {
+        let result = user.call(
+            PendingContractTx::new(&self.contract_account_id, "stake", json!({}), false),
+            NO_DEPOSIT.value(),
+            TGAS.value() * 200,
+        );
+        println!("stake: {:#?}", result);
+        result
     }
 }

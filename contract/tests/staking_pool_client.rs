@@ -1,9 +1,12 @@
+#![allow(dead_code)]
+
 use near_sdk::{
     serde::{Deserialize, Serialize},
     serde_json::json,
     AccountId, PendingContractTx,
 };
 use near_sdk_sim::*;
+use oysterpack_near_stake_token::domain::TGAS;
 use oysterpack_near_stake_token::interface::{contract_state::ContractState, Config};
 
 pub struct StakingPoolClient {
@@ -12,10 +15,10 @@ pub struct StakingPoolClient {
 }
 
 impl StakingPoolClient {
-    pub fn new(staking_pool_id: AccountId, stake_token_contract_id: AccountId) -> Self {
+    pub fn new(staking_pool_id: &str, stake_token_contract_id: &str) -> Self {
         Self {
-            staking_pool_id,
-            stake_token_contract_id,
+            staking_pool_id: staking_pool_id.to_string(),
+            stake_token_contract_id: stake_token_contract_id.to_string(),
         }
     }
 
@@ -28,6 +31,20 @@ impl StakingPoolClient {
         ));
 
         result.unwrap_json()
+    }
+
+    pub fn update_account(&self, user: &UserAccount, account: StakingPoolAccount) {
+        let result = user.call(
+            PendingContractTx::new(
+                &self.staking_pool_id,
+                "update_account",
+                json!({ "account": account }),
+                false,
+            ),
+            0,
+            TGAS.value() * 100,
+        );
+        result.assert_success();
     }
 }
 
