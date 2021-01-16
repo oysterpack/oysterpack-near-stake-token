@@ -1,3 +1,5 @@
+//! NEAR specific constants and logging support
+
 pub mod storage_keys;
 
 use crate::domain::{EpochHeight, YoctoNear};
