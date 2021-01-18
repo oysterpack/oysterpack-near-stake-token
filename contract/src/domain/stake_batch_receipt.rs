@@ -37,7 +37,8 @@ impl StakeBatchReceipt {
         self.stake_token_value
     }
 
-    /// Used to track when an account has claimed their STAKE tokens for the NEAR they have staked
+    /// Used to track when an account has claimed their STAKE tokens for the NEAR they have staked.
+    /// When the staked NEAR balance reaches zero, it means all STAKE tokens have been claimed by users.
     pub fn stake_tokens_issued(&mut self, staked_near: YoctoNear) {
         self.staked_near -= staked_near;
     }

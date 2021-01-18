@@ -162,6 +162,10 @@ impl StakeTokenContract {
         }
     }
 
+    pub(crate) fn predecessor_registered_account(&self) -> RegisteredAccount {
+        self.registered_account(&env::predecessor_account_id())
+    }
+
     /// returns true if this was a new account
     fn save_account(&mut self, account_id: &Hash, account: &Account) -> bool {
         if self.accounts.insert(account_id, account).is_none() {

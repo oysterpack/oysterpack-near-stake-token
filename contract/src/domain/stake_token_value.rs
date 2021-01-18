@@ -62,6 +62,7 @@ impl StakeTokenValue {
     }
 
     /// converts NEAR to STAKE rounded down
+    /// - STAKE appreciates in value over time - if we were to round up, then NEAR would leak out
     pub fn near_to_stake(&self, near: YoctoNear) -> YoctoStake {
         if self.total_staked_near_balance.value() == 0 || self.total_stake_supply.value() == 0 {
             return near.value().into();
@@ -76,9 +77,9 @@ impl StakeTokenValue {
             .into()
     }
 
-    /// converts STAKE to NEAR rounded down and then adds back the remainder
-    /// - the remainder is added back at a 1:1 ratio because i yoctoNEAR is the smallest unit and is
-    ///   not further divisible
+    /// converts STAKE to NEAR rounded up
+    /// - we round up because we never want to short change the payout
+    /// - this also helps to compensate for rounding down when we convert NEAR -> STAKE
     pub fn stake_to_near(&self, stake: YoctoStake) -> YoctoNear {
         if self.total_staked_near_balance.value() == 0 || self.total_stake_supply.value() == 0
             // when deposit and staked with staking pool, there is a small amount remaining as unstaked
@@ -93,11 +94,12 @@ impl StakeTokenValue {
         let total_staked_near_balance = U256::from(self.total_staked_near_balance);
 
         let near_value = stake * total_staked_near_balance / total_stake_supply;
-
-        // convert back to check if we loss any precision
-        let stake_value = near_value * total_stake_supply / total_staked_near_balance;
-        let remainder = stake - stake_value;
-        (near_value + remainder).as_u128().into()
+        if (stake * total_staked_near_balance) % total_stake_supply == U256::from(0) {
+            near_value.as_u128().into()
+        } else {
+            // round up
+            (near_value.as_u128() + 1).into()
+        }
     }
 }
 
@@ -146,7 +148,7 @@ mod test {
     }
 
     #[test]
-    fn conversion_should_symmetric() {
+    fn conversion_should_be_symmetric() {
         let account_id = "bob.near";
         let context = new_context(account_id);
         testing_env!(context);
@@ -159,5 +161,10 @@ mod test {
         let stake_value = stake_token_value.near_to_stake(near_value);
 
         assert_eq!(stake_value, YoctoStake(YOCTO));
+
+        let stake_value = stake_token_value.near_to_stake(YOCTO.into());
+        let near_value = stake_token_value.stake_to_near(stake_value);
+
+        assert_eq!(near_value, YoctoNear(YOCTO));
     }
 }

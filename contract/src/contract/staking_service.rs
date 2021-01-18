@@ -50,7 +50,7 @@ impl StakingService for StakeTokenContract {
 
     #[payable]
     fn deposit(&mut self) -> BatchId {
-        let mut account = self.registered_account(&env::predecessor_account_id());
+        let mut account = self.predecessor_registered_account();
 
         let near_amount = env::attached_deposit().into();
         let batch_id = self.deposit_near_for_account_to_stake(&mut account, near_amount);
@@ -551,8 +551,8 @@ impl StakeTokenContract {
     /// we never want to issue 0 yoctoSTAKE tokens if NEAR is deposited and staked
     ///
     /// the min required NEAR deposit is calculated using the cached STAKE token value
-    /// thus, to be on the safe side, we will require that mininum amount of NEAR deposit should be
-    /// enough to for 100 yoctoSTAKE
+    /// thus, to be on the safe side, we will require that minimum amount of NEAR deposit should be
+    /// enough for 1000 yoctoSTAKE
     fn check_min_required_near_deposit(&self, account: &Account, batch_id: domain::BatchId) {
         if let Some(batch) = account.stake_batch(batch_id) {
             self.check_stake_batch_min_required_near_balance(batch)
@@ -569,7 +569,7 @@ impl StakeTokenContract {
     }
 
     fn min_required_near_deposit(&self) -> domain::YoctoNear {
-        self.stake_token_value.stake_to_near(100.into())
+        self.stake_token_value.stake_to_near(1000.into())
     }
 
     pub(crate) fn get_pending_withdrawal(&self) -> Option<domain::RedeemStakeBatchReceipt> {
@@ -737,16 +737,14 @@ impl StakeTokenContract {
         self.batch_id_sequence.new_redeem_stake_batch()
     }
 
-    /// returns true if funds were claimed
-    /// - the account is saved to storage if funds were claimed
-    pub(crate) fn claim_receipt_funds(&mut self, account: &mut RegisteredAccount) -> bool {
+    /// NOTE: the account is saved to storage if funds were claimed
+    pub(crate) fn claim_receipt_funds(&mut self, account: &mut RegisteredAccount) {
         let claimed_stake_tokens = self.claim_stake_batch_receipts(&mut account.account);
-        let claimed_neat_tokens = self.claim_redeem_stake_batch_receipts(&mut account.account);
-        let funds_were_claimed = claimed_stake_tokens || claimed_neat_tokens;
+        let claimed_near_tokens = self.claim_redeem_stake_batch_receipts(&mut account.account);
+        let funds_were_claimed = claimed_stake_tokens || claimed_near_tokens;
         if funds_were_claimed {
             self.save_registered_account(&account);
         }
-        funds_were_claimed
     }
 
     /// the purpose of this method is to to compute the account's STAKE balance taking into consideration
@@ -899,11 +897,11 @@ impl StakeTokenContract {
             // how much STAKE did the account redeem in the batch
             let redeemed_stake = account_batch.balance().amount();
 
-            // claim the STAKE tokens for the account
+            // claim the NEAR tokens for the account
             let near = receipt.stake_token_value().stake_to_near(redeemed_stake);
             account.apply_near_credit(near);
 
-            // track that the STAKE tokens were claimed
+            // track that the NEAR tokens were claimed
             receipt.stake_tokens_redeemed(redeemed_stake);
             if receipt.all_claimed() {
                 // then delete the receipt and free the storage
@@ -1098,6 +1096,9 @@ impl StakeTokenContract {
             let current_stake_near_value: U256 = U256::from(current_stake_near_value);
             let total_stake_supply: U256 = U256::from(self.total_stake.amount());
             let total_staked_near_balance: U256 = U256::from(total_staked_near_balance.value());
+            // (staked_near_compensation + total_staked_near_balance)    current_stake_near_value
+            // ------------------------------------------------------ =  ------------------------
+            //           total_staked_near_balance                               YOCTO
             let staked_near_compensation = (current_stake_near_value * total_stake_supply
                 / U256::from(YOCTO))
                 - total_staked_near_balance;
@@ -3858,6 +3859,11 @@ mod test {
         println!(
             "compensation = {}",
             new_stake_token_value.total_staked_near_balance().value() - 13364960386336141046957933
+        );
+        println!(
+            "{}\n{}",
+            old_stake_token_value.stake_to_near(YOCTO.into()),
+            new_stake_token_value.stake_to_near(YOCTO.into())
         );
         assert_eq!(
             old_stake_token_value.stake_to_near(YOCTO.into()),

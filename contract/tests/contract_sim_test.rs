@@ -1,4 +1,4 @@
-#![allow(unused_imports, unreachable_code, unused_variables)]
+#![allow(unused_imports, unreachable_code, unused_variables, dead_code)]
 
 //! before running the simulation test, make sure the wasm files are built for the STAKE token contrac
 //! and the mock staking pool contract

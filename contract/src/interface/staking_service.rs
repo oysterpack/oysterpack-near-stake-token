@@ -86,19 +86,19 @@ pub trait StakingService {
     /// - NEAR funds can be withdrawn from the batch, as long as the batch is not yet committed via
     ///   - [withdraw_from_stake_batch](StakingService::withdraw_from_stake_batch)
     ///   - [withdraw_all_from_stake_batch](StakingService::withdraw_all_from_stake_batch)
+    /// - a minimum deposit is required equivalent to 1000 yoctoSTAKE based on the most recent STAKE
+    ///   token value
+    ///   - this protects against the scenario of issuing zero STAKE tokens - we never want to issue
+    ///     zero yoctoSTAKE tokens if NEAR is deposited and staked
+    ///   - in addition because of rounding issues when
     ///
     /// ## Panics
     /// - if account is not registered
     /// - if no deposit is attached
+    /// - if less than the minimum required deposit was attached
     ///
     /// ## Notes
-    /// Users who have pending redeem STAKE requests claim the NEAR from the liquidity pool in the
-    /// following ways:
-    /// 1. explicitly via [claim_receipts](StakingService::claim_receipts)
-    /// 2. implicitly when withdrawing NEAR funds
-    ///    - [withdraw_all](crate::interface::StakingService::withdraw_all)
-    ///    - [withdraw](crate::interface::StakingService::withdraw)
-    /// 3. implicitly when the user who is depositing has pending redeem stake batches
+    /// - as a side effect, batch receipts are claimed
     ///
     /// #\[payable\]
     ///
@@ -295,9 +295,12 @@ pub trait StakingService {
     /// NOTE: pending withdrawals blocks [RedeemStakeBatch](crate::domain::RedeemStakeBatch) to run
     fn pending_withdrawal(&self) -> Option<RedeemStakeBatchReceipt>;
 
-    /// enables the user to claim receipts explicitly, which will also claim any available NEAR
+    /// Enables the user to claim receipts explicitly, which will also claim any available NEAR
     /// liquidity to settle [RedeemStakeBatchReceipts](crate::domain::RedeemStakeBatchReceipt) that
     /// have unstaked NEAR tokens locked in the staking pool and pending withdrawal
+    ///
+    /// ## Notes
+    /// Receipts will also be claimed implicitly when the user submits any transactions.
     ///
     /// ## Panics
     /// if account is not registered
