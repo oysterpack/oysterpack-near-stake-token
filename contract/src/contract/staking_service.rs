@@ -114,7 +114,7 @@ impl StakingService for StakeTokenContract {
     }
 
     fn withdraw_from_stake_batch(&mut self, amount: YoctoNear) {
-        let mut account = self.registered_account(&env::predecessor_account_id());
+        let mut account = self.predecessor_registered_account();
         self.claim_receipt_funds(&mut account);
 
         if let Some(mut batch) = account.next_stake_batch {
@@ -179,7 +179,7 @@ impl StakingService for StakeTokenContract {
     }
 
     fn withdraw_all_from_stake_batch(&mut self) -> YoctoNear {
-        let mut account = self.registered_account(&env::predecessor_account_id());
+        let mut account = self.predecessor_registered_account();
         self.claim_receipt_funds(&mut account);
 
         if let Some(batch) = account.next_stake_batch {
@@ -234,7 +234,7 @@ impl StakingService for StakeTokenContract {
     }
 
     fn redeem(&mut self, amount: YoctoStake) -> BatchId {
-        let mut account = self.registered_account(&env::predecessor_account_id());
+        let mut account = self.predecessor_registered_account();
         let batch_id = self.redeem_stake_for_account(&mut account, amount.into());
         self.save_registered_account(&account);
         self.log_redeem_stake_batch(batch_id.clone().into());
@@ -242,7 +242,7 @@ impl StakingService for StakeTokenContract {
     }
 
     fn redeem_all(&mut self) -> Option<BatchId> {
-        let mut account = self.registered_account(&env::predecessor_account_id());
+        let mut account = self.predecessor_registered_account();
         self.claim_receipt_funds(&mut account);
         account.stake.map(|stake| {
             let amount = stake.amount();
@@ -254,7 +254,7 @@ impl StakingService for StakeTokenContract {
     }
 
     fn remove_all_from_redeem_stake_batch(&mut self) -> YoctoStake {
-        let mut account = self.registered_account(&env::predecessor_account_id());
+        let mut account = self.predecessor_registered_account();
         self.claim_receipt_funds(&mut account);
 
         if self.run_redeem_stake_batch_lock.is_none() {
@@ -307,7 +307,7 @@ impl StakingService for StakeTokenContract {
     }
 
     fn remove_from_redeem_stake_batch(&mut self, amount: YoctoStake) {
-        let mut account = self.registered_account(&env::predecessor_account_id());
+        let mut account = self.predecessor_registered_account();
         self.claim_receipt_funds(&mut account);
 
         if self.run_redeem_stake_batch_lock.is_none() {
@@ -426,17 +426,17 @@ impl StakingService for StakeTokenContract {
     }
 
     fn claim_receipts(&mut self) {
-        let mut account = self.registered_account(&env::predecessor_account_id());
+        let mut account = self.predecessor_registered_account();
         self.claim_receipt_funds(&mut account);
     }
 
     fn withdraw(&mut self, amount: interface::YoctoNear) {
-        let mut account = self.registered_account(&env::predecessor_account_id());
+        let mut account = self.predecessor_registered_account();
         self.withdraw_near_funds(&mut account, amount.into());
     }
 
     fn withdraw_all(&mut self) -> interface::YoctoNear {
-        let mut account = self.registered_account(&env::predecessor_account_id());
+        let mut account = self.predecessor_registered_account();
         self.claim_receipt_funds(&mut account);
         match account.near {
             None => 0.into(),
@@ -448,12 +448,12 @@ impl StakingService for StakeTokenContract {
     }
 
     fn transfer_near(&mut self, recipient: ValidAccountId, amount: interface::YoctoNear) {
-        let mut account = self.registered_account(&env::predecessor_account_id());
+        let mut account = self.predecessor_registered_account();
         self.transfer_near_funds(&mut account, amount.into(), recipient);
     }
 
     fn transfer_all_near(&mut self, recipient: ValidAccountId) -> interface::YoctoNear {
-        let mut account = self.registered_account(&env::predecessor_account_id());
+        let mut account = self.predecessor_registered_account();
         self.claim_receipt_funds(&mut account);
         match account.near {
             None => 0.into(),
