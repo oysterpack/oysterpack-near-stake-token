@@ -1,6 +1,5 @@
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    serde::{Deserialize, Serialize},
 };
 
 use std::ops::{Deref, DerefMut};
@@ -8,8 +7,6 @@ use std::ops::{Deref, DerefMut};
 #[derive(
     BorshSerialize,
     BorshDeserialize,
-    Serialize,
-    Deserialize,
     Debug,
     Clone,
     Copy,
@@ -19,7 +16,6 @@ use std::ops::{Deref, DerefMut};
     PartialOrd,
     Default,
 )]
-#[serde(crate = "near_sdk::serde")]
 pub struct StorageUsage(pub u64);
 
 impl From<u64> for StorageUsage {

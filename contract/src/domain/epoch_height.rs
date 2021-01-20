@@ -1,14 +1,11 @@
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    serde::{Deserialize, Serialize},
 };
 use std::ops::Add;
 
 #[derive(
     BorshSerialize,
     BorshDeserialize,
-    Serialize,
-    Deserialize,
     Debug,
     Clone,
     Copy,
@@ -19,7 +16,6 @@ use std::ops::Add;
     Hash,
     Default,
 )]
-#[serde(crate = "near_sdk::serde")]
 pub struct EpochHeight(pub u64);
 
 impl From<u64> for EpochHeight {

@@ -2,7 +2,6 @@ use crate::interface;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     json_types::U128,
-    serde::{Deserialize, Serialize},
 };
 use primitive_types::U256;
 use std::{
@@ -13,8 +12,6 @@ use std::{
 #[derive(
     BorshSerialize,
     BorshDeserialize,
-    Serialize,
-    Deserialize,
     Debug,
     Clone,
     Copy,
@@ -24,7 +21,6 @@ use std::{
     PartialOrd,
     Default,
 )]
-#[serde(crate = "near_sdk::serde")]
 pub struct YoctoNear(pub u128);
 
 impl From<u128> for YoctoNear {

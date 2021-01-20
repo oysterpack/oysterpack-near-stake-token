@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::interface::Config;
 use crate::errors::asserts::OPERATOR_ID_MUST_NOT_BE_CONTRACT_ID;
 use near_sdk::{
     env,

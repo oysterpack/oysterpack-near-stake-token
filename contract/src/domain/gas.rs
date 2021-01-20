@@ -1,15 +1,12 @@
 use crate::interface;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    serde::{Deserialize, Serialize},
 };
 use std::ops::{Add, Mul};
 
 #[derive(
     BorshSerialize,
     BorshDeserialize,
-    Serialize,
-    Deserialize,
     Debug,
     Clone,
     Copy,
@@ -19,7 +16,6 @@ use std::ops::{Add, Mul};
     PartialOrd,
     Default,
 )]
-#[serde(crate = "near_sdk::serde")]
 pub struct Gas(pub u64);
 
 /// 1 teraGas

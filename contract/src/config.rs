@@ -5,15 +5,13 @@ use crate::{
 };
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    serde::{Deserialize, Serialize},
 };
 
 /// min contract balance required above the contract's locked balance used for storage staking to
 /// ensure the contract is operational
 pub const CONTRACT_MIN_OPERATIONAL_BALANCE: YoctoNear = YoctoNear(YOCTO);
 
-#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, Copy)]
-#[serde(crate = "near_sdk::serde")]
+#[derive(Debug, BorshSerialize, BorshDeserialize, Clone, Copy)]
 pub struct Config {
     storage_cost_per_byte: YoctoNear,
     gas_config: GasConfig,
@@ -95,8 +93,7 @@ fn assert_gas_range(gas: Gas, min: u8, max: u8, field: &str) {
     );
 }
 
-#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, Copy)]
-#[serde(crate = "near_sdk::serde")]
+#[derive(Debug, BorshSerialize, BorshDeserialize, Clone, Copy)]
 pub struct GasConfig {
     staking_pool: StakingPoolGasConfig,
     callbacks: CallBacksGasConfig,
@@ -161,8 +158,7 @@ impl Default for GasConfig {
     }
 }
 
-#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, Copy)]
-#[serde(crate = "near_sdk::serde")]
+#[derive(Debug, BorshSerialize, BorshDeserialize, Clone, Copy)]
 pub struct StakingPoolGasConfig {
     deposit_and_stake: Gas,
     deposit: Gas,
@@ -256,8 +252,7 @@ impl StakingPoolGasConfig {
     }
 }
 
-#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, Copy)]
-#[serde(crate = "near_sdk::serde")]
+#[derive(Debug, BorshSerialize, BorshDeserialize, Clone, Copy)]
 pub struct CallBacksGasConfig {
     on_run_stake_batch: Gas,
     on_deposit_and_stake: Gas,

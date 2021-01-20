@@ -1,13 +1,10 @@
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    serde::{Deserialize, Serialize},
 };
 
 #[derive(
     BorshSerialize,
     BorshDeserialize,
-    Serialize,
-    Deserialize,
     Debug,
     Clone,
     Copy,
@@ -18,7 +15,6 @@ use near_sdk::{
     Hash,
     Default,
 )]
-#[serde(crate = "near_sdk::serde")]
 pub struct BlockTimestamp(pub u64);
 
 impl From<u64> for BlockTimestamp {

@@ -259,7 +259,11 @@ impl StakeTokenContract {
 
             operator_id,
 
-            config: settings.config.unwrap_or_else(Config::default),
+            config: settings.config.map_or_else(Config::default, |c| {
+                let mut config = Config::default();
+                config.merge(c);
+                config
+            }),
             config_change_block_height: env::block_index().into(),
 
             accounts: LookupMap::new(ACCOUNTS_KEY_PREFIX.to_vec()),
@@ -362,7 +366,9 @@ impl StakeTokenContract {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::interface::StakingService;
+    use crate::interface::{
+        StakingService
+    };
     use crate::{interface::AccountManagement, test_utils::*};
     use near_sdk::{serde_json, testing_env, MockedBlockchain};
 
@@ -373,7 +379,7 @@ mod test {
         let contract_settings = ContractSettings::new(
             "staking-pool.near".into(),
             "operator.stake.oysterpack.near".into(),
-            Some(Config::default()),
+            Some(Config::default().into()),
         );
         let json = serde_json::to_string_pretty(&contract_settings).unwrap();
         println!("{}", json);
