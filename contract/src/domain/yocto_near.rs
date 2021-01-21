@@ -1,25 +1,16 @@
+use crate::core::U256;
 use crate::interface;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     json_types::U128,
 };
-use primitive_types::U256;
 use std::{
     fmt::{self, Display, Formatter},
     ops::{Add, AddAssign, Deref, DerefMut, Sub, SubAssign},
 };
 
 #[derive(
-    BorshSerialize,
-    BorshDeserialize,
-    Debug,
-    Clone,
-    Copy,
-    Eq,
-    PartialEq,
-    Ord,
-    PartialOrd,
-    Default,
+    BorshSerialize, BorshDeserialize, Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Default,
 )]
 pub struct YoctoNear(pub u128);
 

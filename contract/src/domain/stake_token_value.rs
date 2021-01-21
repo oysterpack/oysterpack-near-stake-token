@@ -1,9 +1,9 @@
+use crate::core::U256;
 use crate::{
     domain::{BlockTimeHeight, YoctoNear, YoctoStake},
     interface,
 };
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use primitive_types::U256;
 
 /// STAKE token value at a point in time, i.e., at a block height.
 ///

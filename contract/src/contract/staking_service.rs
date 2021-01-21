@@ -1,4 +1,5 @@
 //required in order for near_bindgen macro to work outside of lib.rs
+use crate::core::U256;
 use crate::*;
 use crate::{
     domain::{self, Account, RedeemLock, RedeemStakeBatch, RegisteredAccount, StakeBatch},
@@ -25,7 +26,6 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
     AccountId, Promise, PromiseOrValue,
 };
-use primitive_types::U256;
 
 #[near_bindgen]
 impl StakingService for StakeTokenContract {

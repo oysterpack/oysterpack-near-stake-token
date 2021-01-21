@@ -1,9 +1,9 @@
+use crate::core::U256;
 use crate::interface;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     json_types::U128,
 };
-use primitive_types::U256;
 use std::{
     fmt::{self, Display, Formatter},
     ops::{Add, AddAssign, Deref, DerefMut, Sub, SubAssign},

@@ -37,7 +37,7 @@ use oysterpack_near_stake_token::{
 
 use account_management_client::*;
 use financials_client::*;
-use primitive_types::U256;
+use oysterpack_near_stake_token::core::U256;
 use staking_service_client::*;
 
 use std::{collections::HashMap, convert::TryInto};
