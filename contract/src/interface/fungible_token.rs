@@ -7,22 +7,23 @@ use near_sdk::{
 use std::{
     cmp::Ordering,
     fmt::{self, Display, Formatter},
-    ops::{Deref, DerefMut},
+    ops::Deref,
 };
 
 /// Defines the standard interface for the core Fungible Token contract
 /// - [NEP-141](https://github.com/near/NEPs/issues/141)
+/// - [NEP-141 Standard discussion](https://github.com/near/NEPs/discussions/146)
 ///
 /// The core standard supports the following features:
-/// - [simple token transfers](FungibleTokenCore::ft_transfer)
-/// - [token transfers between contracts](FungibleTokenCore::ft_transfer_call)
-/// - accounting for [total token supply](FungibleTokenCore::ft_total_supply) and
-///   [account balances](FungibleTokenCore::ft_balance_of)
+/// - [simple token transfers](FungibleToken::ft_transfer)
+/// - [token transfers between contracts](FungibleToken::ft_transfer_call)
+/// - accounting for [total token supply](FungibleToken::ft_total_supply) and
+///   [account balances](FungibleToken::ft_balance_of)
 ///
 /// ## Notes
 /// - it doesn't include token metadata standard that will be covered by a separate NEP, because the
 ///   metadata may evolve.
-/// - it also doesn't include account registration standard that also should be covered by a separate
+/// - it also doesn't include account registration standard that also must be covered by a separate
 ///   NEP because it can be reused for other contract.
 ///
 /// ### Security
@@ -33,8 +34,7 @@ use std::{
 /// restricted access key will not be able to call them without going through the wallet confirmation.
 /// This prevents some attacks like fishing through an authorization to a token contract.
 ///
-/// This 1 yoctoNEAR is not enforced by this standard, but is encouraged to do. While ability to
-/// receive attached deposit is enforced by this token.
+/// This 1 yoctoNEAR is enforced by this standard.
 ///
 /// ### Transfer Call Refunds
 /// If the receiver contract is malicious or incorrectly implemented, then the receiver's promise
@@ -44,23 +44,24 @@ use std::{
 /// funds and later retuning invalid value. But if this flaw exist in this standard, it's not an
 /// issue for the sender account. It only affects the transfer amount and the receiver's account
 /// balance. The receiver can't overspend tokens from the sender outside of sent amount, so this
-/// standard should be considered as safe as #122
+/// standard must be considered as safe as #122
 ///
-pub trait FungibleTokenCore {
+pub trait FungibleToken {
     /// Enables simple transfer between accounts.
     ///
     /// - Transfers positive `amount` of tokens from the `env::predecessor_account_id` to `receiver_id`.
-    /// - Both accounts should be registered with the contract for transfer to succeed.
-    /// - Method is required to be able to accept attached deposits - to not panic on attached deposit.
-    ///   See security section of the standard.
+    /// - Both accounts must be registered with the contract for transfer to succeed.
+    /// - Sender account is required to attach exactly 1 yoctoNEAR to the function call - see security
+    ///   section of the standard.
+    ///   - the yoctoNEAR will be credited to the sender account's NEAR balance
     ///
     /// Arguments:
     /// - `receiver_id` - the account ID of the receiver.
-    /// - `amount` - the amount of tokens to transfer. Should be a positive number in decimal string representation.
+    /// - `amount` - the amount of tokens to transfer. must be a positive number in decimal string representation.
     /// - `memo` - an optional string field in a free form to associate a memo with this transfer.
     ///
     /// ## Panics
-    /// - if there is no attached deposit
+    /// - if the attached deposit does not equal 1 yoctoNEAR
     /// - if either sender or receiver accounts are not registered
     /// - if amount is zero
     /// - if the sender account has insufficient funds to fulfill the request
@@ -71,34 +72,34 @@ pub trait FungibleTokenCore {
     /// Transfer to a contract with a callback.
     ///
     /// Transfers positive `amount` of tokens from the `env::predecessor_account_id` to `receiver_id`
-    /// account. Then calls [`FungibleTokenReceiver::ft_on_transfer`] method on `receiver_id` contract
+    /// account. Then calls [`OnTransfer::ft_on_transfer`] method on `receiver_id` contract
     /// and attaches a callback to resolve this transfer.
-    /// [`FungibleTokenReceiver::ft_on_transfer`] method should return the amount of tokens used by
-    /// the receiver contract, the remaining tokens should be refunded to the `predecessor_account_id`
-    /// at the resolve transfer callback.
     ///
-    /// Token contract should pass all the remaining unused gas to [`FungibleTokenReceiver::ft_on_transfer`]
+    /// [`OnTransfer::ft_on_transfer`] method  must return the amount of tokens unused by
+    /// the receiver contract, the remaining tokens must be refunded to the `predecessor_account_id`
+    /// by the resolve transfer callback.
+    ///
+    /// Token contract must pass all the remaining unused gas to [`OnTransfer::ft_on_transfer`]
     ///
     /// Malicious or invalid behavior by the receiver's contract:
     /// - If the receiver contract promise fails or returns invalid value, the full transfer amount
-    ///   should be refunded.
+    ///   must be refunded.
     /// - If the receiver contract overspent the tokens, and the `receiver_id` balance is lower
-    ///   than the required refund amount, the remaining balance should be refunded.
+    ///   than the required refund amount, the remaining balance must be refunded.
     ///
-    /// Both accounts should be registered with the contract for transfer to succeed.
-    /// Method is required to be able to accept attached deposits - to not panic on attached deposit. See Security
-    /// section of the standard.
+    /// Both accounts must be registered with the contract for transfer to succeed.
+    /// Sender must attach exactly 1 yoctoNEAR - see security section of the standard.
     ///
     /// Arguments:
     /// - `receiver_id` - the account ID of the receiver contract. This contract will be called.
-    /// - `amount` - the amount of tokens to transfer. Should be a positive number in decimal string representation.
-    /// - `data` - a string message that will be passed to `ft_on_transfer` contract call.
+    /// - `amount` - the amount of tokens to transfer. Must be a positive number in decimal string representation.
+    /// - `msg` - a string message that will be passed to `ft_on_transfer` contract call.
     /// - `memo` - an optional string field in a free form to associate a memo with this transfer.
-    /// Returns a promise to resolve transfer call which will return the used amount (see suggested trait to resolve
-    /// transfer).
+    ///
+    /// Returns a promise to resolve transfer call which will return the used amount - [`ResolveTransferCall`]
     ///
     /// ## Panics
-    /// - if there is no attached deposit
+    /// - if the attached deposit is not exactly 1 yoctoNEAR
     /// - if either sender or receiver accounts are not registered
     /// - if amount is zero
     /// - if the sender account has insufficient funds to fulfill the transfer request
@@ -108,30 +109,31 @@ pub trait FungibleTokenCore {
         &mut self,
         receiver_id: ValidAccountId,
         amount: TokenAmount,
-        data: TransferCallMessage,
+        msg: TransferCallMessage,
         memo: Option<Memo>,
     ) -> Promise;
 
     fn ft_total_supply(&self) -> TokenAmount;
 
+    /// If the account doesn't exist, then zero is returned.
     fn ft_balance_of(&self, account_id: ValidAccountId) -> TokenAmount;
 }
 
-/// Receiver of the Fungible Token for [`FungibleTokenCore::ft_transfer_call`] calls.
-pub trait FungibleTokenReceiver {
+/// Receiver of the Fungible Token for [`FungibleToken::ft_transfer_call`] calls.
+pub trait OnTransfer {
     /// Callback to receive tokens.
     ///
     /// Called by fungible token contract `env::predecessor_account_id` after `transfer_call` was initiated by
     /// `sender_id` of the given `amount` with the transfer message given in `msg` field.
     /// The `amount` of tokens were already transferred to this contract account and ready to be used.
     ///
-    /// The method should return the amount of tokens that are used/accepted by this contract from the transferred
-    /// amount. Examples:
-    /// - The transferred amount was `500`, the contract completely takes it and should return `500`.
+    /// The method must return the amount of tokens that are not used/accepted by this contract from
+    /// the transferred amount, e.g.:
+    /// - The transferred amount was `500`, the contract completely takes it and must return `0`.
     /// - The transferred amount was `500`, but this transfer call only needs `450` for the action passed in the `msg`
-    ///   field, then the method should return `450`.
-    /// - The transferred amount was `500`, but the action in `msg` field has expired and the transfer should be
-    ///   cancelled. The method should return `0` or panic.
+    ///   field, then the method must return `50`.
+    /// - The transferred amount was `500`, but the action in `msg` field has expired and the transfer must be
+    ///   cancelled. The method must return `500` or panic.
     ///
     /// Arguments:
     /// - `sender_id` - the account ID that initiated the transfer.
@@ -143,19 +145,19 @@ pub trait FungibleTokenReceiver {
         &mut self,
         sender_id: ValidAccountId,
         amount: TokenAmount,
-        data: TransferCallMessage,
+        msg: TransferCallMessage,
     ) -> PromiseOrValue<TokenAmount>;
 }
 
 /// Suggested Trait to handle the callback on fungible token contract to resolve transfer.
 /// It's not a public interface, so fungible token contract can implement it differently.
-pub trait FungibleTokenCoreResolveTransferCall {
+pub trait ResolveTransferCall {
     /// Callback to resolve transfer.
     /// Private method (`env::predecessor_account_id == env::current_account_id`).
     ///
     /// Called after the receiver handles the transfer call and returns value of used amount in `U128`.
     ///
-    /// This method should get `used_amount` from the receiver's promise result and refund the remaining
+    /// This method must get `used_amount` from the receiver's promise result and refund the remaining
     /// `amount - used_amount` from the receiver's account back to the `sender_id` account.
     /// Methods returns the amount tokens that were spent from `sender_id` after the refund
     /// (`amount - min(receiver_balance, used_amount)`)
@@ -167,7 +169,7 @@ pub trait FungibleTokenCoreResolveTransferCall {
     ///
     /// Promise results:
     /// - `used_amount` - the amount of tokens that were used by receiver's contract. Received from `on_ft_receive`.
-    ///   `used_amount` should be `U128` in range from `0` to `amount`. All other invalid values are considered to be
+    ///   `used_amount` must be `U128` in range from `0` to `amount`. All other invalid values are considered to be
     ///   equal to `0`.
     ///
     /// Returns the amount of tokens that were spent from the `sender_id` account. Note, this value might be different
@@ -203,20 +205,6 @@ impl TokenAmount {
     }
 }
 
-impl Deref for TokenAmount {
-    type Target = u128;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0 .0
-    }
-}
-
-impl DerefMut for TokenAmount {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0 .0
-    }
-}
-
 impl Display for TokenAmount {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.0 .0.fmt(f)
@@ -228,14 +216,6 @@ impl PartialOrd for TokenAmount {
         self.value().partial_cmp(&other.value())
     }
 }
-
-impl Ord for TokenAmount {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.value().cmp(&other.value())
-    }
-}
-
-impl Eq for TokenAmount {}
 
 /// > Similarly to bank transfer and payment orders, the memo argument allows to reference transfer
 /// > to other event (on-chain or off-chain). It is a schema less, so user can use it to reference

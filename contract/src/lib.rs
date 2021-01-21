@@ -89,7 +89,7 @@
 //! The STAKE token contract [interfaces](crate::interface) are defined as traits:
 //! - [AccountManagement](crate::interface::AccountManagement)
 //! - [StakingService](crate::interface::StakingService)
-//! - [FungibleTokenCore](crate::interface::FungibleTokenCore)
+//! - [FungibleTokenCore](crate::interface::FungibleToken)
 //! - [Operator](crate::interface::Operator)
 //! - [ContractOwner](crate::interface::ContractOwner)
 //! - [ContractFinancials](crate::interface::ContractFinancials)
@@ -366,9 +366,7 @@ impl StakeTokenContract {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::interface::{
-        StakingService
-    };
+    use crate::interface::StakingService;
     use crate::{interface::AccountManagement, test_utils::*};
     use near_sdk::{serde_json, testing_env, MockedBlockchain};
 
