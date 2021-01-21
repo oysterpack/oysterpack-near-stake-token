@@ -2490,8 +2490,8 @@ mod test {
                     testing_env!(context.clone());
                     let staking_pool_account = StakingPoolAccount {
                         account_id: context.predecessor_account_id,
-                        unstaked_balance: 0.into(),
-                        staked_balance: 0.into(),
+                        unstaked_balance: YOCTO.into(),
+                        staked_balance: (99 * YOCTO).into(),
                         can_withdraw: true,
                     };
                     contract.on_run_stake_batch(staking_pool_account.clone()); // callback

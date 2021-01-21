@@ -120,10 +120,12 @@ impl StakeTokenContract {
         // the STAKE token value is stale
         let stake_minted_amount = self.mint_stake(batch);
         self.update_stake_token_value(staked_balance.into());
+        // recompute the batch STAKE value using the updated staked NEAR balance
         let batch_stake_value = self
             .stake_token_value
             .near_to_stake(batch.balance().amount());
-        if batch_stake_value != stake_minted_amount {
+        // align the total STAKE supply with the STAKE tokens that were minted for the batch
+        {
             self.total_stake.debit(stake_minted_amount);
             self.total_stake.credit(batch_stake_value);
             self.update_stake_token_value(staked_balance.into());

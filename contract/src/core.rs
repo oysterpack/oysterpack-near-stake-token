@@ -1,8 +1,6 @@
 mod hash;
-mod mixed_fraction;
 
 pub use hash::Hash;
-pub use mixed_fraction::{MixedFaction, U128DynaFraction};
 
 use uint::construct_uint;
 

@@ -23,29 +23,17 @@ impl StakeTokenValue {
         total_staked_near_balance: YoctoNear,
         total_stake_supply: YoctoStake,
     ) -> Self {
-        // When staked with staking pool, the staking pool converts the NEAR into shares. However,
-        // any fractional amount cannot be staked, and remains in the unstaked balance. For example:
-        //
-        // total_staked_near_balance:  '999999999999999999999994',
-        // total_stake_supply:        '1000000000000000000000000'
-        //
-        // However, the STAKE token value can never be < 1 NEAR token. Thus, this will compensate
-        // when the deposits are first staked. Overtime, as staking rewards accumulate, they will
-        // mask the fractional share accounting issue.
-        //
-        // NOTE: we are talking practically 0 value on the yocto scale.
-        if total_staked_near_balance.value() < total_stake_supply.value() {
-            Self {
-                block_time_height,
-                total_staked_near_balance: total_stake_supply.value().into(),
-                total_stake_supply,
-            }
-        } else {
-            Self {
-                block_time_height,
-                total_staked_near_balance,
-                total_stake_supply,
-            }
+        assert!(
+            total_staked_near_balance.value() >= total_stake_supply.value(),
+            "total staked NEAR balance ({}) should always >= total STAKE supply ({}) : {}",
+            total_staked_near_balance.value(),
+            total_stake_supply.value(),
+            total_stake_supply.value() - total_staked_near_balance.value()
+        );
+        Self {
+            block_time_height,
+            total_staked_near_balance,
+            total_stake_supply,
         }
     }
 
@@ -64,7 +52,7 @@ impl StakeTokenValue {
     /// converts NEAR to STAKE rounded down
     /// - STAKE appreciates in value over time - if we were to round up, then NEAR would leak out
     pub fn near_to_stake(&self, near: YoctoNear) -> YoctoStake {
-        if self.total_staked_near_balance.value() == 0 || self.total_stake_supply.value() == 0 {
+        if self.total_staked_near_balance.value() == 0 {
             return near.value().into();
         }
 
@@ -81,7 +69,7 @@ impl StakeTokenValue {
     /// - we round up because we never want to short change the payout
     /// - this also helps to compensate for rounding down when we convert NEAR -> STAKE
     pub fn stake_to_near(&self, stake: YoctoStake) -> YoctoNear {
-        if self.total_staked_near_balance.value() == 0 || self.total_stake_supply.value() == 0
+        if self.total_staked_near_balance.value() == 0
             // when deposit and staked with staking pool, there is a small amount remaining as unstaked
             // however, STAKE token value should never be less than 1:1 in terms of NEAR
             || self.total_staked_near_balance.value() < self.total_stake_supply.value()
