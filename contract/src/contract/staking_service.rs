@@ -1770,7 +1770,7 @@ mod test_withdraw {
     }
 
     #[test]
-    #[should_panic(expected = "account NEAR balance is too low to fulfill request")]
+    #[should_panic(expected = "account has zero NEAR balance")]
     fn with_no_near_funds() {
         let mut test_context = TestContext::with_registered_account(None);
         test_context.contract.withdraw((50 * YOCTO).into());

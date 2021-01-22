@@ -149,32 +149,26 @@ pub trait OnTransfer {
     ) -> PromiseOrValue<TokenAmount>;
 }
 
-/// Suggested Trait to handle the callback on fungible token contract to resolve transfer.
-/// It's not a public interface, so fungible token contract can implement it differently.
+/// Callback on fungible token contract to resolve transfer.
 pub trait ResolveTransferCall {
     /// Callback to resolve transfer.
     /// Private method (`env::predecessor_account_id == env::current_account_id`).
     ///
-    /// Called after the receiver handles the transfer call and returns value of used amount in `U128`.
+    /// Called after the receiver handles the transfer call and returns unused token amount.
     ///
-    /// This method must get `used_amount` from the receiver's promise result and refund the remaining
-    /// `amount - used_amount` from the receiver's account back to the `sender_id` account.
-    /// Methods returns the amount tokens that were spent from `sender_id` after the refund
-    /// (`amount - min(receiver_balance, used_amount)`)
+    /// This method must get `unused_amount` from the receiver's promise result and refund the
+    /// `unused_amount` from the receiver's account back to the `sender_id` account.
     ///
     /// Arguments:
     /// - `sender_id` - the account ID that initiated the transfer.
     /// - `receiver_id` - the account ID of the receiver contract.
     /// - `amount` - the amount of tokens that were transferred to receiver's account.
     ///
-    /// Promise results:
-    /// - `used_amount` - the amount of tokens that were used by receiver's contract. Received from `on_ft_receive`.
-    ///   `used_amount` must be `U128` in range from `0` to `amount`. All other invalid values are considered to be
-    ///   equal to `0`.
-    ///
-    /// Returns the amount of tokens that were spent from the `sender_id` account. Note, this value might be different
-    /// from the `used_amount` returned by the receiver contract, in case the refunded balance is not available on the
-    /// receiver's account.
+    /// Promise result data dependency (`unused_amount`):
+    /// - the amount of tokens that were unused by receiver's contract.
+    /// - Received from `on_ft_receive`
+    /// - `unused_amount` must be `U128` in range from `0` to `amount`. All other invalid values
+    ///   are considered to be equal to be the total transfer amount.
     ///
     /// #\[private\]
     fn resolve_transfer_call(
@@ -185,7 +179,7 @@ pub trait ResolveTransferCall {
         // NOTE: #[callback_result] is not supported yet and has to be handled using lower level interface.
         //
         // #[callback_result]
-        // used_amount: CallbackResult<TokenAmount>,
+        // unused_amount: CallbackResult<TokenAmount>,
     );
 }
 
@@ -214,6 +208,12 @@ impl Display for TokenAmount {
 impl PartialOrd for TokenAmount {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.value().partial_cmp(&other.value())
+    }
+}
+
+impl Default for TokenAmount {
+    fn default() -> Self {
+        Self(U128(0))
     }
 }
 

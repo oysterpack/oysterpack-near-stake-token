@@ -1,7 +1,6 @@
 //! centralizes all error messages
 
 pub mod asserts {
-    pub const PREDECESSOR_MUST_BE_SELF: &str = "contract call is only allowed internally";
     pub const PREDECESSOR_MUST_NE_SELF_OR_OPERATOR: &str =
         "contract call is only allowed internally or by an operator account";
     pub const PREDECESSOR_MUST_BE_OPERATOR: &str =
@@ -20,8 +19,6 @@ pub mod staking_pool_failures {
 
     pub const WITHDRAW_ALL_FAILURE: &str =
         "failed to withdraw all unstaked funds from staking pool";
-
-    pub const STAKING_POOL_CALL_FAILED: &str = "staking pool contract call failed";
 }
 
 pub mod staking_errors {
@@ -31,10 +28,6 @@ pub mod staking_errors {
 }
 
 pub mod redeeming_stake_errors {
-    /// redeem stake batch cannot be run while NEAR is being staked
-    pub const REDEEM_STAKE_BATCH_BLOCKED_BY_STAKE_BATCH_RUN: &str =
-        "RedeemStakeBatch is blocked by StakeBatch run";
-
     pub const NO_REDEEM_STAKE_BATCH_TO_RUN: &str = "there is no redeem stake batch";
 
     pub const UNSTAKING_BLOCKED_BY_PENDING_WITHDRAWAL: &str =
@@ -51,8 +44,6 @@ pub mod staking_service {
 
     pub const INSUFFICIENT_STAKE_FOR_REDEEM_REQUEST: &str =
         "account STAKE balance is insufficient to fulfill request";
-
-    pub const BATCH_RUN_ALREADY_IN_PROGRESS: &str = "batch run is already in progress";
 
     pub const BATCH_BALANCE_INSUFFICIENT: &str = "batch balance is insufficient to fulfill request";
 }
@@ -79,26 +70,6 @@ pub mod account_management {
         "all funds must be withdrawn from the account in order to unregister";
 
     pub const ACCOUNT_NOT_REGISTERED: &str = "account is not registered";
-
-    pub const ZERO_NEAR_BALANCE_FOR_WITHDRAWAL: &str =
-        "there are no available NEAR funds to withdraw";
-}
-
-pub mod vault_fungible_token {
-    pub const RECEIVER_MUST_NOT_BE_SENDER: &str = "receiver account must not be the sender";
-
-    pub const ACCOUNT_INSUFFICIENT_STAKE_FUNDS: &str =
-        "account STAKE balance is to low to fulfill request";
-
-    pub const ACCOUNT_INSUFFICIENT_NEAR_FUNDS: &str =
-        "account NEAR balance is too low to fulfill request";
-
-    pub const VAULT_DOES_NOT_EXIST: &str = "vault does not exist";
-
-    pub const VAULT_ACCESS_DENIED: &str = "vault access is denied";
-
-    pub const VAULT_INSUFFICIENT_FUNDS: &str =
-        "vault balance is too low to fulfill withdrawal request";
 }
 
 pub mod contract_owner {

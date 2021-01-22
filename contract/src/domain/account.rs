@@ -4,9 +4,6 @@ use crate::domain::{
     BatchId, RedeemStakeBatch, TimestampedNearBalance, TimestampedStakeBalance, YoctoNear,
     YoctoStake,
 };
-use crate::errors::vault_fungible_token::{
-    ACCOUNT_INSUFFICIENT_NEAR_FUNDS, ACCOUNT_INSUFFICIENT_STAKE_FUNDS,
-};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use std::ops::{Deref, DerefMut};
 
@@ -117,10 +114,11 @@ impl Account {
     }
 
     pub fn apply_near_debit(&mut self, debit: YoctoNear) {
-        let balance = self
-            .near
-            .get_or_insert_with(|| TimestampedNearBalance::new(YoctoNear(0)));
-        assert!(balance.amount() >= debit, ACCOUNT_INSUFFICIENT_NEAR_FUNDS);
+        let balance = self.near.as_mut().expect("account has zero NEAR balance");
+        assert!(
+            balance.amount() >= debit,
+            "account NEAR balance is too low to fulfill request"
+        );
         balance.debit(debit);
         if balance.amount() == 0.into() {
             self.near = None
@@ -134,11 +132,11 @@ impl Account {
     }
 
     pub fn apply_stake_debit(&mut self, debit: YoctoStake) {
-        let balance = self
-            .stake
-            .get_or_insert_with(|| TimestampedStakeBalance::new(YoctoStake(0)));
-
-        assert!(balance.amount() >= debit, ACCOUNT_INSUFFICIENT_STAKE_FUNDS);
+        let balance = self.stake.as_mut().expect("account has zero STAKE balance");
+        assert!(
+            balance.amount() >= debit,
+            "account STAKE balance is too low to fulfill request"
+        );
         balance.debit(debit);
         if balance.amount() == 0.into() {
             self.stake = None
