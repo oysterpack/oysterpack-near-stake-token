@@ -97,7 +97,7 @@ mod test {
 
     #[test]
     fn transfer_ownership_success() {
-        let mut ctx = TestContext::with_registered_account(None);
+        let mut ctx = TestContext::with_registered_account();
         let mut context = ctx.context.clone();
         let contract = &mut ctx.contract;
 
@@ -113,7 +113,7 @@ mod test {
 
     #[test]
     fn set_operator_id() {
-        let mut ctx = TestContext::with_registered_account(None);
+        let mut ctx = TestContext::with_registered_account();
         let mut context = ctx.context.clone();
         let contract = &mut ctx.contract;
 
@@ -127,7 +127,7 @@ mod test {
     #[test]
     #[should_panic(expected = "contract call is only allowed by the contract owner")]
     fn set_operator_id_invoked_by_non_owner() {
-        let mut ctx = TestContext::with_registered_account(None);
+        let mut ctx = TestContext::with_registered_account();
         let mut context = ctx.context.clone();
         let contract = &mut ctx.contract;
 
@@ -141,7 +141,7 @@ mod test {
     #[test]
     #[should_panic(expected = "contract ownership can only be transferred to a registered account")]
     fn transfer_ownership_to_non_registered_account() {
-        let mut ctx = TestContext::new(None);
+        let mut ctx = TestContext::new();
         let mut context = ctx.context.clone();
         let contract = &mut ctx.contract;
 
@@ -153,7 +153,7 @@ mod test {
     #[test]
     #[should_panic(expected = "contract call is only allowed by the contract owner")]
     fn transfer_ownership_from_non_owner() {
-        let mut ctx = TestContext::with_registered_account(None);
+        let mut ctx = TestContext::with_registered_account();
         let contract = &mut ctx.contract;
 
         testing_env!(ctx.context.clone());
@@ -162,7 +162,7 @@ mod test {
 
     #[test]
     fn withdraw_all_owner_balance_success() {
-        let mut test_context = TestContext::new(None);
+        let mut test_context = TestContext::new();
         let mut context = test_context.context.clone();
         let contract = &mut test_context.contract;
 
@@ -185,7 +185,7 @@ mod test {
 
     #[test]
     fn withdraw_owner_balance_success() {
-        let mut test_context = TestContext::new(None);
+        let mut test_context = TestContext::new();
         let mut context = test_context.context.clone();
         let contract = &mut test_context.contract;
 
@@ -207,67 +207,49 @@ mod test {
     #[test]
     #[should_panic(expected = "contract call is only allowed by the contract owner")]
     fn withdraw_all_owner_balance_called_by_non_owner() {
-        let mut test_context = TestContext::new(None);
+        let mut test_context = TestContext::new();
         test_context.contract.withdraw_all_owner_balance();
     }
 
     #[test]
     #[should_panic(expected = "contract call is only allowed by the contract owner")]
     fn withdraw_owner_balance_called_by_non_owner() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.account_balance = 100 * YOCTO;
-        context.is_view = false;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
+        let mut context = TestContext::new();
+        let contract = &mut context.contract;
+        let mut vm_ctx = context.context.clone();
+        vm_ctx.predecessor_account_id = "non-owner.near".to_string();
+        testing_env!(vm_ctx);
         contract.withdraw_owner_balance(YOCTO.into());
     }
 
     #[test]
     #[should_panic(expected = "contract call is only allowed by the contract owner")]
     fn stake_owner_balance_called_by_non_owner() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.account_balance = 100 * YOCTO;
-        context.is_view = false;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
+        let mut context = TestContext::new();
+        let contract = &mut context.contract;
+        let mut vm_ctx = context.context.clone();
+        vm_ctx.predecessor_account_id = "non-owner.near".to_string();
+        testing_env!(vm_ctx);
         contract.stake_owner_balance(YOCTO.into());
     }
 
     #[test]
     #[should_panic(expected = "contract call is only allowed by the contract owner")]
     fn stake_all_owner_balance_called_by_non_owner() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.account_balance = 100 * YOCTO;
-        context.is_view = false;
-        testing_env!(context.clone());
-
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
+        let mut context = TestContext::new();
+        let contract = &mut context.contract;
+        let mut vm_ctx = context.context.clone();
+        vm_ctx.predecessor_account_id = "non-owner.near".to_string();
+        testing_env!(vm_ctx);
         contract.stake_all_owner_balance();
     }
 
     #[test]
     fn stake_all_owner_balance_success() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.account_balance = 100 * YOCTO;
-        context.is_view = false;
-        testing_env!(context.clone());
+        let mut context = TestContext::with_registered_account();
+        context.register_owner();
+        let contract = &mut context.contract;
 
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-
-        context.attached_deposit = YOCTO;
-        context.predecessor_account_id = contract.owner_id();
-        testing_env!(context.clone());
-        contract.register_account();
         contract.stake_all_owner_balance();
         let account = contract
             .lookup_account(ValidAccountId::try_from(contract.owner_id.as_str()).unwrap())
@@ -277,19 +259,10 @@ mod test {
 
     #[test]
     fn stake_owner_balance_success() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.account_balance = 100 * YOCTO;
-        context.is_view = false;
-        testing_env!(context.clone());
+        let mut context = TestContext::with_registered_account();
+        context.register_owner();
+        let contract = &mut context.contract;
 
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-
-        context.attached_deposit = YOCTO;
-        context.predecessor_account_id = contract.owner_id();
-        testing_env!(context.clone());
-        contract.register_account();
         contract.stake_owner_balance(YOCTO.into());
         let account = contract
             .lookup_account(ValidAccountId::try_from(contract.owner_id.as_str()).unwrap())

@@ -115,7 +115,6 @@ pub mod errors;
 pub mod interface;
 pub mod near;
 
-pub use contract::settings::*;
 pub(crate) use contract::*;
 
 #[cfg(test)]
@@ -247,23 +246,22 @@ impl StakeTokenContract {
     /// - when the contract is deployed it will measure account storage usage
     /// - owner account ID defaults to the operator account ID
     #[init]
-    pub fn new(owner_id: Option<ValidAccountId>, settings: ContractSettings) -> Self {
+    pub fn new(
+        staking_pool_id: ValidAccountId,
+        owner_id: ValidAccountId,
+        operator_id: ValidAccountId,
+    ) -> Self {
         assert!(!env::state_exists(), "contract is already initialized");
+        assert_ne!(env::current_account_id().as_str(), owner_id.as_ref());
+        assert_ne!(env::current_account_id().as_str(), operator_id.as_ref());
 
-        settings.validate();
-
-        let operator_id: AccountId = settings.operator_id.into();
         let mut contract = Self {
-            owner_id: owner_id.map_or(operator_id.clone(), |account_id| account_id.into()),
+            owner_id: owner_id.into(),
             contract_owner_balance: env::account_balance().into(),
 
-            operator_id,
+            operator_id: operator_id.into(),
 
-            config: settings.config.map_or_else(Config::default, |c| {
-                let mut config = Config::default();
-                config.merge(c);
-                config
-            }),
+            config: Config::default(),
             config_change_block_height: env::block_index().into(),
 
             accounts: LookupMap::new(ACCOUNTS_KEY_PREFIX.to_vec()),
@@ -282,7 +280,7 @@ impl StakeTokenContract {
                 REDEEM_STAKE_BATCH_RECEIPTS_KEY_PREFIX.to_vec(),
             ),
             account_storage_usage: Default::default(),
-            staking_pool_id: settings.staking_pool_id.into(),
+            staking_pool_id: staking_pool_id.into(),
             run_stake_batch_locked: false,
             run_redeem_stake_batch_lock: None,
 
@@ -368,28 +366,7 @@ mod test {
     use super::*;
     use crate::interface::StakingService;
     use crate::{interface::AccountManagement, test_utils::*};
-    use near_sdk::{serde_json, testing_env, MockedBlockchain};
-
-    #[test]
-    fn contract_settings_serde_json() {
-        testing_env!(new_context("bob.near"));
-
-        let contract_settings = ContractSettings::new(
-            "staking-pool.near".into(),
-            "operator.stake.oysterpack.near".into(),
-            Some(Config::default().into()),
-        );
-        let json = serde_json::to_string_pretty(&contract_settings).unwrap();
-        println!("{}", json);
-
-        let _contract_settings: ContractSettings = serde_json::from_str(
-            r#"{
-  "staking_pool_id": "staking-pool.near",
-  "operator_id": "operator.stake.oysterpack.near"
-}"#,
-        )
-        .unwrap();
-    }
+    use near_sdk::{testing_env, MockedBlockchain};
 
     #[test]
     #[should_panic(expected = "The contract is not initialized")]
@@ -416,18 +393,12 @@ mod test {
     /// And there should be no receipts
     #[test]
     fn contract_init() {
-        let account_id = "bob.near";
-        let mut context = new_context(account_id);
-        context.block_index = 10;
-        testing_env!(context);
+        let mut vm_ctx = new_context(TEST_ACCOUNT_ID);
+        vm_ctx.block_index = 10;
+        let mut test_ctx = TestContext::with_vm_context(vm_ctx);
+        let contract = &mut test_ctx.contract;
 
-        let contract_settings = default_contract_settings();
-        let contract = StakeTokenContract::new(None, contract_settings.clone());
-
-        assert_eq!(
-            &contract.staking_pool_id(),
-            contract_settings.staking_pool_id.as_ref()
-        );
+        assert_eq!(&contract.staking_pool_id(), TEST_STAKING_POOL_ID);
 
         // Then [StakeTokenContract::account_storage_usage] is dynamically computed
         assert_eq!(
@@ -438,12 +409,6 @@ mod test {
             contract.account_storage_fee().value(),
             EXPECTED_ACCOUNT_STORAGE_USAGE as u128
                 * contract.config.storage_cost_per_byte().value()
-        );
-
-        // And staking pool ID was stored
-        assert_eq!(
-            contract.staking_pool_id.as_str(),
-            contract_settings.staking_pool_id.as_ref().as_str()
         );
 
         assert_eq!(
@@ -479,7 +444,8 @@ mod test {
         assert!(contract.stake_batch.is_none());
         assert!(contract.redeem_stake_batch.is_none());
 
-        assert_eq!(contract.owner_id, contract.operator_id);
+        assert_eq!(contract.owner_id, TEST_OWNER_ID);
+        assert_eq!(contract.operator_id, TEST_OPERATOR_ID);
 
         println!(
             "initial_contract_storage_usage = {:?}",

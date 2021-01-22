@@ -224,7 +224,7 @@ mod test {
     /// Then submit an unstake request to the staking pool
     #[test]
     fn on_run_redeem_stake_batch_with_zero_unstaked_balance() {
-        let mut test_context = TestContext::with_registered_account(None);
+        let mut test_context = TestContext::with_registered_account();
         let mut context = test_context.context.clone();
         let contract = &mut test_context.contract;
 
@@ -312,7 +312,7 @@ mod test {
     /// And then the redeem batch is retried
     #[test]
     fn on_run_redeem_stake_batch_with_nonzero_unstaked_balance_and_can_withdraw() {
-        let mut test_context = TestContext::with_registered_account(None);
+        let mut test_context = TestContext::with_registered_account();
         let mut context = test_context.context.clone();
         let contract = &mut test_context.contract;
         *contract.batch_id_sequence += 1;
@@ -390,7 +390,7 @@ mod test {
     #[test]
     #[should_panic(expected = "ILLEGAL STATE : redeem stake batch should exist")]
     fn on_run_redeem_stake_batch_invoked_illegal_state_no_redeem_batch() {
-        let mut test_context = TestContext::with_registered_account(None);
+        let mut test_context = TestContext::with_registered_account();
         let mut context = test_context.context.clone();
         let contract = &mut test_context.contract;
 
@@ -411,7 +411,7 @@ mod test {
     /// And the total STAKE supply is reduced
     #[test]
     fn on_unstake_success() {
-        let mut test_context = TestContext::with_registered_account(None);
+        let mut test_context = TestContext::with_registered_account();
         let mut context = test_context.context.clone();
         let contract = &mut test_context.contract;
         *contract.batch_id_sequence += 1;
@@ -457,7 +457,7 @@ mod test {
     #[test]
     #[should_panic(expected = "failed to unstake NEAR with staking pool")]
     fn on_unstake_staking_pool_failure() {
-        let mut test_context = TestContext::with_registered_account(None);
+        let mut test_context = TestContext::with_registered_account();
         let mut context = test_context.context.clone();
         let contract = &mut test_context.contract;
         *contract.batch_id_sequence += 1;
@@ -479,7 +479,7 @@ mod test {
     /// And the redeem stake batch is popped
     #[test]
     fn on_redeeming_stake_pending_withdrawal_success() {
-        let mut test_context = TestContext::with_registered_account(None);
+        let mut test_context = TestContext::with_registered_account();
         let mut context = test_context.context.clone();
         let contract = &mut test_context.contract;
         *contract.batch_id_sequence += 1;
@@ -521,7 +521,7 @@ mod test {
     /// And the callback is retried
     #[test]
     fn on_redeeming_stake_pending_withdrawal_with_unstaked_funds_can_withdraw() {
-        let mut test_context = TestContext::with_registered_account(None);
+        let mut test_context = TestContext::with_registered_account();
         let mut context = test_context.context.clone();
         let contract = &mut test_context.contract;
         *contract.batch_id_sequence += 1;

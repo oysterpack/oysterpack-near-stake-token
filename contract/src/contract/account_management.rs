@@ -204,7 +204,7 @@ mod test_register_account {
     /// Then the difference will be refunded
     #[test]
     fn register_new_account_with_deposit_overpayment() {
-        let mut test_context = TestContext::new(None);
+        let mut test_context = TestContext::new();
         let mut context = test_context.context.clone();
         let contract = &mut test_context.contract;
         let account_id = test_context.account_id;
@@ -262,7 +262,7 @@ mod test_register_account {
 
     #[test]
     fn register_account_with_exact_storage_fee() {
-        let mut test_context = TestContext::new(None);
+        let mut test_context = TestContext::new();
         let mut context = test_context.context.clone();
         let contract = &mut test_context.contract;
 
@@ -277,7 +277,7 @@ mod test_register_account {
     #[test]
     #[should_panic(expected = "account is already registered")]
     fn register_preexisting_account() {
-        let mut test_context = TestContext::with_registered_account(None);
+        let mut test_context = TestContext::with_registered_account();
         let mut context = test_context.context.clone();
 
         context.attached_deposit = YOCTO;
@@ -288,14 +288,14 @@ mod test_register_account {
     #[test]
     #[should_panic(expected = "sufficient deposit is required to pay for account storage fees")]
     fn register_account_with_no_attached_deposit() {
-        let mut test_context = TestContext::new(None);
+        let mut test_context = TestContext::new();
         test_context.contract.register_account();
     }
 
     #[test]
     #[should_panic(expected = "sufficient deposit is required to pay for account storage fees")]
     fn register_account_with_insufficient_deposit_for_storage_fees() {
-        let mut test_context = TestContext::new(None);
+        let mut test_context = TestContext::new();
         test_context.context.attached_deposit = 1;
         testing_env!(test_context.context.clone());
         test_context.contract.register_account();
@@ -314,7 +314,7 @@ mod test_unregister_account {
 
     #[test]
     fn unregister_registered_account_with_no_funds() {
-        let test_context = TestContext::with_registered_account(None);
+        let test_context = TestContext::with_registered_account();
         let mut contract = test_context.contract;
 
         assert_eq!(
@@ -342,7 +342,7 @@ mod test_unregister_account {
         expected = "all funds must be withdrawn from the account in order to unregister"
     )]
     fn unregister_account_with_stake_funds() {
-        let mut test_context = TestContext::with_registered_account(None);
+        let mut test_context = TestContext::with_registered_account();
         let contract = &mut test_context.contract;
 
         // apply STAKE credit to the account
@@ -359,7 +359,7 @@ mod test_unregister_account {
         expected = "all funds must be withdrawn from the account in order to unregister"
     )]
     fn unregister_account_with_near_funds() {
-        let mut test_context = TestContext::with_registered_account(None);
+        let mut test_context = TestContext::with_registered_account();
         let contract = &mut test_context.contract;
 
         // credit some NEAR
@@ -376,7 +376,7 @@ mod test_unregister_account {
         expected = "all funds must be withdrawn from the account in order to unregister"
     )]
     fn account_has_funds_in_stake_batch() {
-        let mut test_context = TestContext::with_registered_account(None);
+        let mut test_context = TestContext::with_registered_account();
         let mut context = test_context.context;
         let contract = &mut test_context.contract;
 
@@ -394,7 +394,7 @@ mod test_unregister_account {
         expected = "all funds must be withdrawn from the account in order to unregister"
     )]
     fn account_has_funds_in_next_stake_batch() {
-        let mut test_context = TestContext::with_registered_account(None);
+        let mut test_context = TestContext::with_registered_account();
         let mut context = test_context.context;
         let contract = &mut test_context.contract;
 
@@ -417,7 +417,7 @@ mod test_unregister_account {
         expected = "all funds must be withdrawn from the account in order to unregister"
     )]
     fn account_has_funds_in_redeem_stake_batch() {
-        let mut test_context = TestContext::with_registered_account(None);
+        let mut test_context = TestContext::with_registered_account();
         let contract = &mut test_context.contract;
 
         // give the account STAKE
@@ -436,7 +436,7 @@ mod test_unregister_account {
         expected = "all funds must be withdrawn from the account in order to unregister"
     )]
     fn account_has_funds_in_next_redeem_stake_batch() {
-        let mut test_context = TestContext::with_registered_account(None);
+        let mut test_context = TestContext::with_registered_account();
         let contract = &mut test_context.contract;
 
         // give the account STAKE
@@ -463,7 +463,7 @@ mod test_unregister_account {
     #[test]
     #[should_panic(expected = "account is not registered")]
     fn unregister_unknown_account() {
-        let mut test_context = TestContext::new(None);
+        let mut test_context = TestContext::new();
         test_context.contract.unregister_account();
     }
 }
@@ -479,7 +479,7 @@ mod test_lookup_account {
 
     #[test]
     fn lookup_registered_account() {
-        let test_context = TestContext::with_registered_account(None);
+        let test_context = TestContext::with_registered_account();
 
         test_context
             .contract
@@ -489,7 +489,7 @@ mod test_lookup_account {
 
     #[test]
     fn lookup_unregistered_account() {
-        let test_context = TestContext::new(None);
+        let test_context = TestContext::new();
 
         assert!(test_context
             .contract
@@ -501,7 +501,7 @@ mod test_lookup_account {
     /// for display purposes - so as not to confuse the end user
     #[test]
     fn with_unclaimed_receipts() {
-        let mut ctx = TestContext::with_registered_account(None);
+        let mut ctx = TestContext::with_registered_account();
         let mut context = ctx.context;
         let contract = &mut ctx.contract;
 
@@ -553,7 +553,7 @@ mod test_lookup_account {
 
     #[test]
     fn with_unclaimed_receipts_pending_withdrawal() {
-        let mut ctx = TestContext::with_registered_account(None);
+        let mut ctx = TestContext::with_registered_account();
         let mut context = ctx.context;
         let contract = &mut ctx.contract;
 
@@ -607,7 +607,7 @@ mod test {
     /// - lookup_account
     #[test]
     fn check_view_funcs() {
-        let mut ctx = TestContext::new(None);
+        let mut ctx = TestContext::new();
 
         // given the funcs are called in view mode
         ctx.context.is_view = true;

@@ -281,7 +281,7 @@ mod test {
     /// And a callback is scheduled to run once the deposit and stake promise completes
     #[test]
     fn on_run_stake_batch_success() {
-        let mut test_context = TestContext::with_registered_account(None);
+        let mut test_context = TestContext::with_registered_account();
         let mut context = test_context.context.clone();
         let contract = &mut test_context.contract;
 
@@ -394,7 +394,7 @@ mod test {
     /// And a stake request is submitted to the staking pool
     #[test]
     fn on_run_stake_batch_success_with_pending_withdrawal_with_all_near_added_to_liquidity() {
-        let mut test_context = TestContext::with_registered_account(None);
+        let mut test_context = TestContext::with_registered_account();
         let mut context = test_context.context.clone();
         let contract = &mut test_context.contract;
 
@@ -523,7 +523,7 @@ mod test {
     // And a deposit request and then a stake request are submitted to the staking pool
     #[test]
     fn on_run_stake_batch_success_with_pending_withdrawal_with_partial_near_added_to_liquidity() {
-        let mut test_context = TestContext::with_registered_account(None);
+        let mut test_context = TestContext::with_registered_account();
         let mut context = test_context.context.clone();
         let contract = &mut test_context.contract;
 

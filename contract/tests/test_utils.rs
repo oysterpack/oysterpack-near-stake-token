@@ -10,6 +10,7 @@ use crate::financials_client::FinancialsClient;
 use crate::operator_client::OperatorClient;
 use crate::staking_pool_client::StakingPoolClient;
 use crate::staking_service_client::StakingServiceClient;
+use near_sdk::json_types::ValidAccountId;
 use near_sdk::AccountId;
 use near_sdk_sim::errors::TxExecutionError;
 use near_sdk_sim::{
@@ -17,10 +18,10 @@ use near_sdk_sim::{
     transaction::ExecutionStatus,
 };
 use oysterpack_near_stake_token::{
-    interface::StakeAccount, near::YOCTO, ContractSettings, StakeTokenContractContract,
+    interface::StakeAccount, near::YOCTO, StakeTokenContractContract,
 };
 use staking_pool_mock::StakingPoolContract;
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, convert::TryInto, rc::Rc};
 
 lazy_static! {
     static ref WASM_BYTES: &'static [u8] =
@@ -36,7 +37,6 @@ pub struct TestContext {
     pub contract_owner: UserAccount,
     pub contract_account_id: AccountId,
     pub contract_operator: UserAccount,
-    pub settings: ContractSettings,
 
     pub users: HashMap<String, UserAccount>,
 
@@ -68,10 +68,6 @@ impl TestContext {
         &self.contract_account_id
     }
 
-    pub fn settings(&self) -> &ContractSettings {
-        &self.settings
-    }
-
     pub fn registered_stake_accounts(&self) -> HashMap<String, StakeAccount> {
         self.users
             .values()
@@ -91,6 +87,10 @@ impl TestContext {
     }
 }
 
+pub fn to_valid_account_id(account_id: &str) -> ValidAccountId {
+    account_id.try_into().unwrap()
+}
+
 pub fn create_context() -> TestContext {
     let (runtime, signer, ..) = init_runtime(None);
     let runtime = Rc::new(RefCell::new(runtime));
@@ -98,12 +98,10 @@ pub fn create_context() -> TestContext {
     let contract_owner = master_account.create_user("oysterpack".to_string(), 1000 * YOCTO);
     let contract_operator = contract_owner.create_user("operator".to_string(), 10 * YOCTO);
 
-    let staking_pool_id = "astro-stakers-poolv1";
-    let settings = ContractSettings::new(
-        staking_pool_id.to_string(),
-        contract_operator.account_id(),
-        None,
-    );
+    const STAKING_POOL_ID: &str = "astro-stakers-poolv1";
+    let staking_pool_id = to_valid_account_id(STAKING_POOL_ID);
+    let contract_owner_id = to_valid_account_id(&contract_owner.account_id());
+    let contract_operator_id = to_valid_account_id(&contract_operator.account_id());
 
     let contract = deploy!(
         // Contract Proxy
@@ -115,7 +113,7 @@ pub fn create_context() -> TestContext {
         // User deploying the contract,
         signer_account: master_account,
         // init method
-        init_method: new(None, settings.clone())
+        init_method: new(staking_pool_id, contract_owner_id, contract_operator_id)
     );
     let contract_account_id = contract.user_account.account_id();
 
@@ -142,7 +140,7 @@ pub fn create_context() -> TestContext {
     );
 
     let staking_service = StakingServiceClient::new(&contract_account_id);
-    let staking_pool = StakingPoolClient::new(staking_pool_id, &contract_account_id);
+    let staking_pool = StakingPoolClient::new(STAKING_POOL_ID, &contract_account_id);
     let account_management = AccountManagementClient::new(&contract_account_id);
     let operator = OperatorClient::new(&contract_account_id);
     let financials = FinancialsClient::new(&contract_account_id);
@@ -155,7 +153,6 @@ pub fn create_context() -> TestContext {
         contract_account_id,
         contract_owner,
         contract_operator,
-        settings,
 
         users,
         staking_pool,

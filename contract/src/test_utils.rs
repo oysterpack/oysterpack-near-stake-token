@@ -1,11 +1,15 @@
+#![allow(dead_code)]
+
 use crate::interface::{AccountManagement, YoctoNear};
 use crate::near_env::Env;
-use crate::{near::*, ContractSettings, StakeTokenContract};
+use crate::{near::*, StakeTokenContract};
+use near_sdk::json_types::ValidAccountId;
 use near_sdk::test_utils::get_created_receipts;
 use near_sdk::{
     serde::{Deserialize, Serialize},
     serde_json, testing_env, AccountId, MockedBlockchain, PromiseResult, VMContext,
 };
+use std::convert::TryInto;
 
 pub const EXPECTED_ACCOUNT_STORAGE_USAGE: u64 = 681;
 
@@ -15,31 +19,49 @@ pub struct TestContext<'a> {
     pub context: VMContext,
 }
 
-const ACCOUNT_ID: &str = "oysterpack.near";
+pub const TEST_ACCOUNT_ID: &str = "oysterpack.near";
+
+pub const TEST_STAKING_POOL_ID: &str = "staking-pool.near";
+pub const TEST_OWNER_ID: &str = "owner.stake.oysterpack.near";
+pub const TEST_OPERATOR_ID: &str = "operator.stake.oysterpack.near";
+
+pub fn to_valid_account_id(account_id: &str) -> ValidAccountId {
+    account_id.try_into().unwrap()
+}
 
 impl<'a> TestContext<'a> {
-    pub fn new(contract_settings: Option<ContractSettings>) -> Self {
-        let mut context = new_context(ACCOUNT_ID);
+    pub fn with_vm_context(context: VMContext) -> Self {
+        let mut context = context.clone();
         context.is_view = false;
         testing_env!(context.clone());
 
-        let contract_settings = contract_settings.unwrap_or_else(default_contract_settings);
-        let contract = StakeTokenContract::new(None, contract_settings);
+        let contract = StakeTokenContract::new(
+            to_valid_account_id(TEST_STAKING_POOL_ID),
+            to_valid_account_id(TEST_OWNER_ID),
+            to_valid_account_id(TEST_OPERATOR_ID),
+        );
 
         Self {
             contract,
-            account_id: ACCOUNT_ID,
+            account_id: TEST_ACCOUNT_ID,
             context,
         }
     }
 
-    pub fn with_registered_account(contract_settings: Option<ContractSettings>) -> Self {
-        let mut context = new_context(ACCOUNT_ID);
+    pub fn new() -> Self {
+        TestContext::with_vm_context(new_context(TEST_ACCOUNT_ID))
+    }
+
+    pub fn with_registered_account() -> Self {
+        let mut context = new_context(TEST_ACCOUNT_ID);
         context.is_view = false;
         testing_env!(context.clone());
 
-        let contract_settings = contract_settings.unwrap_or_else(default_contract_settings);
-        let mut contract = StakeTokenContract::new(None, contract_settings);
+        let mut contract = StakeTokenContract::new(
+            to_valid_account_id(TEST_STAKING_POOL_ID),
+            to_valid_account_id(TEST_OWNER_ID),
+            to_valid_account_id(TEST_OPERATOR_ID),
+        );
 
         context.attached_deposit = YOCTO;
         testing_env!(context.clone());
@@ -51,18 +73,35 @@ impl<'a> TestContext<'a> {
 
         Self {
             contract,
-            account_id: ACCOUNT_ID,
+            account_id: TEST_ACCOUNT_ID,
             context,
         }
     }
-}
 
-pub fn default_contract_settings() -> ContractSettings {
-    ContractSettings::new(
-        "staking-pool.near".into(),
-        "operator.stake.oysterpack.near".into(),
-        None,
-    )
+    pub fn register_owner(&mut self) {
+        self.register_account(TEST_OWNER_ID);
+    }
+
+    pub fn register_operator(&mut self) {
+        self.register_account(TEST_OPERATOR_ID);
+    }
+
+    pub fn register_account(&mut self, account_id: &str) {
+        let mut context = self.set_predecessor_account_id(account_id);
+        let contract = &mut self.contract;
+        context.attached_deposit = YOCTO;
+        testing_env!(context.clone());
+        contract.register_account();
+
+        context.attached_deposit = 0;
+        testing_env!(context);
+    }
+
+    pub fn set_predecessor_account_id(&mut self, account_id: &str) -> VMContext {
+        let mut context = self.context.clone();
+        context.predecessor_account_id = account_id.to_string();
+        context
+    }
 }
 
 pub fn stake_contract_account_id() -> AccountId {

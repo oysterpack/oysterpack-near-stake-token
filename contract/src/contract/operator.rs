@@ -85,23 +85,18 @@ impl Operator for StakeTokenContract {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::near::YOCTO;
     use crate::test_utils::*;
     use near_sdk::{serde_json, testing_env, MockedBlockchain};
 
     #[test]
     fn release_run_redeem_stake_batch_unstaking_lock_with_unstaking_lock() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = 100 * YOCTO;
-        testing_env!(context.clone());
+        let mut context = TestContext::new();
+        let contract = &mut context.contract;
+        let mut context = context.context.clone();
 
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
-
         context.predecessor_account_id = context.current_account_id.clone();
-        testing_env!(context.clone());
+        testing_env!(context);
         contract.release_run_redeem_stake_batch_unstaking_lock();
 
         assert!(contract.run_redeem_stake_batch_lock.is_none());
@@ -109,37 +104,32 @@ mod test {
 
     #[test]
     fn release_run_redeem_stake_batch_unstaking_lock_invoked_by_operator() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = 100 * YOCTO;
-        testing_env!(context.clone());
+        let mut context = TestContext::new();
+        let contract = &mut context.contract;
+        let mut context = context.context.clone();
 
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
-
         context.predecessor_account_id = contract.operator_id.clone();
-        testing_env!(context.clone());
+        testing_env!(context);
         contract.release_run_redeem_stake_batch_unstaking_lock();
-
         assert!(contract.run_redeem_stake_batch_lock.is_none());
     }
 
     #[test]
     fn release_run_redeem_stake_batch_unstaking_lock_with_pending_withdrawal_lock() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = 100 * YOCTO;
-        testing_env!(context.clone());
+        // Arrange
+        let mut context = TestContext::new();
+        let contract = &mut context.contract;
+        let mut context = context.context.clone();
 
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
         contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
-
         context.predecessor_account_id = context.current_account_id.clone();
         testing_env!(context.clone());
+
+        // Act
         contract.release_run_redeem_stake_batch_unstaking_lock();
 
+        // Assert
         assert_eq!(
             contract.run_redeem_stake_batch_lock,
             Some(RedeemLock::PendingWithdrawal)
@@ -149,26 +139,21 @@ mod test {
     #[test]
     #[should_panic(expected = "contract call is only allowed internally or by an operator account")]
     fn release_run_redeem_stake_batch_unstaking_lock_access_denied() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = 100 * YOCTO;
-        testing_env!(context.clone());
+        // Arrange
+        let mut context = TestContext::new();
+        let contract = &mut context.contract;
 
-        let contract_settings = default_contract_settings();
-        let mut contract = StakeTokenContract::new(None, contract_settings);
-
+        // Act
         contract.release_run_redeem_stake_batch_unstaking_lock();
     }
 
     #[test]
     fn contract_state_invoked_by_operator() {
-        let account_id = "alfio-zappala.near";
-        let mut context = new_context(account_id);
-        context.attached_deposit = 100 * YOCTO;
-        testing_env!(context.clone());
+        // Arrange
+        let mut context = TestContext::new();
+        let contract = &mut context.contract;
+        let mut context = context.context.clone();
 
-        let contract_settings = default_contract_settings();
-        let contract = StakeTokenContract::new(None, contract_settings);
         const CONTRACT_STATE_STORAGE_OVERHEAD: u64 = 45;
         context.storage_usage +=
             contract.try_to_vec().unwrap().len() as u64 + CONTRACT_STATE_STORAGE_OVERHEAD;

@@ -3,13 +3,18 @@ use crate::{
     domain::{Gas, YoctoNear, TGAS},
     interface,
 };
-use near_sdk::{
-    borsh::{self, BorshDeserialize, BorshSerialize},
-};
+use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 
 /// min contract balance required above the contract's locked balance used for storage staking to
 /// ensure the contract is operational
 pub const CONTRACT_MIN_OPERATIONAL_BALANCE: YoctoNear = YoctoNear(YOCTO);
+
+/// Basic compute.
+pub const GAS_BASE_COMPUTE: Gas = Gas(5_000_000_000_000);
+/// Fee for function call promise.
+pub const GAS_FOR_PROMISE: Gas = Gas(5_000_000_000_000);
+/// Fee for the `.then` call.
+pub const GAS_FOR_DATA_DEPENDENCY: Gas = Gas(10_000_000_000_000);
 
 #[derive(Debug, BorshSerialize, BorshDeserialize, Clone, Copy)]
 pub struct Config {
@@ -75,13 +80,6 @@ impl Config {
         }
     }
 }
-
-/// Basic compute.
-pub const GAS_BASE_COMPUTE: Gas = Gas(5_000_000_000_000);
-/// Fee for function call promise.
-pub const GAS_FOR_PROMISE: Gas = Gas(5_000_000_000_000);
-/// Fee for the `.then` call.
-pub const GAS_FOR_DATA_DEPENDENCY: Gas = Gas(10_000_000_000_000);
 
 fn assert_gas_range(gas: Gas, min: u8, max: u8, field: &str) {
     assert!(
