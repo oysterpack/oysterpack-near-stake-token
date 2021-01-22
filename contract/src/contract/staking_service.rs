@@ -915,6 +915,7 @@ impl StakeTokenContract {
             }
         }
 
+        /// for a pending withdrawal, funds can also be claimed against the liquidity pool
         fn claim_redeemed_stake_for_batch_pending_withdrawal(
             contract: &mut StakeTokenContract,
             account: &mut Account,
@@ -923,23 +924,22 @@ impl StakeTokenContract {
         ) {
             // how much STAKE did the account redeem in the batch
             let redeemed_stake = account_batch.balance().amount();
-            // compute STAKE liquidity
-            let stake_liquidity = receipt
-                .stake_token_value()
-                .near_to_stake(contract.near_liquidity_pool);
-            // compute how much STAKE can be redeemed from liquidity pool
-            let redeemable_stake = if stake_liquidity >= redeemed_stake {
-                redeemed_stake
+
+            let redeemed_stake_near_value =
+                receipt.stake_token_value().stake_to_near(redeemed_stake);
+            let claimed_near = if contract.near_liquidity_pool >= redeemed_stake_near_value {
+                redeemed_stake_near_value
             } else {
-                stake_liquidity
+                contract.near_liquidity_pool
             };
+            let redeemable_stake = receipt.stake_token_value().near_to_stake(claimed_near);
             account_batch.remove(redeemable_stake);
 
             // claim the STAKE tokens for the account
-            let near = receipt.stake_token_value().stake_to_near(redeemable_stake);
-            account.apply_near_credit(near);
-            contract.near_liquidity_pool -= near;
-            contract.total_near.credit(near);
+            // let near = receipt.stake_token_value().stake_to_near(redeemable_stake);
+            account.apply_near_credit(claimed_near);
+            contract.near_liquidity_pool -= claimed_near;
+            contract.total_near.credit(claimed_near);
 
             // track that the STAKE tokens were claimed
             receipt.stake_tokens_redeemed(redeemable_stake);
@@ -1851,6 +1851,718 @@ mod test_withdraw_all {
 
         // Assert
         assert_eq!(amount.value(), 0);
+    }
+}
+
+#[cfg(test)]
+mod test_claim_receipts {
+    use super::*;
+
+    use crate::domain::BlockTimeHeight;
+    use crate::test_utils::*;
+    use crate::{interface::AccountManagement, near::YOCTO};
+    use near_sdk::{testing_env, MockedBlockchain};
+    use std::convert::TryInto;
+
+    #[test]
+    #[should_panic(expected = "account is not registered")]
+    fn when_account_is_not_registered() {
+        // Arrange
+        let mut test_context = TestContext::new();
+        let contract = &mut test_context.contract;
+
+        // Act
+        contract.claim_receipts();
+    }
+
+    /// Given the account has no funds in stake batches
+    /// When funds are claimed
+    /// Then there should be no effect
+    #[test]
+    fn when_account_has_no_batches() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+        let contract = &mut test_context.contract;
+
+        // Act
+        contract.claim_receipts();
+    }
+
+    /// Given the account has funds in the stake batch
+    /// And there is no receipt for the batch
+    /// When funds are claimed
+    /// Then there should be no effect on the account
+    #[test]
+    fn when_account_has_funds_in_unprocessed_stake_batch() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+        let contract = &mut test_context.contract;
+
+        // deposit NEAR into StakeBatch
+        test_context.context.attached_deposit = YOCTO;
+        testing_env!(test_context.context.clone());
+        let batch_id = contract.deposit();
+
+        // Act
+        contract.claim_receipts();
+
+        // Assert
+        let account = contract
+            .lookup_account(test_context.account_id.try_into().unwrap())
+            .unwrap();
+        let stake_batch = account.stake_batch.unwrap();
+        assert_eq!(stake_batch.id, batch_id.into());
+        assert_eq!(stake_batch.balance.amount, YOCTO.into());
+        assert!(account.stake.is_none());
+    }
+
+    /// Given the account has funds in the stake batch
+    /// And there is a receipt for the batch with additional funds batched into it
+    /// When funds are claimed
+    /// Then the STAKE tokens should be credited to the account
+    /// And the receipt NEAR balance should have been debited
+    #[test]
+    fn when_account_has_batch_with_receipt() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+        let contract = &mut test_context.contract;
+        let mut context = test_context.context.clone();
+
+        context.attached_deposit = YOCTO;
+        testing_env!(context.clone());
+        let batch_id = contract.deposit();
+        let batch_id: domain::BatchId = domain::BatchId(batch_id.into());
+
+        // create a receipt for the batch to simulate that the batch has been staked
+        {
+            let stake_token_value =
+                domain::StakeTokenValue::new(Default::default(), YOCTO.into(), YOCTO.into());
+            let receipt = domain::StakeBatchReceipt::new(
+                (context.attached_deposit * 2).into(), // simulate that other accounts have deposited into the same batch
+                stake_token_value,
+            );
+            contract.stake_batch_receipts.insert(&batch_id, &receipt);
+        }
+
+        // Act
+        contract.claim_receipts();
+
+        // Assert
+        let account = contract.predecessor_registered_account().account;
+        assert_eq!(
+            account.stake.unwrap().amount().value(),
+            YOCTO,
+            "the funds should have been claimed by the account"
+        );
+        assert!(
+            account.stake_batch.is_none(),
+            "stake batch should be set to None"
+        );
+        let receipt = contract.stake_batch_receipts.get(&batch_id.into()).unwrap();
+        assert_eq!(
+            receipt.staked_near().value(),
+            YOCTO,
+            "claiming STAKE tokens should have reduced the near balance on the receipt"
+        );
+    }
+
+    /// Given the account has funds in the stake batch
+    /// And there is a receipt for the batch with exact matching funds
+    /// When funds are claimed
+    /// Then the STAKE tokens should be credited to the account
+    /// And the receipt is deleted
+    #[test]
+    fn when_all_funds_on_stake_batch_receipt_are_claimed() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+        let contract = &mut test_context.contract;
+        let mut context = test_context.context.clone();
+
+        context.attached_deposit = YOCTO;
+        testing_env!(context.clone());
+        let batch_id = contract.deposit();
+        let batch_id: domain::BatchId = domain::BatchId(batch_id.into());
+
+        let stake_token_value =
+            domain::StakeTokenValue::new(Default::default(), YOCTO.into(), YOCTO.into());
+        let receipt =
+            domain::StakeBatchReceipt::new(context.attached_deposit.into(), stake_token_value);
+        contract.stake_batch_receipts.insert(&batch_id, &receipt);
+
+        // Act
+        contract.claim_receipts();
+
+        // Assert
+        let account = contract.predecessor_registered_account().account;
+
+        assert_eq!(
+            account.stake.unwrap().amount().value(),
+            context.attached_deposit,
+            "the funds should have been claimed by the account"
+        );
+        assert!(
+            account.stake_batch.is_none(),
+            "stake batch should be set to None"
+        );
+        assert!(
+            contract.stake_batch_receipts.get(&batch_id).is_none(),
+            "when all STAKE tokens are claimed, then the receipt should have been deleted"
+        );
+    }
+
+    /// Given Account::stake_batch and Account::next_stake_batch both have funds
+    /// And there are exact receipts for both batches
+    /// Then STAKE tokens should be claimed for both
+    /// And the receipts should be deleted
+    #[test]
+    fn when_account_has_stake_batch_and_next_stake_batch_funds_with_receipts() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+        let contract = &mut test_context.contract;
+        let mut context = test_context.context.clone();
+
+        context.attached_deposit = YOCTO;
+        testing_env!(context.clone());
+        let batch_id = contract.deposit();
+        let batch_id_1: domain::BatchId = domain::BatchId(batch_id.into());
+
+        contract.run_stake_batch_locked = true;
+        context.attached_deposit = YOCTO * 2;
+        testing_env!(context.clone());
+        let batch_id = contract.deposit();
+        let batch_id_2: domain::BatchId = domain::BatchId(batch_id.into());
+        assert_ne!(batch_id_1, batch_id_2);
+
+        {
+            let stake_token_value =
+                domain::StakeTokenValue::new(Default::default(), YOCTO.into(), YOCTO.into());
+            contract.stake_batch_receipts.insert(
+                &batch_id_1,
+                &domain::StakeBatchReceipt::new(YOCTO.into(), stake_token_value),
+            );
+            contract.stake_batch_receipts.insert(
+                &batch_id_2,
+                &domain::StakeBatchReceipt::new((YOCTO * 2).into(), stake_token_value),
+            );
+        }
+
+        contract.run_stake_batch_locked = false;
+
+        // Act
+        contract.claim_receipts();
+
+        // Assert
+        assert!(contract.stake_batch_receipts.get(&batch_id_1).is_none());
+        assert!(contract.stake_batch_receipts.get(&batch_id_2).is_none());
+
+        let account = contract.predecessor_registered_account().account;
+        // and the account batches have been cleared
+        assert!(account.stake_batch.is_none());
+        assert!(account.next_stake_batch.is_none());
+        // and the STAKE tokens were claimed and credited to the account
+        assert_eq!(account.stake.unwrap().amount().value(), 3 * YOCTO);
+    }
+
+    #[test]
+    fn when_account_has_stake_batch_and_next_stake_batch_funds_with_receipt_for_stake_batch() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+        let contract = &mut test_context.contract;
+        let mut context = test_context.context.clone();
+
+        context.attached_deposit = YOCTO;
+        testing_env!(context.clone());
+        let batch_id = contract.deposit();
+        let batch_id_1: domain::BatchId = domain::BatchId(batch_id.into());
+
+        contract.run_stake_batch_locked = true;
+        context.attached_deposit = YOCTO * 2;
+        testing_env!(context.clone());
+        let batch_id = contract.deposit();
+        let batch_id_2: domain::BatchId = domain::BatchId(batch_id.into());
+        assert_ne!(batch_id_1, batch_id_2);
+
+        {
+            let stake_token_value =
+                domain::StakeTokenValue::new(Default::default(), YOCTO.into(), YOCTO.into());
+            contract.stake_batch_receipts.insert(
+                &batch_id_1,
+                &domain::StakeBatchReceipt::new(YOCTO.into(), stake_token_value),
+            );
+        }
+
+        contract.run_stake_batch_locked = false;
+
+        // Act
+        contract.claim_receipts();
+
+        // Assert
+        assert!(contract.stake_batch_receipts.get(&batch_id_1).is_none());
+
+        let account = contract.predecessor_registered_account().account;
+        // and the account batches have been cleared
+        assert_eq!(account.stake_batch.unwrap().id(), batch_id_2);
+        assert!(account.next_stake_batch.is_none());
+        // and the STAKE tokens were claimed and credited to the account
+        assert_eq!(account.stake.unwrap().amount().value(), YOCTO);
+    }
+
+    /// Given an account has redeemed STAKE
+    /// And the batch has completed
+    /// Then the account can claim the NEAR funds
+    #[test]
+    fn when_account_has_redeem_stake_batch_with_receipt() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+        let contract = &mut test_context.contract;
+
+        let mut account = contract.predecessor_registered_account();
+        account.apply_stake_credit(YOCTO.into());
+        contract.save_registered_account(&account);
+        let batch_id = contract
+            .redeem_all()
+            .map(|batch_id| domain::BatchId(batch_id.into()))
+            .unwrap();
+
+        contract.redeem_stake_batch_receipts.insert(
+            &batch_id,
+            &domain::RedeemStakeBatchReceipt::new((2 * YOCTO).into(), contract.stake_token_value),
+        );
+
+        // Act
+        contract.claim_receipts();
+
+        // Assert
+        let account = contract.predecessor_registered_account().account;
+        assert_eq!(account.near.unwrap().amount(), (YOCTO).into());
+        assert!(account.redeem_stake_batch.is_none());
+
+        // Then there should be 1 STAKE left unclaimed on the receipt
+        let receipt = contract.redeem_stake_batch_receipts.get(&batch_id).unwrap();
+        assert_eq!(receipt.redeemed_stake(), YOCTO.into());
+    }
+
+    #[test]
+    fn when_account_has_redeem_stake_batch_and_next_redeem_stake_batch_with_receipts_for_both() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+        let contract = &mut test_context.contract;
+
+        let batch_id_1 = {
+            let mut account = contract.predecessor_registered_account();
+            account.apply_stake_credit(YOCTO.into());
+            contract.save_registered_account(&account);
+            let batch_id = contract
+                .redeem_all()
+                .map(|batch_id| domain::BatchId(batch_id.into()))
+                .unwrap();
+            contract.redeem_stake_batch_receipts.insert(
+                &batch_id,
+                &domain::RedeemStakeBatchReceipt::new(
+                    (2 * YOCTO).into(),
+                    contract.stake_token_value,
+                ),
+            );
+            batch_id
+        };
+
+        let batch_id_2 = {
+            let mut account = contract.predecessor_registered_account();
+            account.apply_stake_credit(YOCTO.into());
+            contract.save_registered_account(&account);
+            contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+            let batch_id = contract
+                .redeem_all()
+                .map(|batch_id| domain::BatchId(batch_id.into()))
+                .unwrap();
+            contract.redeem_stake_batch_receipts.insert(
+                &batch_id,
+                &domain::RedeemStakeBatchReceipt::new(
+                    (4 * YOCTO).into(),
+                    contract.stake_token_value,
+                ),
+            );
+            contract.run_redeem_stake_batch_lock = None;
+            batch_id
+        };
+
+        // Act
+        contract.claim_receipts();
+
+        // Assert
+        let account = contract.predecessor_registered_account().account;
+        assert_eq!(account.near.unwrap().amount(), (2 * YOCTO).into());
+        assert!(account.redeem_stake_batch.is_none());
+        assert!(account.next_redeem_stake_batch.is_none());
+
+        // Then there should be 1 STAKE left unclaimed on the receipt
+        let receipt = contract
+            .redeem_stake_batch_receipts
+            .get(&batch_id_1)
+            .unwrap();
+        assert_eq!(receipt.redeemed_stake(), YOCTO.into());
+
+        let receipt = contract
+            .redeem_stake_batch_receipts
+            .get(&batch_id_2)
+            .unwrap();
+        assert_eq!(receipt.redeemed_stake(), (3 * YOCTO).into());
+    }
+
+    #[test]
+    fn when_account_has_redeem_stake_batch_and_next_redeem_stake_batch_with_receipt_for_both_fully_claimed(
+    ) {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+        let contract = &mut test_context.contract;
+
+        let batch_id_1 = {
+            let mut account = contract.predecessor_registered_account();
+            account.apply_stake_credit(YOCTO.into());
+            contract.save_registered_account(&account);
+            let batch_id = contract
+                .redeem_all()
+                .map(|batch_id| domain::BatchId(batch_id.into()))
+                .unwrap();
+            contract.redeem_stake_batch_receipts.insert(
+                &batch_id,
+                &domain::RedeemStakeBatchReceipt::new(YOCTO.into(), contract.stake_token_value),
+            );
+            batch_id
+        };
+
+        let batch_id_2 = {
+            let mut account = contract.predecessor_registered_account();
+            account.apply_stake_credit(YOCTO.into());
+            contract.save_registered_account(&account);
+            contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+            let batch_id = contract
+                .redeem_all()
+                .map(|batch_id| domain::BatchId(batch_id.into()))
+                .unwrap();
+            contract.redeem_stake_batch_receipts.insert(
+                &batch_id,
+                &domain::RedeemStakeBatchReceipt::new(YOCTO.into(), contract.stake_token_value),
+            );
+            contract.run_redeem_stake_batch_lock = None;
+            batch_id
+        };
+
+        // Act
+        contract.claim_receipts();
+
+        // Assert
+        let account = contract.predecessor_registered_account().account;
+        assert_eq!(account.near.unwrap().amount(), (2 * YOCTO).into());
+        assert!(account.redeem_stake_batch.is_none());
+        assert!(account.next_redeem_stake_batch.is_none());
+
+        // Then there should be 1 STAKE left unclaimed on the receipt
+        assert!(contract
+            .redeem_stake_batch_receipts
+            .get(&batch_id_1)
+            .is_none());
+        assert!(contract
+            .redeem_stake_batch_receipts
+            .get(&batch_id_2)
+            .is_none());
+    }
+
+    #[test]
+    fn when_account_has_redeem_stake_batch_and_next_redeem_stake_batch_with_receipts_for_current() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+        let contract = &mut test_context.contract;
+
+        {
+            let mut account = contract.predecessor_registered_account();
+            account.apply_stake_credit(YOCTO.into());
+            contract.save_registered_account(&account);
+            let batch_id = contract
+                .redeem_all()
+                .map(|batch_id| domain::BatchId(batch_id.into()))
+                .unwrap();
+            contract.redeem_stake_batch_receipts.insert(
+                &batch_id,
+                &domain::RedeemStakeBatchReceipt::new(
+                    (2 * YOCTO).into(),
+                    contract.stake_token_value,
+                ),
+            );
+            batch_id
+        };
+
+        let batch_id_2 = {
+            let mut account = contract.predecessor_registered_account();
+            account.apply_stake_credit(YOCTO.into());
+            contract.save_registered_account(&account);
+            contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+            let batch_id = contract
+                .redeem_all()
+                .map(|batch_id| domain::BatchId(batch_id.into()))
+                .unwrap();
+            contract.run_redeem_stake_batch_lock = None;
+            batch_id
+        };
+
+        // Act
+        contract.claim_receipts();
+
+        // Assert
+        let account = contract.predecessor_registered_account().account;
+        assert_eq!(account.near.unwrap().amount(), YOCTO.into());
+        assert_eq!(account.redeem_stake_batch.unwrap().id(), batch_id_2);
+        assert!(account.next_redeem_stake_batch.is_none());
+    }
+
+    /// Given an account has redeemed STAKE
+    /// And the batch receipt is pending withdrawal
+    /// And there is enough NEAR liquidity to fulfill the claim
+    /// Then the account can claim the NEAR funds from the NEAR liquidity pool
+    #[test]
+    fn when_account_claims_against_liquidity() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+        let contract = &mut test_context.contract;
+        let mut context = test_context.context.clone();
+
+        let mut registered_account = contract.predecessor_registered_account();
+        let account = &mut registered_account.account;
+        account.apply_stake_credit(YOCTO.into());
+        contract.save_registered_account(&registered_account);
+
+        context.attached_deposit = YOCTO;
+        testing_env!(context.clone());
+        let batch_id = contract
+            .redeem_all()
+            .map(|id| domain::BatchId(id.into()))
+            .unwrap();
+
+        contract.near_liquidity_pool = YOCTO.into();
+        contract.redeem_stake_batch_receipts.insert(
+            &batch_id,
+            &domain::RedeemStakeBatchReceipt::new((2 * YOCTO).into(), contract.stake_token_value),
+        );
+        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+
+        // Act
+        contract.claim_receipts();
+
+        // Assert
+        let account = contract.predecessor_registered_account().account;
+        assert!(account.stake.is_none());
+        assert_eq!(account.near.unwrap().amount(), YOCTO.into());
+        assert!(account.redeem_stake_batch.is_none());
+        assert_eq!(contract.near_liquidity_pool, 0.into());
+        assert_eq!(
+            contract.pending_withdrawal().unwrap().redeemed_stake,
+            YOCTO.into()
+        );
+    }
+
+    /// Given an account has redeemed STAKE
+    /// And the batch receipt is pending withdrawal
+    /// And there is enough NEAR liquidity to fulfill the claim
+    /// And the receipt is fully claimed
+    /// Then the account can claim the NEAR funds from the NEAR liquidity pool
+    /// And the RedeemLock is set to None
+    /// And the receipt has been deleted
+    #[test]
+    fn when_account_claims_from_liquidity_pool_and_closes_out_pending_withdrawal() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+        let contract = &mut test_context.contract;
+        let mut context = test_context.context.clone();
+
+        let mut registered_account = contract.predecessor_registered_account();
+        let account = &mut registered_account.account;
+        account.apply_stake_credit(YOCTO.into());
+        contract.save_registered_account(&registered_account);
+
+        context.attached_deposit = YOCTO;
+        testing_env!(context.clone());
+        let batch_id = contract
+            .redeem_all()
+            .map(|id| domain::BatchId(id.into()))
+            .unwrap();
+
+        contract.near_liquidity_pool = YOCTO.into();
+        contract.redeem_stake_batch_receipts.insert(
+            &batch_id,
+            &domain::RedeemStakeBatchReceipt::new(YOCTO.into(), contract.stake_token_value),
+        );
+        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+
+        // Act
+        contract.claim_receipts();
+
+        // Assert
+        let account = contract.predecessor_registered_account().account;
+        assert!(account.stake.is_none());
+        assert_eq!(account.near.unwrap().amount(), YOCTO.into());
+        assert!(account.redeem_stake_batch.is_none());
+        assert_eq!(contract.near_liquidity_pool, 0.into());
+        assert!(contract.pending_withdrawal().is_none());
+        assert!(contract.run_redeem_stake_batch_lock.is_none());
+    }
+
+    #[test]
+    fn when_account_claims_from_liquidity_pool_and_liquidity_results_in_rounding_down_stake() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+        let contract = &mut test_context.contract;
+
+        let mut registered_account = contract.predecessor_registered_account();
+        let account = &mut registered_account.account;
+        account.apply_stake_credit(YOCTO.into());
+        contract.save_registered_account(&registered_account);
+
+        let batch_id = contract
+            .redeem_all()
+            .map(|id| domain::BatchId(id.into()))
+            .unwrap();
+
+        // contract has 1 NEAR in liquidity pool
+        contract.near_liquidity_pool = YOCTO.into();
+        // exchange rate is 1 STAKE -> 3 NEAR
+        contract.redeem_stake_batch_receipts.insert(
+            &batch_id,
+            &domain::RedeemStakeBatchReceipt::new(
+                YOCTO.into(),
+                domain::StakeTokenValue::new(
+                    BlockTimeHeight::from_env(),
+                    (3 * YOCTO).into(),
+                    YOCTO.into(),
+                ),
+            ),
+        );
+        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+
+        // Act
+        contract.claim_receipts();
+
+        // Assert
+        let account = contract.predecessor_registered_account().account;
+        // account's STAKE balance should be zero because all STAKE was redeemed
+        assert!(account.stake.is_none());
+
+        assert_eq!(account.near.unwrap().amount(), YOCTO.into());
+        assert_eq!(
+            account.redeem_stake_batch.unwrap().balance().amount(),
+            (YOCTO - (YOCTO / 3)).into()
+        );
+        assert_eq!(contract.near_liquidity_pool, 0.into());
+        assert_eq!(
+            contract.pending_withdrawal().unwrap().redeemed_stake,
+            (YOCTO - (YOCTO / 3)).into()
+        );
+        assert!(contract.run_redeem_stake_batch_lock.is_some());
+
+        // Arrange - unstaked NEAR has been withdrawn from staking pool
+        contract.run_redeem_stake_batch_lock = None;
+
+        // Act
+        contract.claim_receipts();
+
+        // Assert
+        let account = contract.predecessor_registered_account().account;
+        assert_eq!(account.near.unwrap().amount(), (3 * YOCTO + 1).into());
+        println!(
+            "account.redeem_stake_batch: {:?}",
+            account.redeem_stake_batch
+        );
+        assert!(account.redeem_stake_batch.is_none());
+        println!(
+            "contract.pending_withdrawal(): {:?}",
+            contract.pending_withdrawal()
+        );
+        assert!(contract.pending_withdrawal().is_none());
+    }
+
+    /// Given an account has redeemed STAKE into the current and next batches
+    /// And there is a receipt for the current batch
+    /// When the account claims funds, the current batch funds will be claimed
+    /// And the next batch gets moved into the current batch slot
+    #[test]
+    fn claim_redeem_stake_batch_receipts_for_current_and_next_batch_with_receipt_for_current() {
+        let mut ctx = TestContext::with_registered_account();
+        let contract = &mut ctx.contract;
+
+        let mut account = contract.predecessor_registered_account();
+        account.redeem_stake_batch = Some(domain::RedeemStakeBatch::new(
+            contract.batch_id_sequence,
+            (10 * YOCTO).into(),
+        ));
+        *contract.batch_id_sequence += 1;
+        account.next_redeem_stake_batch = Some(domain::RedeemStakeBatch::new(
+            contract.batch_id_sequence,
+            (15 * YOCTO).into(),
+        ));
+        contract.save_registered_account(&account);
+
+        contract.redeem_stake_batch_receipts.insert(
+            &(contract.batch_id_sequence.value() - 1).into(),
+            &domain::RedeemStakeBatchReceipt::new((10 * YOCTO).into(), contract.stake_token_value),
+        );
+
+        contract.claim_receipt_funds(&mut account);
+        contract.save_registered_account(&account);
+        let account = contract.predecessor_registered_account();
+        assert_eq!(account.near.unwrap().amount(), (10 * YOCTO).into());
+        assert_eq!(
+            account.redeem_stake_batch.unwrap().balance().amount(),
+            (15 * YOCTO).into()
+        );
+        assert!(account.next_redeem_stake_batch.is_none());
+        assert!(contract
+            .redeem_stake_batch_receipts
+            .get(&(contract.batch_id_sequence.value() - 1).into())
+            .is_none());
+    }
+
+    /// Given an account has redeemed STAKE
+    /// And the batch has completed
+    /// And there is a current batch pending withdrawal
+    /// Then the account can claim the NEAR funds
+    #[test]
+    fn claim_redeem_stake_batch_receipts_for_old_batch_receipt_while_pending_withdrawal_on_current_batch(
+    ) {
+        let mut ctx = TestContext::with_registered_account();
+        let contract = &mut ctx.contract;
+
+        let mut account = contract.predecessor_registered_account();
+        let batch_id = contract.batch_id_sequence;
+        account.redeem_stake_batch =
+            Some(domain::RedeemStakeBatch::new(batch_id, (10 * YOCTO).into()));
+        account.next_redeem_stake_batch = Some(domain::RedeemStakeBatch::new(
+            (batch_id.value() + 1).into(),
+            (10 * YOCTO).into(),
+        ));
+        contract.save_registered_account(&account);
+
+        *contract.batch_id_sequence += 10;
+        contract.redeem_stake_batch = Some(domain::RedeemStakeBatch::new(
+            contract.batch_id_sequence,
+            (100 * YOCTO).into(),
+        ));
+
+        contract.redeem_stake_batch_receipts.insert(
+            &batch_id,
+            &domain::RedeemStakeBatchReceipt::new((20 * YOCTO).into(), contract.stake_token_value),
+        );
+        contract.redeem_stake_batch_receipts.insert(
+            &(batch_id.value() + 1).into(),
+            &domain::RedeemStakeBatchReceipt::new((20 * YOCTO).into(), contract.stake_token_value),
+        );
+
+        contract.claim_receipt_funds(&mut account);
+        contract.save_registered_account(&account);
+        let account = contract.predecessor_registered_account();
+        assert_eq!(account.near.unwrap().amount(), (20 * YOCTO).into());
+        assert!(account.redeem_stake_batch.is_none());
+
+        let receipt = contract.redeem_stake_batch_receipts.get(&batch_id).unwrap();
+        assert_eq!(receipt.redeemed_stake(), (10 * YOCTO).into());
     }
 }
 
@@ -3102,7 +3814,7 @@ mod test {
     /// And the batch has completed
     /// Then the account can claim the NEAR funds
     #[test]
-    fn claim_redeem_stake_batch_receipts_for_current_batch() {
+    fn claim_receipt_funds_on_reddeem_stake_batch_receipt() {
         let mut test_ctx = TestContext::with_registered_account();
         let contract = &mut test_ctx.contract;
 
@@ -3111,8 +3823,6 @@ mod test {
             contract.batch_id_sequence,
             (10 * YOCTO).into(),
         ));
-        contract.save_registered_account(&account);
-
         contract.redeem_stake_batch_receipts.insert(
             &contract.batch_id_sequence,
             &domain::RedeemStakeBatchReceipt::new((20 * YOCTO).into(), contract.stake_token_value),
@@ -3237,6 +3947,7 @@ mod test {
     #[test]
     fn claim_redeem_stake_batch_receipts_for_current_batch_pending_withdrawal_with_full_near_liquidity_available_and_receipt_fully_claimed(
     ) {
+        // Arrange
         let mut test_ctx = TestContext::with_registered_account();
         let contract = &mut test_ctx.contract;
 
@@ -3263,8 +3974,10 @@ mod test {
             ),
         );
 
-        contract.claim_receipt_funds(&mut account);
-        contract.save_registered_account(&account);
+        // Act
+        contract.claim_receipts();
+
+        // Assert
         let account = contract.predecessor_registered_account();
         assert_eq!(account.near.unwrap().amount(), (10 * YOCTO).into());
         assert!(account.redeem_stake_batch.is_none());
@@ -3285,14 +3998,24 @@ mod test {
     /// And the next batch gets moved into the current batch slot
     #[test]
     fn claim_redeem_stake_batch_receipts_for_current_and_next_batch_with_receipt_for_current() {
+        // Arrange
         let mut test_ctx = TestContext::with_registered_account();
         let contract = &mut test_ctx.contract;
 
+        // account has redeemed 10 STAKE in current batch and 15 STAKE in next batch
         let mut account = contract.predecessor_registered_account();
         account.redeem_stake_batch = Some(domain::RedeemStakeBatch::new(
             contract.batch_id_sequence,
             (10 * YOCTO).into(),
         ));
+        //contract has receipt that matches exact value of account's batch amount
+        contract.redeem_stake_batch_receipts.insert(
+            &(contract.batch_id_sequence.value()).into(),
+            &domain::RedeemStakeBatchReceipt::new(
+                account.redeem_stake_batch.unwrap().balance().amount(),
+                contract.stake_token_value,
+            ),
+        );
         *contract.batch_id_sequence += 1;
         account.next_redeem_stake_batch = Some(domain::RedeemStakeBatch::new(
             contract.batch_id_sequence,
@@ -3300,19 +4023,12 @@ mod test {
         ));
         contract.save_registered_account(&account);
 
-        contract.redeem_stake_batch_receipts.insert(
-            &(contract.batch_id_sequence.value() - 1).into(),
-            &domain::RedeemStakeBatchReceipt::new((10 * YOCTO).into(), contract.stake_token_value),
-        );
+        // Act
+        contract.claim_receipts();
 
-        contract.claim_receipt_funds(&mut account);
-        contract.save_registered_account(&account);
+        // Assert
         let account = contract.predecessor_registered_account();
         assert_eq!(account.near.unwrap().amount(), (10 * YOCTO).into());
-        assert_eq!(
-            account.redeem_stake_batch.unwrap().balance().amount(),
-            (15 * YOCTO).into()
-        );
         assert!(account.next_redeem_stake_batch.is_none());
         assert!(contract
             .redeem_stake_batch_receipts
@@ -3692,7 +4408,4 @@ mod test {
             new_stake_token_value.stake_to_near(YOCTO.into())
         );
     }
-
-    #[test]
-    fn validate_sums() {}
 }
