@@ -104,9 +104,6 @@
 //! STAKE token value in NEAR = `total staked NEAR balance / total STAKE token supply`
 //!
 
-// TODO: comment out when doing a release build
-// #![allow(dead_code, unused_variables)]
-
 pub mod config;
 mod contract;
 pub mod core;
@@ -323,11 +320,6 @@ impl StakeTokenContract {
         }
 
         contract
-    }
-
-    // TODO: remove - added to provide example for https://github.com/near/near-sdk-rs/issues/262
-    pub fn get_staking_pool_id(&self) -> AccountId {
-        self.staking_pool_id.clone()
     }
 }
 

@@ -250,6 +250,9 @@ impl StakingPoolGasConfig {
     }
 }
 
+// TODO: fine tune gas config and then freeze the config because once the contract is deployed it is
+//       dangerous for the operator to change the gas config for callbacks.
+// TODO: measure gas config for callbacks by temporarily exposing the callback funds on the contract
 #[derive(Debug, BorshSerialize, BorshDeserialize, Clone, Copy)]
 pub struct CallBacksGasConfig {
     on_run_stake_batch: Gas,
