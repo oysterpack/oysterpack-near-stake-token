@@ -170,8 +170,10 @@ pub trait ResolveTransferCall {
     /// - `unused_amount` must be `U128` in range from `0` to `amount`. All other invalid values
     ///   are considered to be equal to be the total transfer amount.
     ///
+    /// Returns amount that was refunded back to the sender.
+    ///
     /// #\[private\]
-    fn resolve_transfer_call(
+    fn ft_resolve_transfer_call(
         &mut self,
         sender_id: ValidAccountId,
         receiver_id: ValidAccountId,
@@ -180,7 +182,7 @@ pub trait ResolveTransferCall {
         //
         // #[callback_result]
         // unused_amount: CallbackResult<TokenAmount>,
-    );
+    ) -> PromiseOrValue<TokenAmount>;
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

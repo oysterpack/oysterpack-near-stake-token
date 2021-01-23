@@ -29,6 +29,7 @@ impl FungibleToken for StakeTokenContract {
 
         let mut sender = self.predecessor_registered_account();
         sender.apply_stake_debit(stake_amount);
+        sender.apply_near_credit(1.into());
 
         let mut receiver = self.registered_account(receiver_id.as_ref());
         receiver.apply_stake_credit(stake_amount);
@@ -57,7 +58,7 @@ impl FungibleToken for StakeTokenContract {
             NO_DEPOSIT.value(),
             gas,
         )
-        .then(ext_resolve_transfer_call::resolve_transfer_call(
+        .then(ext_resolve_transfer_call::ft_resolve_transfer_call(
             env::predecessor_account_id(),
             receiver_id.as_ref().to_string(),
             amount,
@@ -85,12 +86,12 @@ impl FungibleToken for StakeTokenContract {
 #[near_bindgen]
 impl ResolveTransferCall for StakeTokenContract {
     #[private]
-    fn resolve_transfer_call(
+    fn ft_resolve_transfer_call(
         &mut self,
         sender_id: ValidAccountId,
         receiver_id: ValidAccountId,
         amount: TokenAmount,
-    ) {
+    ) -> PromiseOrValue<TokenAmount> {
         assert_eq!(
             env::promise_results_count(),
             1,
@@ -114,7 +115,7 @@ impl ResolveTransferCall for StakeTokenContract {
             unused_amount
         };
 
-        if unused_amount.value() > 0 {
+        let refund_amount = if unused_amount.value() > 0 {
             log!("receiver returned unused amount: {}", unused_amount);
             let mut sender = self.registered_account(sender_id.as_ref());
             let mut receiver = self.registered_account(receiver_id.as_ref());
@@ -132,10 +133,17 @@ impl ResolveTransferCall for StakeTokenContract {
                     self.save_registered_account(&receiver);
                     self.save_registered_account(&sender);
                     log!("sender has been refunded: {}", refund_amount.value());
+                    refund_amount.value().into()
                 }
-                None => log!("ERROR: receiver STAKE balance is zero"),
+                None => {
+                    log!("ERROR: receiver STAKE balance is zero");
+                    0.into()
+                }
             }
-        }
+        } else {
+            unused_amount
+        };
+        PromiseOrValue::Value(refund_amount)
     }
 }
 
@@ -163,7 +171,7 @@ pub trait ExtOnTransfer {
 
 #[ext_contract(ext_resolve_transfer_call)]
 pub trait ExtResolveTransferCall {
-    fn resolve_transfer_call(
+    fn ft_resolve_transfer_call(
         &mut self,
         sender_id: AccountId,
         receiver_id: AccountId,
