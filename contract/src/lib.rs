@@ -117,6 +117,7 @@ pub(crate) use contract::*;
 #[cfg(test)]
 pub(crate) mod test_utils;
 
+use crate::domain::StakeLock;
 use crate::{
     config::Config,
     core::Hash,
@@ -229,8 +230,8 @@ pub struct StakeTokenContract {
     redeem_stake_batch_receipts: LookupMap<BatchId, RedeemStakeBatchReceipt>,
 
     staking_pool_id: AccountId,
-    run_stake_batch_locked: bool,
-    run_redeem_stake_batch_lock: Option<RedeemLock>,
+    stake_batch_lock: Option<StakeLock>,
+    redeem_stake_batch_lock: Option<RedeemLock>,
 
     #[cfg(test)]
     #[borsh_skip]
@@ -278,8 +279,8 @@ impl StakeTokenContract {
             ),
             account_storage_usage: Default::default(),
             staking_pool_id: staking_pool_id.into(),
-            run_stake_batch_locked: false,
-            run_redeem_stake_batch_lock: None,
+            stake_batch_lock: None,
+            redeem_stake_batch_lock: None,
 
             total_account_storage_escrow: 0.into(),
             contract_initial_storage_usage: 0.into(), // computed after contract is created - see below
@@ -414,7 +415,7 @@ mod test {
             "config change block height should be set from the NEAR runtime env"
         );
         assert!(
-            !contract.run_stake_batch_locked,
+            !contract.stake_batch_locked(),
             "contract should not be locked"
         );
         assert_eq!(

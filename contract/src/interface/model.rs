@@ -7,6 +7,7 @@ mod contract_balances;
 pub mod contract_state;
 mod epoch_height;
 mod gas;
+mod lock;
 mod redeem_stake_batch;
 mod redeem_stake_batch_receipt;
 mod stake_account;

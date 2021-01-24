@@ -96,7 +96,7 @@ impl StakeTokenContract {
                         // move the liquidity to the contract's NEAR balance to make it available for withdrawal
                         self.near_liquidity_pool -= stake_near_value;
                         self.total_near.credit(stake_near_value);
-                        self.run_redeem_stake_batch_lock = None;
+                        self.redeem_stake_batch_lock = None;
                         self.pop_redeem_stake_batch();
                     }
                 }
@@ -241,7 +241,7 @@ impl StakeTokenContract {
     }
 
     pub(crate) fn invoke_release_run_stake_batch_lock(&self) -> Promise {
-        ext_staking_workflow_callbacks::release_run_stake_batch_lock(
+        ext_staking_workflow_callbacks::clear_stake_batch_lock(
             &env::current_account_id(),
             NO_DEPOSIT.into(),
             self.config.gas_config().callbacks().unlock().value(),
@@ -412,7 +412,7 @@ mod test {
         testing_env!(context.clone());
 
         // Given there is a pending withdrawal
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+        contract.redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
         *contract.batch_id_sequence += 1;
         let redeem_stake_batch =
             domain::RedeemStakeBatch::new(contract.batch_id_sequence, (10 * YOCTO).into());
@@ -542,7 +542,7 @@ mod test {
 
         // Given there is a pending withdrawal for 10 NEAR
         {
-            contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+            contract.redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
             *contract.batch_id_sequence += 1;
             let redeem_stake_batch =
                 domain::RedeemStakeBatch::new(contract.batch_id_sequence, (10 * YOCTO).into());

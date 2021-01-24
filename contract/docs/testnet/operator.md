@@ -7,6 +7,10 @@ near view $CONTRACT config
 
 ### Stateful Func Calls
 ```shell
+near call $CONTRACT clear_stake_batch_lock --accountId oysterpack.testnet
+
+near call $CONTRACT clear_redeem_stake_batch_lock --accountId oysterpack.testnet
+
 near call $CONTRACT reset_config_default --accountId oysterpack.testnet
 
 near call $CONTRACT update_config --accountId oysterpack.testnet --args '{"config":{"gas_config":{"callbacks":{"on_run_stake_batch":125000000000000}}}}'

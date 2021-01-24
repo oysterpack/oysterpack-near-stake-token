@@ -1,32 +1,9 @@
-use crate::domain::YoctoNear;
-use near_sdk::{
-    borsh::{self, BorshDeserialize, BorshSerialize},
-    serde::{Deserialize, Serialize},
-};
+use crate::{domain, interface::YoctoNear};
 
-#[derive(
-    BorshSerialize,
-    BorshDeserialize,
-    Serialize,
-    Deserialize,
-    Debug,
-    Clone,
-    Copy,
-    Eq,
-    PartialEq,
-    Ord,
-    PartialOrd,
-)]
+use near_sdk::serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
-pub enum RedeemLock {
-    Unstaking,
-    /// while locked on pending withdrawal of unstaked funds, the receipt for the specified
-    /// batch ID cannot be claimed
-    PendingWithdrawal,
-}
-
-/// [`Staking`] -> [`Staked`] -> DONE
-#[derive(BorshSerialize, BorshDeserialize, Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 pub enum StakeLock {
     /// requests have been submitted to staking pool to deposit and stake funds
     /// - is triggered by [StakingService::stake()](crate::interface::StakingService::stake)
@@ -42,4 +19,21 @@ pub enum StakeLock {
         staked_balance: YoctoNear,
         unstaked_balance: YoctoNear,
     },
+}
+
+impl From<domain::StakeLock> for StakeLock {
+    fn from(lock: domain::StakeLock) -> Self {
+        match lock {
+            domain::StakeLock::Staking => StakeLock::Staking,
+            domain::StakeLock::Staked {
+                near_liquidity,
+                staked_balance,
+                unstaked_balance,
+            } => StakeLock::Staked {
+                near_liquidity: near_liquidity.map(Into::into),
+                staked_balance: staked_balance.into(),
+                unstaked_balance: unstaked_balance.into(),
+            },
+        }
+    }
 }

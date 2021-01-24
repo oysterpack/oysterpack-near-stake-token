@@ -402,7 +402,7 @@ mod test_unregister_account {
         context.attached_deposit = YOCTO;
         testing_env!(context.clone());
         // setting the lock to true should cause the deposit to be put in the next stake batch
-        contract.run_stake_batch_locked = true;
+        contract.stake_batch_lock = Some(StakeLock::Staking);
         contract.deposit();
         // confirm that account has funds in next stake batch
         let registered_account = contract.registered_account(test_context.account_id);
@@ -444,7 +444,7 @@ mod test_unregister_account {
         registered_account.apply_stake_credit(YOCTO.into());
         contract.save_registered_account(&registered_account);
         // set lock to pending withdrawal to force STAKE funds to go into the next redeem batch
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+        contract.redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
         // pending withdrawal requires redeem stake batch to be present
         contract.redeem_stake_batch = Some(RedeemStakeBatch::new(
             contract.batch_id_sequence,
@@ -573,7 +573,7 @@ mod test_lookup_account {
             contract
                 .redeem_stake_batch_receipts
                 .insert(&batch.id(), &receipt);
-            contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+            contract.redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
         }
 
         context.is_view = true;

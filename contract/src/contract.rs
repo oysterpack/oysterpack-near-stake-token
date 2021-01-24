@@ -43,6 +43,10 @@ impl StakeTokenContract {
             PREDECESSOR_MUST_BE_OWNER
         );
     }
+
+    pub fn stake_batch_locked(&self) -> bool {
+        self.stake_batch_lock.is_some()
+    }
 }
 
 #[cfg(not(test))]

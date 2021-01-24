@@ -34,8 +34,8 @@ impl Operator for StakeTokenContract {
                     self.redeem_stake_batch_receipt(batch.id().into()),
                 )
             }),
-            run_stake_batch_locked: self.run_stake_batch_locked,
-            run_redeem_stake_batch_lock: self.run_redeem_stake_batch_lock,
+            stake_batch_lock: self.stake_batch_lock.map(Into::into),
+            redeem_stake_batch_lock: self.redeem_stake_batch_lock,
             balances: self.balances(),
             initial_storage_usage: self.contract_initial_storage_usage.into(),
             storage_usage_growth: (env::storage_usage()
@@ -68,16 +68,21 @@ impl Operator for StakeTokenContract {
         self.config.into()
     }
 
-    fn release_run_stake_batch_lock(&mut self) {
+    fn clear_stake_batch_lock(&mut self) {
         self.assert_predecessor_is_self_or_operator();
-        self.run_stake_batch_locked = false;
+
+        // we only want to release the stake batch lock if the batch funds have not transferred over
+        // to the staking pool
+        if let Some(StakeLock::Staking) = self.stake_batch_lock {
+            self.stake_batch_lock = None;
+        }
     }
 
-    fn release_run_redeem_stake_batch_unstaking_lock(&mut self) {
+    fn clear_redeem_stake_batch_lock(&mut self) {
         self.assert_predecessor_is_self_or_operator();
 
-        if let Some(RedeemLock::Unstaking) = self.run_redeem_stake_batch_lock {
-            self.run_redeem_stake_batch_lock = None
+        if let Some(RedeemLock::Unstaking) = self.redeem_stake_batch_lock {
+            self.redeem_stake_batch_lock = None
         }
     }
 }
@@ -94,12 +99,12 @@ mod test {
         let contract = &mut context.contract;
         let mut context = context.context.clone();
 
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
+        contract.redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
         context.predecessor_account_id = context.current_account_id.clone();
         testing_env!(context);
-        contract.release_run_redeem_stake_batch_unstaking_lock();
+        contract.clear_redeem_stake_batch_lock();
 
-        assert!(contract.run_redeem_stake_batch_lock.is_none());
+        assert!(contract.redeem_stake_batch_lock.is_none());
     }
 
     #[test]
@@ -108,11 +113,11 @@ mod test {
         let contract = &mut context.contract;
         let mut context = context.context.clone();
 
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
+        contract.redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
         context.predecessor_account_id = contract.operator_id.clone();
         testing_env!(context);
-        contract.release_run_redeem_stake_batch_unstaking_lock();
-        assert!(contract.run_redeem_stake_batch_lock.is_none());
+        contract.clear_redeem_stake_batch_lock();
+        assert!(contract.redeem_stake_batch_lock.is_none());
     }
 
     #[test]
@@ -122,16 +127,16 @@ mod test {
         let contract = &mut context.contract;
         let mut context = context.context.clone();
 
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+        contract.redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
         context.predecessor_account_id = context.current_account_id.clone();
         testing_env!(context.clone());
 
         // Act
-        contract.release_run_redeem_stake_batch_unstaking_lock();
+        contract.clear_redeem_stake_batch_lock();
 
         // Assert
         assert_eq!(
-            contract.run_redeem_stake_batch_lock,
+            contract.redeem_stake_batch_lock,
             Some(RedeemLock::PendingWithdrawal)
         );
     }
@@ -144,7 +149,7 @@ mod test {
         let contract = &mut context.contract;
 
         // Act
-        contract.release_run_redeem_stake_batch_unstaking_lock();
+        contract.clear_redeem_stake_batch_lock();
     }
 
     #[test]

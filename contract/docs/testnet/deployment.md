@@ -7,6 +7,7 @@
 ## deploying contract to testnet
 ```shell
 export NEAR_ENV=testnet
+#export CONTRACT=stake.oysterpack.testnet
 export CONTRACT=stake-1.oysterpack.testnet
 
 # recreating stake.oysterpack.testnet account
@@ -16,7 +17,7 @@ near create-account $CONTRACT --masterAccount oysterpack.testnet
 near deploy --accountId $CONTRACT \
   --wasmFile res/oysterpack_near_stake_token.wasm \
   --initFunction new \
-  --initArgs '{"settings":{"staking_pool_id":"stakin.pool.f863973.m0", "operator_id":"oysterpack.testnet"}}'
+  --initArgs '{"staking_pool_id":"stakin.pool.f863973.m0", "owner_id":"oysterpack.testnet", "operator_id":"oysterpack.testnet"}'
   
 # redeploy - with no breaking state schema changes
 near deploy --accountId $CONTRACT --wasmFile res/oysterpack_near_stake_token.wasm 

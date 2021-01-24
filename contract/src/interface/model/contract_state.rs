@@ -1,3 +1,4 @@
+use crate::interface::model::lock::StakeLock;
 use crate::interface::{BlockHeight, ContractBalances, StorageUsage};
 use crate::{
     domain::RedeemLock,
@@ -36,8 +37,8 @@ pub struct ContractState {
     pub redeem_stake_batch: Option<RedeemStakeBatch>,
     pub next_redeem_stake_batch: Option<RedeemStakeBatch>,
 
-    pub run_stake_batch_locked: bool,
-    pub run_redeem_stake_batch_lock: Option<RedeemLock>,
+    pub stake_batch_lock: Option<StakeLock>,
+    pub redeem_stake_batch_lock: Option<RedeemLock>,
 
     pub balances: ContractBalances,
     /// total contract storage usage = [initial_storage_usage](ContractState::initial_storage_usage) + [storage_usage_growth](ContractState::storage_usage_growth)

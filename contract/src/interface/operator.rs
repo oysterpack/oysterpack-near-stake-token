@@ -34,15 +34,16 @@ pub trait Operator {
     /// - if not invoked by the operator account
     fn force_update_config(&mut self, config: Config) -> Config;
 
-    /// unlocks the contract
+    /// unlocks the contract if the [StateLock](crate::domain::StateLock) state is
+    /// [StateLock::Staking](crate::domain::StateLock::Staking)
     ///
     /// ## Panics
     /// if not invoked by self as callback or the operator account
-    fn release_run_stake_batch_lock(&mut self);
+    fn clear_stake_batch_lock(&mut self);
 
     /// if the [RedeemLock](crate::domain::RedeemLock) state is unstaking, then clear it
     ///
     /// ## Panics
     /// if not invoked by self as callback or the operator account
-    fn release_run_redeem_stake_batch_unstaking_lock(&mut self);
+    fn clear_redeem_stake_batch_lock(&mut self);
 }

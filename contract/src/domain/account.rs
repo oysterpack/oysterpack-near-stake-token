@@ -7,7 +7,7 @@ use crate::domain::{
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use std::ops::{Deref, DerefMut};
 
-#[derive(BorshSerialize, BorshDeserialize, Clone)]
+#[derive(BorshSerialize, BorshDeserialize, Clone, Copy)]
 pub struct Account {
     /// account is responsible for paying for its own storage fees
     /// the funds are escrowed and refunded when the account is unregistered

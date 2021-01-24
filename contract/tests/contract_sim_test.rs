@@ -334,7 +334,7 @@ fn unstake(ctx: &TestContext) {
     let initial_contract_state: ContractState = ctx.operator.contract_state(&ctx.master_account);
     let account_before_unstaking = ctx.contract().user_account.account();
     ctx.operator.contract_state(&ctx.master_account);
-    match initial_contract_state.run_redeem_stake_batch_lock {
+    match initial_contract_state.redeem_stake_batch_lock {
         None => {
             if let Some(batch) = initial_contract_state.redeem_stake_batch {
                 let result: ExecutionResult = ctx.staking_service.unstake(&ctx.contract_operator);

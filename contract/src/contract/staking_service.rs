@@ -77,7 +77,7 @@ impl StakingService for StakeTokenContract {
         assert!(self.can_run_batch(), BLOCKED_BY_BATCH_RUNNING);
         let batch = self.stake_batch.expect(STAKE_BATCH_SHOULD_EXIST);
 
-        self.run_stake_batch_locked = true;
+        self.stake_batch_lock = Some(StakeLock::Staking);
 
         self.distribute_earnings();
 
@@ -257,7 +257,7 @@ impl StakingService for StakeTokenContract {
         let mut account = self.predecessor_registered_account();
         self.claim_receipt_funds(&mut account);
 
-        if self.run_redeem_stake_batch_lock.is_none() {
+        if self.redeem_stake_batch_lock.is_none() {
             if let Some(batch) = account.redeem_stake_batch {
                 let amount = batch.balance().amount();
                 let batch_id = batch.id();
@@ -310,7 +310,7 @@ impl StakingService for StakeTokenContract {
         let mut account = self.predecessor_registered_account();
         self.claim_receipt_funds(&mut account);
 
-        if self.run_redeem_stake_batch_lock.is_none() {
+        if self.redeem_stake_batch_lock.is_none() {
             if let Some(mut batch) = account.redeem_stake_batch {
                 let amount: domain::YoctoStake = amount.into();
                 assert!(
@@ -372,13 +372,13 @@ impl StakingService for StakeTokenContract {
     fn unstake(&mut self) -> Promise {
         assert!(self.can_run_batch(), BLOCKED_BY_BATCH_RUNNING);
 
-        match self.run_redeem_stake_batch_lock {
+        match self.redeem_stake_batch_lock {
             None => {
                 assert!(
                     self.redeem_stake_batch.is_some(),
                     NO_REDEEM_STAKE_BATCH_TO_RUN
                 );
-                self.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
+                self.redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
 
                 self.staking_pool_promise()
                     .get_account()
@@ -579,12 +579,12 @@ impl StakeTokenContract {
     }
 
     fn can_run_batch(&self) -> bool {
-        !self.run_stake_batch_locked && !self.is_unstaking()
+        !self.stake_batch_locked() && !self.is_unstaking()
     }
 
     fn can_unstake(&self) -> bool {
         if self.can_run_batch() {
-            match self.run_redeem_stake_batch_lock {
+            match self.redeem_stake_batch_lock {
                 None => self.redeem_stake_batch.is_some(),
                 Some(RedeemLock::PendingWithdrawal) => {
                     let batch = self
@@ -620,7 +620,7 @@ impl StakeTokenContract {
         self.claim_receipt_funds(account);
 
         // use current batch if not staking, i.e., the stake batch is not running
-        if !self.run_stake_batch_locked {
+        if !self.stake_batch_locked() {
             // apply at contract level
             let mut contract_batch = self.stake_batch.unwrap_or_else(|| self.new_stake_batch());
             contract_batch.add(amount);
@@ -690,7 +690,7 @@ impl StakeTokenContract {
             account.stake = None;
         }
 
-        match self.run_redeem_stake_batch_lock {
+        match self.redeem_stake_batch_lock {
             // use current batch
             None => {
                 // apply at contract level
@@ -791,7 +791,7 @@ impl StakeTokenContract {
                 account.apply_near_credit(near);
             }
 
-            if let Some(RedeemLock::PendingWithdrawal) = self.run_redeem_stake_batch_lock {
+            if let Some(RedeemLock::PendingWithdrawal) = self.redeem_stake_batch_lock {
                 // NEAR funds cannot be claimed from a receipt that is pending withdrawal from the staking pool
                 let batch_pending_withdrawal_id = self.redeem_stake_batch.as_ref().unwrap().id();
 
@@ -879,7 +879,7 @@ impl StakeTokenContract {
         //
         // NOTE: while the contract is locked for running a stake batch, all deposits must go into
         //       the next batch
-        if !self.run_stake_batch_locked && account.stake_batch.is_none() {
+        if !self.stake_batch_locked() && account.stake_batch.is_none() {
             account.stake_batch = account.next_stake_batch.take();
         }
 
@@ -949,7 +949,7 @@ impl StakeTokenContract {
                 contract
                     .redeem_stake_batch_receipts
                     .remove(&account_batch.id());
-                contract.run_redeem_stake_batch_lock = None;
+                contract.redeem_stake_batch_lock = None;
                 contract.pop_redeem_stake_batch();
             } else {
                 contract
@@ -960,7 +960,7 @@ impl StakeTokenContract {
 
         let mut claimed_funds = false;
 
-        match self.run_redeem_stake_batch_lock {
+        match self.redeem_stake_batch_lock {
             // NEAR funds can be claimed for receipts that are not pending on the unstaked NEAR withdrawal
             // NEAR funds can also be claimed against the NEAR liquidity pool
             Some(RedeemLock::PendingWithdrawal) => {
@@ -1042,7 +1042,7 @@ impl StakeTokenContract {
         // and if the contract is not locked because it is running redeem stake batch workflow.
         //
         // NOTE: while a contract is locked, all redeem requests must be collected in the next batch
-        if self.run_redeem_stake_batch_lock.is_none() && account.redeem_stake_batch.is_none() {
+        if self.redeem_stake_batch_lock.is_none() && account.redeem_stake_batch.is_none() {
             account.redeem_stake_batch = account.next_redeem_stake_batch.take();
         }
 
@@ -1050,7 +1050,7 @@ impl StakeTokenContract {
     }
 
     pub(crate) fn is_unstaking(&self) -> bool {
-        match self.run_redeem_stake_batch_lock {
+        match self.redeem_stake_batch_lock {
             Some(RedeemLock::Unstaking) => true,
             _ => false,
         }
@@ -1134,7 +1134,7 @@ pub struct StakingPoolAccount {
 }
 
 #[ext_contract(ext_redeeming_workflow_callbacks)]
-pub trait ExtRedeemingWokflowCallbacks {
+pub trait ExtRedeemingWorkflowCallbacks {
     fn on_run_redeem_stake_batch(
         &mut self,
         #[callback] staked_balance: near_sdk::json_types::U128,
@@ -1145,7 +1145,7 @@ pub trait ExtRedeemingWokflowCallbacks {
     /// 2. set the redeem stake batch lock state to pending withdrawal
     fn on_unstake(&mut self);
 
-    fn release_run_redeem_stake_batch_unstaking_lock(&mut self);
+    fn clear_redeem_stake_batch_lock(&mut self);
 
     /// batch ID is returned when all unstaked NEAR has been withdrawn
     fn on_redeeming_stake_pending_withdrawal(
@@ -1181,7 +1181,7 @@ pub trait ExtStakingWorkflowCallbacks {
     );
 
     /// defined on [Operator] interface
-    fn release_run_stake_batch_lock(&mut self);
+    fn clear_stake_batch_lock(&mut self);
 }
 
 #[cfg(test)]
@@ -1212,7 +1212,7 @@ mod test_stake {
         context.prepaid_gas = 10u64.pow(18);
         testing_env!(context.clone());
         contract.stake();
-        assert!(contract.run_stake_batch_locked);
+        assert!(contract.stake_batch_locked());
         println!(
             "prepaid gas: {}, used_gas: {}, unused_gas: {}",
             context.prepaid_gas,
@@ -1262,9 +1262,9 @@ mod test_stake {
             let action = &receipt.actions[0];
             match action {
                 Action::FunctionCall { method_name, .. } => {
-                    assert_eq!(method_name, "release_run_stake_batch_lock")
+                    assert_eq!(method_name, "clear_stake_batch_lock")
                 }
-                _ => panic!("expected `release_run_stake_batch_lock` callback"),
+                _ => panic!("expected `clear_stake_batch_lock` callback"),
             }
         }
     }
@@ -1286,7 +1286,7 @@ mod test_stake {
         testing_env!(context.clone());
         contract.deposit();
 
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+        contract.redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
         *contract.batch_id_sequence += 1;
         let redeem_stake_batch =
             domain::RedeemStakeBatch::new(contract.batch_id_sequence, YOCTO.into());
@@ -1330,9 +1330,9 @@ mod test_stake {
             let action = &receipt.actions[0];
             match action {
                 Action::FunctionCall { method_name, .. } => {
-                    assert_eq!(method_name, "release_run_stake_batch_lock")
+                    assert_eq!(method_name, "clear_stake_batch_lock")
                 }
-                _ => panic!("expected `release_run_stake_batch_lock` callback"),
+                _ => panic!("expected `clear_stake_batch_lock` callback"),
             }
         }
     }
@@ -1348,7 +1348,7 @@ mod test_stake {
         testing_env!(context.clone());
         contract.deposit();
 
-        contract.run_stake_batch_locked = true;
+        contract.stake_batch_lock = Some(StakeLock::Staking);
 
         testing_env!(context.clone());
         contract.withdraw_from_stake_batch(YOCTO.into());
@@ -1365,7 +1365,7 @@ mod test_stake {
         testing_env!(context.clone());
         contract.deposit();
 
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
+        contract.redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
 
         testing_env!(context.clone());
         contract.withdraw_from_stake_batch(YOCTO.into());
@@ -1472,7 +1472,7 @@ mod test_withdraw_from_stake_batch {
         let mut test_context = TestContext::with_registered_account();
         let mut context = test_context.context.clone();
         let contract = &mut test_context.contract;
-        contract.run_stake_batch_locked = true;
+        contract.stake_batch_lock = Some(StakeLock::Staking);
 
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context.clone());
@@ -1512,7 +1512,7 @@ mod test_withdraw_from_stake_batch {
         let mut test_context = TestContext::with_registered_account();
         let mut context = test_context.context.clone();
         let contract = &mut test_context.contract;
-        contract.run_stake_batch_locked = true;
+        contract.stake_batch_lock = Some(StakeLock::Staking);
 
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context.clone());
@@ -1556,7 +1556,7 @@ mod test_withdraw_all_from_stake_batch {
         let mut test_context = TestContext::with_registered_account();
         let mut context = test_context.context.clone();
         let contract = &mut test_context.contract;
-        contract.run_stake_batch_locked = true;
+        contract.stake_batch_lock = Some(StakeLock::Staking);
 
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context.clone());
@@ -1587,7 +1587,7 @@ mod test_withdraw_all_from_stake_batch {
         let mut test_context = TestContext::with_registered_account();
         let mut context = test_context.context.clone();
         let contract = &mut test_context.contract;
-        contract.run_stake_batch_locked = true;
+        contract.stake_batch_lock = Some(StakeLock::Staking);
 
         context.attached_deposit = 10 * YOCTO;
         testing_env!(context.clone());
@@ -1720,7 +1720,7 @@ mod test_withdraw_all_from_stake_batch {
         testing_env!(context.clone());
         contract.deposit();
 
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
+        contract.redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
 
         testing_env!(context.clone());
         contract.withdraw_all_from_stake_batch();
@@ -1737,7 +1737,7 @@ mod test_withdraw_all_from_stake_batch {
         testing_env!(context.clone());
         contract.deposit();
 
-        contract.run_stake_batch_locked = true;
+        contract.stake_batch_lock = Some(StakeLock::Staking);
 
         testing_env!(context.clone());
         contract.withdraw_all_from_stake_batch();
@@ -2026,7 +2026,7 @@ mod test_claim_receipts {
         let batch_id = contract.deposit();
         let batch_id_1: domain::BatchId = domain::BatchId(batch_id.into());
 
-        contract.run_stake_batch_locked = true;
+        contract.stake_batch_lock = Some(StakeLock::Staking);
         context.attached_deposit = YOCTO * 2;
         testing_env!(context.clone());
         let batch_id = contract.deposit();
@@ -2046,7 +2046,7 @@ mod test_claim_receipts {
             );
         }
 
-        contract.run_stake_batch_locked = false;
+        contract.stake_batch_lock = None;
 
         // Act
         contract.claim_receipts();
@@ -2075,7 +2075,7 @@ mod test_claim_receipts {
         let batch_id = contract.deposit();
         let batch_id_1: domain::BatchId = domain::BatchId(batch_id.into());
 
-        contract.run_stake_batch_locked = true;
+        contract.stake_batch_lock = Some(StakeLock::Staking);
         context.attached_deposit = YOCTO * 2;
         testing_env!(context.clone());
         let batch_id = contract.deposit();
@@ -2091,7 +2091,7 @@ mod test_claim_receipts {
             );
         }
 
-        contract.run_stake_batch_locked = false;
+        contract.stake_batch_lock = None;
 
         // Act
         contract.claim_receipts();
@@ -2170,7 +2170,7 @@ mod test_claim_receipts {
             let mut account = contract.predecessor_registered_account();
             account.apply_stake_credit(YOCTO.into());
             contract.save_registered_account(&account);
-            contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+            contract.redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
             let batch_id = contract
                 .redeem_all()
                 .map(|batch_id| domain::BatchId(batch_id.into()))
@@ -2182,7 +2182,7 @@ mod test_claim_receipts {
                     contract.stake_token_value,
                 ),
             );
-            contract.run_redeem_stake_batch_lock = None;
+            contract.redeem_stake_batch_lock = None;
             batch_id
         };
 
@@ -2235,7 +2235,7 @@ mod test_claim_receipts {
             let mut account = contract.predecessor_registered_account();
             account.apply_stake_credit(YOCTO.into());
             contract.save_registered_account(&account);
-            contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+            contract.redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
             let batch_id = contract
                 .redeem_all()
                 .map(|batch_id| domain::BatchId(batch_id.into()))
@@ -2244,7 +2244,7 @@ mod test_claim_receipts {
                 &batch_id,
                 &domain::RedeemStakeBatchReceipt::new(YOCTO.into(), contract.stake_token_value),
             );
-            contract.run_redeem_stake_batch_lock = None;
+            contract.redeem_stake_batch_lock = None;
             batch_id
         };
 
@@ -2296,12 +2296,12 @@ mod test_claim_receipts {
             let mut account = contract.predecessor_registered_account();
             account.apply_stake_credit(YOCTO.into());
             contract.save_registered_account(&account);
-            contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+            contract.redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
             let batch_id = contract
                 .redeem_all()
                 .map(|batch_id| domain::BatchId(batch_id.into()))
                 .unwrap();
-            contract.run_redeem_stake_batch_lock = None;
+            contract.redeem_stake_batch_lock = None;
             batch_id
         };
 
@@ -2343,7 +2343,7 @@ mod test_claim_receipts {
             &batch_id,
             &domain::RedeemStakeBatchReceipt::new((2 * YOCTO).into(), contract.stake_token_value),
         );
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+        contract.redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
 
         // Act
         contract.claim_receipts();
@@ -2391,7 +2391,7 @@ mod test_claim_receipts {
             &batch_id,
             &domain::RedeemStakeBatchReceipt::new(YOCTO.into(), contract.stake_token_value),
         );
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+        contract.redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
 
         // Act
         contract.claim_receipts();
@@ -2403,7 +2403,7 @@ mod test_claim_receipts {
         assert!(account.redeem_stake_batch.is_none());
         assert_eq!(contract.near_liquidity_pool, 0.into());
         assert!(contract.pending_withdrawal().is_none());
-        assert!(contract.run_redeem_stake_batch_lock.is_none());
+        assert!(contract.redeem_stake_batch_lock.is_none());
     }
 
     #[test]
@@ -2436,7 +2436,7 @@ mod test_claim_receipts {
                 ),
             ),
         );
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+        contract.redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
 
         // Act
         contract.claim_receipts();
@@ -2456,10 +2456,10 @@ mod test_claim_receipts {
             contract.pending_withdrawal().unwrap().redeemed_stake,
             (YOCTO - (YOCTO / 3)).into()
         );
-        assert!(contract.run_redeem_stake_batch_lock.is_some());
+        assert!(contract.redeem_stake_batch_lock.is_some());
 
         // Arrange - unstaked NEAR has been withdrawn from staking pool
-        contract.run_redeem_stake_batch_lock = None;
+        contract.redeem_stake_batch_lock = None;
 
         // Act
         contract.claim_receipts();
@@ -2646,7 +2646,7 @@ mod test {
         let mut test_context = TestContext::with_registered_account();
         let mut context = test_context.context.clone();
         let contract = &mut test_context.contract;
-        contract.run_stake_batch_locked = true;
+        contract.stake_batch_lock = Some(StakeLock::Staking);
 
         context.attached_deposit = 100 * YOCTO;
         testing_env!(context.clone());
@@ -2700,7 +2700,7 @@ mod test {
             context.attached_deposit.into()
         );
 
-        contract.run_stake_batch_locked = true;
+        contract.stake_batch_lock = Some(StakeLock::Staking);
 
         context.attached_deposit = 50 * YOCTO;
         testing_env!(context.clone());
@@ -2911,7 +2911,7 @@ mod test {
             (2 * YOCTO).into()
         );
         // locking the contract should deposit the funds into the next stake batch
-        contract.run_stake_batch_locked = true;
+        contract.stake_batch_lock = Some(StakeLock::Staking);
         let next_stake_batch_id =
             contract.deposit_near_for_account_to_stake(&mut account, (3 * YOCTO).into());
         assert_eq!(
@@ -2932,7 +2932,7 @@ mod test {
             3 * YOCTO
         );
 
-        contract.run_stake_batch_locked = false;
+        contract.stake_batch_lock = None;
 
         // Given that the batches have receipts
         // And STAKE token value = 1 NEAR
@@ -2995,7 +2995,7 @@ mod test {
         context.attached_deposit = 0;
         testing_env!(context.clone());
         contract.stake();
-        assert!(contract.run_stake_batch_locked);
+        assert!(contract.stake_batch_locked());
 
         testing_env!(context.clone());
         // should panic because contract is locked
@@ -3030,7 +3030,7 @@ mod test {
         let mut test_context = TestContext::with_registered_account();
         let contract = &mut test_context.contract;
 
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
+        contract.redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
         contract.stake();
     }
 
@@ -3040,7 +3040,7 @@ mod test {
         let mut context = test_context.context.clone();
         let contract = &mut test_context.contract;
 
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
+        contract.redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
         context.attached_deposit = YOCTO;
         testing_env!(context.clone());
         if let PromiseOrValue::Value(batch_id) = contract.deposit_and_stake() {
@@ -3062,7 +3062,7 @@ mod test {
         testing_env!(context.clone());
         contract.deposit();
 
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+        contract.redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
         contract.stake();
     }
 
@@ -3072,7 +3072,7 @@ mod test {
         let mut context = test_context.context.clone();
         let contract = &mut test_context.contract;
 
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+        contract.redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
         *contract.batch_id_sequence += 1;
         let redeem_stake_batch =
             domain::RedeemStakeBatch::new(contract.batch_id_sequence, YOCTO.into());
@@ -3115,7 +3115,7 @@ mod test {
         testing_env!(context.clone());
         contract.deposit_and_stake();
 
-        assert!(contract.run_stake_batch_locked);
+        assert!(contract.stake_batch_locked());
         println!(
             "prepaid gas: {}, used_gas: {}, unused_gas: {}",
             context.prepaid_gas,
@@ -3165,9 +3165,9 @@ mod test {
             let action = &receipt.actions[0];
             match action {
                 Action::FunctionCall { method_name, .. } => {
-                    assert_eq!(method_name, "release_run_stake_batch_lock")
+                    assert_eq!(method_name, "clear_stake_batch_lock")
                 }
-                _ => panic!("expected `on_deposit_and_stake` callback"),
+                _ => panic!("expected `clear_stake_batch_lock` callback"),
             }
         }
     }
@@ -3195,7 +3195,7 @@ mod test {
                 // capture the batch ID to lookup the batch receipt after the workflow is done
                 let batch_id = contract.stake_batch.unwrap().id();
                 contract.stake();
-                assert!(contract.run_stake_batch_locked);
+                assert!(contract.stake_batch_locked());
                 {
                     context.predecessor_account_id = context.current_account_id.clone();
                     testing_env!(context.clone());
@@ -3226,8 +3226,8 @@ mod test {
                         {
                             context.predecessor_account_id = context.current_account_id.clone();
                             testing_env!(context.clone());
-                            contract.release_run_stake_batch_lock();
-                            assert!(!contract.run_stake_batch_locked);
+                            contract.clear_stake_batch_lock();
+                            assert!(!contract.stake_batch_locked());
                         }
                     }
                 }
@@ -3349,7 +3349,7 @@ mod test {
         assert_eq!(redeem_stake_batch.id, batch_id);
 
         // Given the contract is locked for unstaking
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
+        contract.redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
         let batch_id_2 = contract.redeem(redeem_amount.clone());
 
         let batch = contract
@@ -3475,7 +3475,7 @@ mod test {
         contract.save_registered_account(&account);
 
         let batch_id = contract.redeem_all().unwrap();
-        contract.run_redeem_stake_batch_lock = Some(lock);
+        contract.redeem_stake_batch_lock = Some(lock);
 
         let batch = contract
             .redeem_stake_batch
@@ -3508,6 +3508,7 @@ mod test {
         account_id: String,
     }
 
+    // TODO:
     /// Given the contract is unlocked and has no batch runs in progress
     /// And there is a redeem stake batch
     /// When the redeem batch is run
@@ -3678,7 +3679,7 @@ mod test {
         // Arrange
         let mut context = TestContext::with_registered_account();
         let contract = &mut context.contract;
-        contract.run_stake_batch_locked = true;
+        contract.stake_batch_lock = Some(StakeLock::Staking);
 
         // Act
         contract.unstake();
@@ -3690,7 +3691,7 @@ mod test {
         let mut test_ctx = TestContext::with_registered_account();
         let contract = &mut test_ctx.contract;
 
-        contract.run_stake_batch_locked = true;
+        contract.stake_batch_lock = Some(StakeLock::Staking);
         let mut account = contract.predecessor_registered_account();
         account.stake = Some(TimestampedStakeBalance::new((100 * YOCTO).into()));
         contract.save_registered_account(&account);
@@ -3708,7 +3709,7 @@ mod test {
         // Arrange
         let mut context = TestContext::with_registered_account();
         let contract = &mut context.contract;
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
+        contract.redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
 
         // Act
         contract.unstake();
@@ -3720,7 +3721,7 @@ mod test {
         let mut test_ctx = TestContext::with_registered_account();
         let contract = &mut test_ctx.contract;
 
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
+        contract.redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
 
         let mut account = contract.predecessor_registered_account();
         account.stake = Some(TimestampedStakeBalance::new((100 * YOCTO).into()));
@@ -3764,12 +3765,12 @@ mod test {
             &contract.batch_id_sequence,
             &domain::RedeemStakeBatchReceipt::new((10 * YOCTO).into(), contract.stake_token_value),
         );
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+        contract.redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
         context.epoch_height += UNSTAKED_NEAR_FUNDS_NUM_EPOCHS_TO_UNLOCK.value();
         testing_env!(context.clone());
         contract.unstake();
         assert_eq!(
-            contract.run_redeem_stake_batch_lock,
+            contract.redeem_stake_batch_lock,
             Some(RedeemLock::PendingWithdrawal)
         );
         let receipts = deserialize_receipts();
@@ -3909,7 +3910,7 @@ mod test {
             contract.batch_id_sequence,
             (20 * YOCTO).into(),
         ));
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+        contract.redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
         contract.near_liquidity_pool = contract
             .stake_token_value
             .stake_to_near(account.redeem_stake_batch.unwrap().balance().amount());
@@ -3962,7 +3963,7 @@ mod test {
             contract.batch_id_sequence,
             (10 * YOCTO).into(),
         ));
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+        contract.redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
         contract.near_liquidity_pool = contract
             .stake_token_value
             .stake_to_near(account.redeem_stake_batch.unwrap().balance().amount());
@@ -3987,7 +3988,7 @@ mod test {
             .redeem_stake_batch_receipts
             .get(&contract.batch_id_sequence)
             .is_none());
-        assert!(contract.run_redeem_stake_batch_lock.is_none());
+        assert!(contract.redeem_stake_batch_lock.is_none());
         assert_eq!(contract.near_liquidity_pool, 0.into());
         assert_eq!(contract.total_near.amount(), (10 * YOCTO).into());
     }
@@ -4229,7 +4230,7 @@ mod test {
 
         contract.redeem((10 * YOCTO).into());
 
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+        contract.redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
         contract.redeem((10 * YOCTO).into());
 
         let account = contract.predecessor_registered_account();
@@ -4258,7 +4259,7 @@ mod test {
 
         contract.redeem((10 * YOCTO).into());
 
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
+        contract.redeem_stake_batch_lock = Some(RedeemLock::PendingWithdrawal);
         contract.redeem((10 * YOCTO).into());
         {
             let mut batch = contract.next_redeem_stake_batch.unwrap();
@@ -4297,7 +4298,7 @@ mod test {
         let mut test_ctx = TestContext::with_registered_account();
         let contract = &mut test_ctx.contract;
 
-        contract.run_redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
+        contract.redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
         assert_eq!(contract.remove_all_from_redeem_stake_batch(), 0.into());
     }
 
