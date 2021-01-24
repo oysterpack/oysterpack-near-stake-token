@@ -136,8 +136,8 @@ pub trait StakingService {
     /// - if there is no stake batch to run
     /// - if the attached deposit is less than the [minimum required deposit](StakingService::min_required_deposit_to_stake)
     ///
-    /// GAS REQUIREMENTS: 225 TGas
-    fn stake(&mut self) -> Promise;
+    /// GAS REQUIREMENTS: 200 TGas
+    fn stake(&mut self) -> PromiseOrValue<BatchId>;
 
     /// Combines [deposit](StakingService::deposit) and [stake](StakingService::stake) calls together.
     ///

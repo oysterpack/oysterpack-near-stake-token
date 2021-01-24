@@ -40,7 +40,10 @@ impl StakeTokenContract {
         assert!(self.promise_result_succeeded(), GET_ACCOUNT_FAILURE);
 
         // update the cached STAKE token value
-        let staked_balance = self.staked_near_balance(&staking_pool_account);
+        let staked_balance = self.staked_near_balance(
+            staking_pool_account.staked_balance.0.into(),
+            staking_pool_account.unstaked_balance.0.into(),
+        );
         self.update_stake_token_value(staked_balance);
 
         let unstake_amount = self

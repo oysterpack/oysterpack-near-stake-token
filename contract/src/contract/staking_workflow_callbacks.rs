@@ -1,5 +1,6 @@
 //required in order for near_bindgen macro to work outside of lib.rs
-use crate::domain::YoctoStake;
+use crate::config::GAS_FOR_PROMISE;
+use crate::domain::{YoctoStake, TGAS};
 use crate::*;
 use crate::{
     domain::{self, YoctoNear},
@@ -75,47 +76,82 @@ impl StakeTokenContract {
         &mut self,
         near_liquidity: Option<interface::YoctoNear>,
         #[callback] staking_pool_account: StakingPoolAccount,
-    ) {
+    ) -> Promise {
+        self.stake_batch_lock = Some(StakeLock::Staked {
+            near_liquidity: near_liquidity.map(Into::into),
+            staked_balance: staking_pool_account.staked_balance.0.into(),
+            unstaked_balance: staking_pool_account.unstaked_balance.0.into(),
+        });
+        self.invoke_process_stake_batch()
+    }
+
+    /// ## Workflow
+    /// 1. if liquidity was added, then update liquidity balance
+    ///    - if enough liquidity was added to cover the pending withdrawal, then clear the
+    ///      [RedeemLock](crate::domain::RedeemLock)
+    /// 2. mint STAKE for the NEAR that was staked
+    /// 3. update STAKE token value
+    /// 4. create [StakeBatchReceipt](crate::domain::StakeBatchReceipt)
+    ///    - [Staked](crate::interface::staking_service::events::Staked) event is logged
+    /// 5. pop the [StakeBatch](crate::domain::StakeBatch)
+    ///
+    /// ## Panics
+    /// - if not called by self
+    /// - if [StakeBatch](crate::domain::StakeBatch) does not exist
+    /// - if any of the upstream Promises failed
+    #[private]
+    pub fn process_staked_batch(&mut self) {
         let batch = self.stake_batch.take().expect(STAKE_BATCH_SHOULD_EXIST);
 
-        if let Some(near_liquidity) = near_liquidity {
-            if near_liquidity.value() > 0 {
-                *self.near_liquidity_pool += near_liquidity.value();
-                log(NearLiquidityAdded {
-                    amount: near_liquidity.value(),
-                    balance: self.near_liquidity_pool.value(),
-                });
+        if let Some(StakeLock::Staked {
+            near_liquidity,
+            staked_balance,
+            unstaked_balance,
+        }) = self.stake_batch_lock
+        {
+            if let Some(near_liquidity) = near_liquidity {
+                if near_liquidity.value() > 0 {
+                    *self.near_liquidity_pool += near_liquidity.value();
+                    log(NearLiquidityAdded {
+                        amount: near_liquidity.value(),
+                        balance: self.near_liquidity_pool.value(),
+                    });
 
-                // check if liquidity can clear the pending withdrawal
-                if let Some(receipt) = self.get_pending_withdrawal() {
-                    let stake_near_value = receipt.stake_near_value();
-                    if self.near_liquidity_pool >= stake_near_value {
-                        if let Some(batch) = self.redeem_stake_batch.as_ref() {
-                            log(PendingWithdrawalCleared::new(batch, &receipt));
+                    // check if liquidity can clear the pending withdrawal
+                    if let Some(receipt) = self.get_pending_withdrawal() {
+                        let stake_near_value = receipt.stake_near_value();
+                        if self.near_liquidity_pool >= stake_near_value {
+                            if let Some(batch) = self.redeem_stake_batch.as_ref() {
+                                log(PendingWithdrawalCleared::new(batch, &receipt));
+                            }
+                            // move the liquidity to the contract's NEAR balance to make it available for withdrawal
+                            self.near_liquidity_pool -= stake_near_value;
+                            self.total_near.credit(stake_near_value);
+                            self.redeem_stake_batch_lock = None;
+                            self.pop_redeem_stake_batch();
                         }
-                        // move the liquidity to the contract's NEAR balance to make it available for withdrawal
-                        self.near_liquidity_pool -= stake_near_value;
-                        self.total_near.credit(stake_near_value);
-                        self.redeem_stake_batch_lock = None;
-                        self.pop_redeem_stake_batch();
                     }
                 }
             }
-        }
 
-        self.mint_stake_and_update_stake_token_value(&staking_pool_account, batch);
-        self.create_stake_batch_receipt(batch);
-        self.pop_stake_batch();
+            self.mint_stake_and_update_stake_token_value(staked_balance, unstaked_balance, batch);
+            self.create_stake_batch_receipt(batch);
+            self.pop_stake_batch();
+            self.stake_batch_lock = None
+        } else {
+            panic!("ERROR: illegal state - should only be called when StakeLock::Staked - current state is: {:?}", self.stake_batch_lock);
+        }
     }
 }
 
 impl StakeTokenContract {
     pub fn mint_stake_and_update_stake_token_value(
         &mut self,
-        staking_pool_account: &StakingPoolAccount,
+        staked_balance: YoctoNear,
+        unstaked_balance: YoctoNear,
         batch: StakeBatch,
     ) {
-        let staked_balance = self.staked_near_balance(&staking_pool_account);
+        let staked_balance = self.staked_near_balance(staked_balance, unstaked_balance);
         // this is minted using the prior STAKE token value - however, if rewards were issued, then
         // the STAKE token value is stale
         let stake_minted_amount = self.mint_stake(batch);
@@ -148,19 +184,19 @@ impl StakeTokenContract {
     ///   is derived from restaking unstaked NEAR)
     pub(crate) fn staked_near_balance(
         &self,
-        staking_pool_account: &StakingPoolAccount,
+        staked_balance: YoctoNear,
+        unstaked_balance: YoctoNear,
     ) -> YoctoNear {
-        let staked_balance = staking_pool_account.staked_balance.0;
-        if staked_balance == 0 {
+        if staked_balance.value() == 0 {
             return 0.into();
         }
-        let unstaked_balance = staking_pool_account.unstaked_balance.0;
         let balance = match self.get_pending_withdrawal() {
             Some(receipt) => {
-                staked_balance + unstaked_balance - receipt.stake_near_value().value()
+                staked_balance.value() + unstaked_balance.value()
+                    - receipt.stake_near_value().value()
                     + self.near_liquidity_pool.value()
             }
-            _ => staked_balance + unstaked_balance,
+            _ => staked_balance.value() + unstaked_balance.value(),
         };
         balance.into()
     }
@@ -258,6 +294,18 @@ impl StakeTokenContract {
                 .callbacks()
                 .on_deposit_and_stake()
                 .value(),
+        )
+    }
+
+    pub(crate) fn invoke_process_stake_batch(&self) -> Promise {
+        // pass on remaining gas
+        let remaining_compute = TGAS.value();
+        let gas =
+            env::prepaid_gas() - env::used_gas() - GAS_FOR_PROMISE.value() - remaining_compute;
+        ext_staking_workflow_callbacks::process_staked_batch(
+            &env::current_account_id(),
+            NO_DEPOSIT.into(),
+            gas,
         )
     }
 }

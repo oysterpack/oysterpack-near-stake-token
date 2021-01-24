@@ -256,12 +256,14 @@ impl StakingPoolGasConfig {
 #[derive(Debug, BorshSerialize, BorshDeserialize, Clone, Copy)]
 pub struct CallBacksGasConfig {
     on_run_stake_batch: Gas,
+    /// gas is split with [`StakingService::process_stake_batch`](crate::interface::StakingService::process_stake_batch)
+    /// - it takes what it needs and passes along the rest to `process_stake_batch`
     on_deposit_and_stake: Gas,
 
     on_unstake: Gas,
     unlock: Gas,
 
-    // used by redeem stake workflow
+    /// used by redeem stake workflow
     on_run_redeem_stake_batch: Gas,
     on_redeeming_stake_pending_withdrawal: Gas,
     on_redeeming_stake_post_withdrawal: Gas,
@@ -358,7 +360,7 @@ impl Default for CallBacksGasConfig {
     fn default() -> Self {
         Self {
             on_run_stake_batch: TGAS * 135,
-            on_deposit_and_stake: TGAS * 5,
+            on_deposit_and_stake: TGAS * 10,
 
             unlock: TGAS * 4,
 
