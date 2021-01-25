@@ -193,7 +193,7 @@ pub struct TokenAmount(pub U128);
 
 impl From<u128> for TokenAmount {
     fn from(value: u128) -> Self {
-        Self(value.into())
+        Self(U128::from(value))
     }
 }
 

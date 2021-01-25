@@ -85,6 +85,7 @@ impl FungibleToken for StakeTokenContract {
         self.accounts
             .get(&Hash::from(account_id))
             .map_or_else(TokenAmount::default, |account| {
+                let account = self.apply_receipt_funds_for_view(&account);
                 account.stake.map_or_else(TokenAmount::default, |balance| {
                     balance.amount().value().into()
                 })
