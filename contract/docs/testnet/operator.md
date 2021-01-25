@@ -27,5 +27,8 @@ near call $CONTRACT force_update_config --accountId oysterpack.testnet --args '{
 near tx-status --accountId oysterpack.testnet AFZieZSG9aymGnQNpw3mdUiFeTDE2cEkc4yrJWFwRZWi > temp/txn.txt
 
 1000000000000   1 TGas
-5154653795633
-6569859047018
+2427936651538
+6167250439669
+4506577528637
+6219296404217
+4506577528637

@@ -8,11 +8,9 @@ near view $CONTRACT ft_total_supply
 
 ### Stateful Calls
 ```shell
-near call $CONTRACT transfer --accountId alfio-zappala-oysterpack.testnet --args '{"recipient":"oysterpack.testnet", "amount":"1000000000000"}'
+near call $CONTRACT ft_transfer --accountId alfio-zappala-oysterpack.testnet --args '{"receiver_id":"oysterpack.testnet", "amount":"1000000000000000000000000"}' --amount 0.000000000000000000000001
 
-near call $CONTRACT transfer --accountId oysterpack.testnet --args '{"recipient":"alfio-zappala-oysterpack.testnet", "amount":"1000000000000", "headers":{"msg":"merry christmas"}}'
+near call $CONTRACT ft_transfer --accountId oysterpack.testnet --args '{"receiver_id":"alfio-zappala-oysterpack.testnet", "amount":"1000000000000000000000000", "memo":"merry christmas"}' --amount 0.000000000000000000000001
 ```
 
 1000000000000000000000000
- 1 000 000 000 000
-40 000 000 000 000

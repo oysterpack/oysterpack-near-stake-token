@@ -14,9 +14,9 @@ pub struct StakingServiceClient {
 }
 
 impl StakingServiceClient {
-    pub fn new(contrac_account_id: &str) -> Self {
+    pub fn new(contract_account_id: &str) -> Self {
         Self {
-            contract_account_id: contrac_account_id.to_string(),
+            contract_account_id: contract_account_id.to_string(),
         }
     }
 

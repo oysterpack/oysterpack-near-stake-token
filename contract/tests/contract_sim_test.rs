@@ -294,6 +294,10 @@ fn stake(ctx: &TestContext) {
             result.assert_success();
 
             ctx.process_all_transactions();
+            {
+                println!("stake receipt results: {:#?}", result.get_receipt_results());
+                println!("stake promise results: {:#?}", result.promise_results());
+            }
 
             let contract_state: ContractState = ctx.operator.contract_state(&ctx.master_account);
             assert!(

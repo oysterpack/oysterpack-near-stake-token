@@ -66,6 +66,7 @@ pub trait FungibleToken {
     /// - if amount is zero
     /// - if the sender account has insufficient funds to fulfill the request
     ///
+    /// GAS REQUIREMENTS: 10 TGas
     /// #\[payable\]
     fn ft_transfer(&mut self, receiver_id: ValidAccountId, amount: TokenAmount, memo: Option<Memo>);
 
@@ -104,6 +105,7 @@ pub trait FungibleToken {
     /// - if amount is zero
     /// - if the sender account has insufficient funds to fulfill the transfer request
     ///
+    /// GAS REQUIREMENTS: 40 TGas + gas for receiver call
     /// #\[payable\]
     fn ft_transfer_call(
         &mut self,
@@ -120,7 +122,7 @@ pub trait FungibleToken {
 }
 
 /// Receiver of the Fungible Token for [`FungibleToken::ft_transfer_call`] calls.
-pub trait OnTransfer {
+pub trait TransferReceiver {
     /// Callback to receive tokens.
     ///
     /// Called by fungible token contract `env::predecessor_account_id` after `transfer_call` was initiated by
@@ -244,6 +246,12 @@ impl Deref for Memo {
     }
 }
 
+impl From<&str> for Memo {
+    fn from(memo: &str) -> Self {
+        Self(memo.to_string())
+    }
+}
+
 impl Display for Memo {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
@@ -267,6 +275,12 @@ impl Deref for TransferCallMessage {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl From<&str> for TransferCallMessage {
+    fn from(memo: &str) -> Self {
+        Self(memo.to_string())
     }
 }
 

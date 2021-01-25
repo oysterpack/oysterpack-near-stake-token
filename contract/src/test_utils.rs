@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use crate::domain::TGAS;
 use crate::interface::{AccountManagement, YoctoNear};
 use crate::near_env::Env;
 use crate::{near::*, StakeTokenContract};
@@ -122,7 +123,7 @@ pub fn new_context(predecessor_account_id: &str) -> VMContext {
         account_locked_balance: 0,
         storage_usage: 400 * 1000,
         attached_deposit: 0,
-        prepaid_gas: 10u64.pow(18),
+        prepaid_gas: (TGAS * 200).value(),
         random_seed: vec![0, 1, 2],
         is_view: false,
         output_data_receivers: vec![],
