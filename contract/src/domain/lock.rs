@@ -25,7 +25,7 @@ pub enum RedeemLock {
     PendingWithdrawal,
 }
 
-/// [`Staking`] -> [`Staked`] -> DONE
+/// [`StakeLock::Staking`] -> [`StakeLock::Staked`] -> DONE
 #[derive(BorshSerialize, BorshDeserialize, Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 pub enum StakeLock {
     /// requests have been submitted to staking pool to deposit and stake funds

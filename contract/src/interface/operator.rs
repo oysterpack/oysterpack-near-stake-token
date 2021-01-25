@@ -34,8 +34,8 @@ pub trait Operator {
     /// - if not invoked by the operator account
     fn force_update_config(&mut self, config: Config) -> Config;
 
-    /// unlocks the contract if the [StateLock](crate::domain::StateLock) state is
-    /// [StateLock::Staking](crate::domain::StateLock::Staking)
+    /// unlocks the contract if the [StakeLock](crate::domain::StakeLock) state is
+    /// [StakeLock::Staking](crate::domain::StakeLock::Staking)
     ///
     /// ## Panics
     /// if not invoked by self as callback or the operator account

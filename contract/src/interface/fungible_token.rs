@@ -73,14 +73,14 @@ pub trait FungibleToken {
     /// Transfer to a contract with a callback.
     ///
     /// Transfers positive `amount` of tokens from the `env::predecessor_account_id` to `receiver_id`
-    /// account. Then calls [`OnTransfer::ft_on_transfer`] method on `receiver_id` contract
+    /// account. Then calls [`TransferReceiver::ft_on_transfer`] method on `receiver_id` contract
     /// and attaches a callback to resolve this transfer.
     ///
-    /// [`OnTransfer::ft_on_transfer`] method  must return the amount of tokens unused by
+    /// [`TransferReceiver::ft_on_transfer`] method  must return the amount of tokens unused by
     /// the receiver contract, the remaining tokens must be refunded to the `predecessor_account_id`
     /// by the resolve transfer callback.
     ///
-    /// Token contract must pass all the remaining unused gas to [`OnTransfer::ft_on_transfer`]
+    /// Token contract must pass all the remaining unused gas to [`TransferReceiver::ft_on_transfer`]
     ///
     /// Malicious or invalid behavior by the receiver's contract:
     /// - If the receiver contract promise fails or returns invalid value, the full transfer amount

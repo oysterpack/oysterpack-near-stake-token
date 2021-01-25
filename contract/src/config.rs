@@ -256,7 +256,7 @@ impl StakingPoolGasConfig {
 #[derive(Debug, BorshSerialize, BorshDeserialize, Clone, Copy)]
 pub struct CallBacksGasConfig {
     on_run_stake_batch: Gas,
-    /// gas is split with [`StakingService::process_stake_batch`](crate::interface::StakingService::process_stake_batch)
+    /// gas is split with [StakeTokenContract::process_staked_batch](crate::StakeTokenContract::process_staked_batch)
     /// - it takes what it needs and passes along the rest to `process_stake_batch`
     on_deposit_and_stake: Gas,
 
