@@ -187,12 +187,6 @@ pub trait ExtResolveTransferCall {
     ) -> PromiseOrValue<TokenAmount>;
 }
 
-/// and if anyone is interested I implemented NEP-141 in my STAKE project:
-//
-// [FungibleToken interface] (https://github.com/oysterpack/oysterpack-near-stake-token/blob/main/contract/src/interface/fungible_token.rs)
-// [FungibleToken implementation](https://github.com/oysterpack/oysterpack-near-stake-token/blob/main/contract/src/contract/fungible_token.rs)
-//
-// NOTE: this is a sneak preview - the code is not tested yet
 #[cfg(test)]
 mod test_transfer {
 
