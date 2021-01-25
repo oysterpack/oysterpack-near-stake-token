@@ -101,14 +101,13 @@ impl ResolveTransferCall for StakeTokenContract {
         receiver_id: ValidAccountId,
         amount: TokenAmount,
     ) -> PromiseOrValue<TokenAmount> {
-        assert_eq!(
-            env::promise_results_count(),
-            1,
-            "transfer call recipient should have returned unused transfer amount"
+        assert!(
+            self.promise_result_succeeded(),
+            "receiver `ft_on_transfer` call failed"
         );
-        let unused_amount: TokenAmount = match env::promise_result(0) {
+        let unused_amount: TokenAmount = match self.promise_result(0) {
             PromiseResult::Successful(result) => {
-                serde_json::from_slice(&result).expect("unsued token amount")
+                serde_json::from_slice(&result).expect("unused token amount")
             }
             _ => 0.into(),
         };
@@ -856,5 +855,245 @@ mod test_transfer_call {
         sender_id: ValidAccountId,
         amount: TokenAmount,
         msg: TransferCallMessage,
+    }
+}
+
+#[cfg(test)]
+mod test_resolve_transfer_call {
+    use super::*;
+    use crate::interface::AccountManagement;
+    use crate::near::YOCTO;
+    use crate::test_utils::*;
+    use near_sdk::{serde_json, testing_env, MockedBlockchain};
+
+    #[test]
+    pub fn resolve_ok_zero_refund() {
+        // Arrange
+        let mut test_ctx = TestContext::with_registered_account();
+        let contract = &mut test_ctx.contract;
+
+        let sender_id = test_ctx.account_id;
+        let receiver_id = "receiver.near";
+
+        // register receiver account
+        {
+            let mut context = test_ctx.context.clone();
+            context.predecessor_account_id = receiver_id.to_string();
+            context.attached_deposit = YOCTO;
+            testing_env!(context);
+            contract.register_account();
+        }
+
+        set_env_with_promise_result(contract, promise_result_zero_refund);
+
+        // Act
+        let result = contract.ft_resolve_transfer_call(
+            to_valid_account_id(sender_id),
+            to_valid_account_id(receiver_id),
+            YOCTO.into(),
+        );
+
+        // Assert
+        match result {
+            PromiseOrValue::Value(refund_amount) => assert_eq!(refund_amount.value(), 0),
+            _ => panic!("expected value to be returned"),
+        }
+    }
+
+    #[test]
+    pub fn resolve_ok_with_refund() {
+        // Arrange
+        let mut test_ctx = TestContext::with_registered_account();
+        let contract = &mut test_ctx.contract;
+
+        let sender_id = test_ctx.account_id;
+        let receiver_id = "receiver.near";
+
+        // register receiver account
+        {
+            let mut context = test_ctx.context.clone();
+            context.predecessor_account_id = receiver_id.to_string();
+            context.attached_deposit = YOCTO;
+            testing_env!(context);
+            contract.register_account();
+        }
+
+        // credit the receiver with STAKE
+        let mut receiver = contract.registered_account(receiver_id);
+        receiver.apply_stake_credit((100 * YOCTO).into());
+        contract.save_registered_account(&receiver);
+
+        set_env_with_promise_result(contract, promise_result_with_refund);
+
+        // Act
+        let result = contract.ft_resolve_transfer_call(
+            to_valid_account_id(sender_id),
+            to_valid_account_id(receiver_id),
+            YOCTO.into(),
+        );
+
+        // Assert
+        match result {
+            PromiseOrValue::Value(refund_amount) => assert_eq!(refund_amount.value(), YOCTO),
+            _ => panic!("expected value to be returned"),
+        }
+
+        assert_eq!(
+            contract
+                .registered_account(receiver_id)
+                .stake
+                .unwrap()
+                .amount(),
+            (99 * YOCTO).into()
+        );
+        assert_eq!(
+            contract
+                .registered_account(sender_id)
+                .stake
+                .unwrap()
+                .amount(),
+            YOCTO.into()
+        );
+    }
+
+    #[test]
+    pub fn resolve_ok_with_refund_and_receiver_zero_balance() {
+        // Arrange
+        let mut test_ctx = TestContext::with_registered_account();
+        let contract = &mut test_ctx.contract;
+
+        let sender_id = test_ctx.account_id;
+        let receiver_id = "receiver.near";
+
+        // register receiver account
+        {
+            let mut context = test_ctx.context.clone();
+            context.predecessor_account_id = receiver_id.to_string();
+            context.attached_deposit = YOCTO;
+            testing_env!(context);
+            contract.register_account();
+        }
+
+        set_env_with_promise_result(contract, promise_result_with_refund);
+
+        // Act
+        let result = contract.ft_resolve_transfer_call(
+            to_valid_account_id(sender_id),
+            to_valid_account_id(receiver_id),
+            YOCTO.into(),
+        );
+
+        // Assert
+        match result {
+            PromiseOrValue::Value(refund_amount) => assert_eq!(refund_amount.value(), 0),
+            _ => panic!("expected value to be returned"),
+        }
+    }
+
+    #[test]
+    pub fn resolve_ok_with_refund_and_receiver_balance_insufficient() {
+        // Arrange
+        let mut test_ctx = TestContext::with_registered_account();
+        let contract = &mut test_ctx.contract;
+
+        let sender_id = test_ctx.account_id;
+        let receiver_id = "receiver.near";
+
+        // register receiver account
+        {
+            let mut context = test_ctx.context.clone();
+            context.predecessor_account_id = receiver_id.to_string();
+            context.attached_deposit = YOCTO;
+            testing_env!(context);
+            contract.register_account();
+        }
+
+        // credit the receiver with STAKE
+        let mut receiver = contract.registered_account(receiver_id);
+        receiver.apply_stake_credit((YOCTO / 10).into());
+        contract.save_registered_account(&receiver);
+
+        set_env_with_promise_result(contract, promise_result_with_refund);
+
+        // Act
+        let result = contract.ft_resolve_transfer_call(
+            to_valid_account_id(sender_id),
+            to_valid_account_id(receiver_id),
+            YOCTO.into(),
+        );
+
+        // Assert
+        match result {
+            PromiseOrValue::Value(refund_amount) => assert_eq!(refund_amount.value(), (YOCTO / 10)),
+            _ => panic!("expected value to be returned"),
+        }
+    }
+
+    #[test]
+    pub fn resolve_ok_with_refund_gt_transfer_amount() {
+        // Arrange
+        let mut test_ctx = TestContext::with_registered_account();
+        let contract = &mut test_ctx.contract;
+
+        let sender_id = test_ctx.account_id;
+        let receiver_id = "receiver.near";
+
+        // register receiver account
+        {
+            let mut context = test_ctx.context.clone();
+            context.predecessor_account_id = receiver_id.to_string();
+            context.attached_deposit = YOCTO;
+            testing_env!(context);
+            contract.register_account();
+        }
+
+        // credit the receiver with STAKE
+        let mut receiver = contract.registered_account(receiver_id);
+        receiver.apply_stake_credit((100 * YOCTO).into());
+        contract.save_registered_account(&receiver);
+
+        set_env_with_promise_result(contract, promise_result_with_overrefund);
+
+        // Act
+        let result = contract.ft_resolve_transfer_call(
+            to_valid_account_id(sender_id),
+            to_valid_account_id(receiver_id),
+            YOCTO.into(),
+        );
+
+        // Assert
+        match result {
+            PromiseOrValue::Value(refund_amount) => assert_eq!(refund_amount.value(), YOCTO),
+            _ => panic!("expected value to be returned"),
+        }
+
+        assert_eq!(
+            contract
+                .registered_account(receiver_id)
+                .stake
+                .unwrap()
+                .amount(),
+            (99 * YOCTO).into()
+        );
+        assert_eq!(
+            contract
+                .registered_account(sender_id)
+                .stake
+                .unwrap()
+                .amount(),
+            YOCTO.into()
+        );
+    }
+
+    fn promise_result_zero_refund(_result_index: u64) -> PromiseResult {
+        PromiseResult::Successful(serde_json::to_vec(&TokenAmount::from(0)).unwrap())
+    }
+
+    fn promise_result_with_refund(_result_index: u64) -> PromiseResult {
+        PromiseResult::Successful(serde_json::to_vec(&TokenAmount::from(YOCTO)).unwrap())
+    }
+
+    fn promise_result_with_overrefund(_result_index: u64) -> PromiseResult {
+        PromiseResult::Successful(serde_json::to_vec(&TokenAmount::from(2 * YOCTO)).unwrap())
     }
 }

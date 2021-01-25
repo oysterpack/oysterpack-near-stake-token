@@ -78,6 +78,10 @@ impl StakeTokenContract {
         }
         true
     }
+
+    pub fn promise_result(&self, result_index: u64) -> PromiseResult {
+        env::promise_result(result_index)
+    }
 }
 
 /// in order to make it easier to unit test Promise func callbacks, we need to abstract away the near env
@@ -109,6 +113,10 @@ impl StakeTokenContract {
             }
         }
         true
+    }
+
+    pub fn promise_result(&self, result_index: u64) -> PromiseResult {
+        self.env.promise_result(result_index)
     }
 
     pub fn set_env(&mut self, env: near_env::Env) {

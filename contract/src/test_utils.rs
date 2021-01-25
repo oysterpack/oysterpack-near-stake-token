@@ -179,6 +179,20 @@ pub fn set_env_with_success_promise_result(contract: &mut StakeTokenContract) {
     });
 }
 
+pub fn set_env_with_promise_result(
+    contract: &mut StakeTokenContract,
+    promise_result: fn(u64) -> PromiseResult,
+) {
+    pub fn promise_results_count() -> u64 {
+        1
+    }
+
+    contract.set_env(Env {
+        promise_results_count_: promise_results_count,
+        promise_result_: promise_result,
+    });
+}
+
 pub fn set_env_with_failed_promise_result(contract: &mut StakeTokenContract) {
     pub fn promise_result(_result_index: u64) -> PromiseResult {
         PromiseResult::Failed
