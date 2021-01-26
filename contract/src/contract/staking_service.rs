@@ -1482,7 +1482,7 @@ mod test_stake {
 
     use crate::interface::Operator;
     use crate::{near::YOCTO, test_utils::*};
-    use near_sdk::{testing_env, MockedBlockchain};
+    use near_sdk::{env, testing_env, MockedBlockchain};
 
     /// any account can invoke stake
     #[test]
@@ -1810,6 +1810,49 @@ mod test_stake {
                 check_action_receipts();
             }
             _ => panic!("expected StakeLock::Staking"),
+        }
+    }
+
+    #[test]
+    fn earnings_are_distributed_when_staking() {
+        // Arrange
+        let mut test_ctx = TestContext::with_registered_account();
+        let contract = &mut test_ctx.contract;
+
+        let mut context = test_ctx.context.clone();
+        context.attached_deposit = YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+        context.storage_usage = env::storage_usage();
+
+        context.attached_deposit = 0;
+        context.account_balance += 10 * YOCTO;
+        testing_env!(context.clone());
+
+        contract.collected_earnings += domain::YoctoNear(2 * YOCTO);
+        let owner_balance = contract.contract_owner_balance;
+        let contract_owner_earnings = contract.contract_owner_earnings();
+        let user_accounts_earnings = contract.user_accounts_earnings();
+
+        // Act
+        contract.stake();
+        assert!(contract.contract_owner_balance > owner_balance);
+
+        // Assert
+        assert_eq!(contract.collected_earnings.value(), 0);
+        let receipts = deserialize_receipts();
+        let deposit_and_stake_func_call_receipt = &receipts[0];
+        let action = &deposit_and_stake_func_call_receipt.actions[0];
+        match action {
+            Action::FunctionCall {
+                method_name,
+                deposit,
+                ..
+            } => {
+                assert_eq!(method_name, "deposit_and_stake");
+                assert_eq!(*deposit, user_accounts_earnings.value() + YOCTO);
+            }
+            _ => panic!("expected `deposit_and_stake` func call on staking pool"),
         }
     }
 }
