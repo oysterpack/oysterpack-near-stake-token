@@ -1480,82 +1480,304 @@ mod test_deposit {
 mod test_stake {
     use super::*;
 
+    use crate::interface::Operator;
     use crate::{near::YOCTO, test_utils::*};
     use near_sdk::{testing_env, MockedBlockchain};
 
+    /// any account can invoke stake
     #[test]
-    fn with_no_locks() {
+    fn account_not_registered() {
+        // Arrange
+        let mut test_ctx = TestContext::with_registered_account();
+        let contract = &mut test_ctx.contract;
+
+        let mut context = test_ctx.context.clone();
+        context.attached_deposit = YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+
+        // Act
+        context.attached_deposit = 0;
+        context.predecessor_account_id = "unregistered-user.near".to_string();
+        testing_env!(context.clone());
+        contract.stake();
+    }
+
+    #[test]
+    fn no_locks() {
+        fn check_stake_action_receipts() {
+            let receipts: Vec<Receipt> = deserialize_receipts();
+            assert_eq!(receipts.len(), 3);
+
+            {
+                let receipt = &receipts[0];
+                assert_eq!(receipt.actions.len(), 2);
+                {
+                    let action = &receipt.actions[0];
+                    match action {
+                        Action::FunctionCall { method_name, .. } => {
+                            assert_eq!(method_name, "deposit_and_stake")
+                        }
+                        _ => panic!("expected `deposit_and_stake` func call on staking pool"),
+                    }
+                }
+                {
+                    let action = &receipt.actions[1];
+                    match action {
+                        Action::FunctionCall { method_name, .. } => {
+                            assert_eq!(method_name, "get_account")
+                        }
+                        _ => panic!("expected `get_account` func call on staking pool"),
+                    }
+                }
+            }
+
+            {
+                let receipt = &receipts[1];
+                let action = &receipt.actions[0];
+                match action {
+                    Action::FunctionCall { method_name, .. } => {
+                        assert_eq!(method_name, "on_deposit_and_stake")
+                    }
+                    _ => panic!("expected `get_account` func call on staking pool"),
+                }
+            }
+
+            {
+                let receipt = &receipts[2];
+                let action = &receipt.actions[0];
+                match action {
+                    Action::FunctionCall { method_name, .. } => {
+                        assert_eq!(method_name, "clear_stake_batch_lock")
+                    }
+                    _ => panic!("expected `clear_stake_batch_lock` callback"),
+                }
+            }
+        }
+
+        fn check_on_deposit_and_stake_action_receipts() {
+            let receipts: Vec<Receipt> = deserialize_receipts();
+            assert_eq!(receipts.len(), 1);
+
+            {
+                let receipt = &receipts[0];
+                assert_eq!(receipt.actions.len(), 1);
+                {
+                    let action = &receipt.actions[0];
+                    match action {
+                        Action::FunctionCall { method_name, .. } => {
+                            assert_eq!(method_name, "process_staked_batch")
+                        }
+                        _ => panic!("expected `deposit_and_stake` func call on staking pool"),
+                    }
+                }
+            }
+        }
+
         // Arrange
         let mut test_context = TestContext::with_registered_account();
         let contract = &mut test_context.contract;
 
         let mut context = test_context.context.clone();
         context.attached_deposit = YOCTO;
-        testing_env!(context);
-        contract.deposit();
+        testing_env!(context.clone());
+        let batch_id = contract.deposit();
 
         // Act
-        testing_env!(test_context.context.clone());
+        context.attached_deposit = 0;
+        testing_env!(context.clone());
         contract.stake();
 
         // Assert
-        assert!(contract.stake_batch_locked());
-        check_stake_receipts_no_pending_withdrawal();
+        match contract.stake_batch_lock {
+            Some(StakeLock::Staking) => {
+                check_stake_action_receipts();
+
+                context.predecessor_account_id = env::current_account_id();
+                testing_env!(context.clone());
+                contract.on_deposit_and_stake(
+                    None,
+                    StakingPoolAccount {
+                        account_id: contract.staking_pool_id.clone(),
+                        unstaked_balance: 7.into(),
+                        staked_balance: (YOCTO - 7).into(),
+                        can_withdraw: true,
+                    },
+                );
+                match contract.stake_batch_lock {
+                    Some(StakeLock::Staked { .. }) => {
+                        check_on_deposit_and_stake_action_receipts();
+
+                        context.predecessor_account_id = env::current_account_id();
+                        testing_env!(context.clone());
+                        contract.process_staked_batch();
+                        assert!(contract.stake_batch_lock.is_none());
+                        match contract.stake_batch_receipt(batch_id.into()) {
+                            Some(receipt) => {
+                                assert_eq!(receipt.staked_near.value(), YOCTO);
+                            }
+                            None => panic!("receipt should have been created"),
+                        }
+
+                        context.predecessor_account_id = env::current_account_id();
+                        testing_env!(context.clone());
+                        contract.clear_stake_batch_lock();
+                    }
+                    _ => panic!("expected StakeLock::Staked"),
+                };
+            }
+            _ => panic!("expected StakeLock::Staking"),
+        }
     }
 
-    fn check_stake_receipts_no_pending_withdrawal() {
-        let receipts: Vec<Receipt> = deserialize_receipts();
-        assert_eq!(receipts.len(), 3);
+    #[test]
+    #[should_panic(expected = "action is blocked because a batch is running")]
+    fn locked_and_staking() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+        let contract = &mut test_context.contract;
 
-        {
-            let receipt = &receipts[0];
-            assert_eq!(receipt.actions.len(), 2);
-            {
-                let action = &receipt.actions[0];
-                match action {
-                    Action::FunctionCall { method_name, .. } => {
-                        assert_eq!(method_name, "deposit_and_stake")
+        let mut context = test_context.context.clone();
+        context.attached_deposit = YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+
+        context.attached_deposit = 0;
+        testing_env!(context.clone());
+        contract.stake();
+
+        // Act
+        contract.stake();
+    }
+
+    #[test]
+    fn locked_and_staked() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+        let contract = &mut test_context.contract;
+
+        let mut context = test_context.context.clone();
+        context.attached_deposit = YOCTO;
+        testing_env!(context.clone());
+        let batch_id = contract.deposit();
+
+        context.attached_deposit = 0;
+        testing_env!(context.clone());
+        contract.stake();
+
+        context.predecessor_account_id = env::current_account_id();
+        testing_env!(context.clone());
+        contract.on_deposit_and_stake(
+            None,
+            StakingPoolAccount {
+                account_id: contract.staking_pool_id(),
+                unstaked_balance: 10.into(),
+                staked_balance: (YOCTO - 10).into(),
+                can_withdraw: true,
+            },
+        );
+        match contract.stake_batch_lock {
+            Some(StakeLock::Staked {
+                near_liquidity,
+                staked_balance,
+                unstaked_balance,
+            }) => {
+                assert!(near_liquidity.is_none());
+                assert_eq!(unstaked_balance.value(), 10);
+                assert_eq!(staked_balance.value(), YOCTO - 10);
+
+                // Act
+                context.predecessor_account_id = contract.operator_id();
+                testing_env!(context.clone());
+                match contract.stake() {
+                    PromiseOrValue::Value(id) => {
+                        assert_eq!(batch_id, id);
+                        assert!(contract.stake_batch_lock.is_none());
                     }
-                    _ => panic!("expected `deposit_and_stake` func call on staking pool"),
+                    _ => panic!("expected batch ID to be returned"),
                 }
             }
-            {
-                let action = &receipt.actions[1];
-                match action {
-                    Action::FunctionCall { method_name, .. } => {
-                        assert_eq!(method_name, "get_account")
-                    }
-                    _ => panic!("expected `get_account` func call on staking pool"),
-                }
-            }
+            _ => panic!("expected StakeLock::Staked"),
         }
+    }
 
-        {
-            let receipt = &receipts[1];
-            let action = &receipt.actions[0];
-            match action {
-                Action::FunctionCall { method_name, .. } => {
-                    assert_eq!(method_name, "on_deposit_and_stake")
-                }
-                _ => panic!("expected `get_account` func call on staking pool"),
-            }
-        }
+    #[test]
+    #[should_panic(expected = "ILLEGAL STATE : stake batch should exist")]
+    fn no_stake_batch() {
+        let mut test_context = TestContext::with_registered_account();
+        let contract = &mut test_context.contract;
+        contract.stake();
+    }
 
-        {
-            let receipt = &receipts[2];
-            let action = &receipt.actions[0];
-            match action {
-                Action::FunctionCall { method_name, .. } => {
-                    assert_eq!(method_name, "clear_stake_batch_lock")
-                }
-                _ => panic!("expected `clear_stake_batch_lock` callback"),
+    #[test]
+    #[should_panic(expected = "action is blocked because a batch is running")]
+    fn locked_and_unstaking() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+        let contract = &mut test_context.contract;
+
+        let mut context = test_context.context.clone();
+        context.attached_deposit = YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+
+        let mut account = contract.predecessor_registered_account();
+        account.apply_stake_credit(YOCTO.into());
+        contract.save_registered_account(&account);
+
+        context.attached_deposit = 0;
+        testing_env!(context.clone());
+        contract.redeem_all_and_unstake();
+        match contract.redeem_stake_batch_lock {
+            Some(RedeemLock::Unstaking) => {
+                // Act
+                contract.stake();
             }
+            _ => panic!("expected RedeemLock::Unstaking"),
         }
     }
 
     /// when there is a pending withdrawal, the contract tries to add liquidity
     #[test]
     fn with_pending_withdrawal() {
+        fn check_action_receipts() {
+            let receipts = deserialize_receipts();
+            assert_eq!(receipts.len(), 3);
+
+            {
+                let receipt = &receipts[0];
+                let action = &receipt.actions[0];
+                match action {
+                    Action::FunctionCall { method_name, .. } => {
+                        assert_eq!(method_name, "get_account")
+                    }
+                    _ => panic!("expected `deposit_and_stake` func call on staking pool"),
+                }
+            }
+
+            {
+                let receipt = &receipts[1];
+                let action = &receipt.actions[0];
+                match action {
+                    Action::FunctionCall { method_name, .. } => {
+                        assert_eq!(method_name, "on_run_stake_batch")
+                    }
+                    _ => panic!("expected `get_account` func call on staking pool"),
+                }
+            }
+
+            {
+                let receipt = &receipts[2];
+                let action = &receipt.actions[0];
+                match action {
+                    Action::FunctionCall { method_name, .. } => {
+                        assert_eq!(method_name, "clear_stake_batch_lock")
+                    }
+                    _ => panic!("expected `clear_stake_batch_lock` callback"),
+                }
+            }
+        }
+
         // Arrange
         let mut test_context = TestContext::with_registered_account();
         let contract = &mut test_context.contract;
@@ -1583,45 +1805,11 @@ mod test_stake {
         contract.stake();
 
         // Assert
-        assert!(contract.stake_batch_locked());
-        check_stake_receipts_with_pending_withdrawal();
-    }
-
-    fn check_stake_receipts_with_pending_withdrawal() {
-        let receipts = deserialize_receipts();
-        assert_eq!(receipts.len(), 3);
-
-        {
-            let receipt = &receipts[0];
-            let action = &receipt.actions[0];
-            match action {
-                Action::FunctionCall { method_name, .. } => {
-                    assert_eq!(method_name, "get_account")
-                }
-                _ => panic!("expected `deposit_and_stake` func call on staking pool"),
+        match contract.stake_batch_lock {
+            Some(StakeLock::Staking) => {
+                check_action_receipts();
             }
-        }
-
-        {
-            let receipt = &receipts[1];
-            let action = &receipt.actions[0];
-            match action {
-                Action::FunctionCall { method_name, .. } => {
-                    assert_eq!(method_name, "on_run_stake_batch")
-                }
-                _ => panic!("expected `get_account` func call on staking pool"),
-            }
-        }
-
-        {
-            let receipt = &receipts[2];
-            let action = &receipt.actions[0];
-            match action {
-                Action::FunctionCall { method_name, .. } => {
-                    assert_eq!(method_name, "clear_stake_batch_lock")
-                }
-                _ => panic!("expected `clear_stake_batch_lock` callback"),
-            }
+            _ => panic!("expected StakeLock::Staking"),
         }
     }
 }
