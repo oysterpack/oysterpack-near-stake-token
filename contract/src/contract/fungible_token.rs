@@ -1,11 +1,8 @@
-use crate::config::{GAS_FOR_DATA_DEPENDENCY, GAS_FOR_PROMISE};
-use crate::domain::Gas;
-use crate::interface::ResolveTransferCall;
 use crate::*;
 use crate::{
     core::Hash,
-    domain::{YoctoStake, TGAS},
-    interface::{FungibleToken, Memo, TokenAmount, TransferCallMessage},
+    domain::YoctoStake,
+    interface::{FungibleToken, Memo, ResolveTransferCall, TokenAmount, TransferCallMessage},
     near::NO_DEPOSIT,
 };
 use near_sdk::{
@@ -50,14 +47,27 @@ impl FungibleToken for StakeTokenContract {
     ) -> Promise {
         self.ft_transfer(receiver_id.clone(), amount.clone(), _memo);
 
-        let resolve_transfer_gas: Gas = TGAS * 10;
+        let resolve_transfer_gas = self
+            .config
+            .gas_config()
+            .callbacks()
+            .resolve_transfer_gas()
+            .value();
         // pass along remainder of prepaid  gas to receiver contract
         let gas = {
             env::prepaid_gas()
                 - env::used_gas()
-                - resolve_transfer_gas.value()
-                - (GAS_FOR_PROMISE * 2).value()
-                - GAS_FOR_DATA_DEPENDENCY.value()
+                - resolve_transfer_gas
+                // ft_on_transfer
+                - self.config.gas_config().function_call_promise().value()
+                // ft_resolve_transfer_call
+                - self.config.gas_config().function_call_promise().value()
+                // ft_resolve_transfer_call data dependency
+                - self
+                    .config
+                    .gas_config()
+                    .function_call_promise_data_dependency()
+                    .value()
         };
 
         ext_transfer_receiver::ft_on_transfer(
@@ -74,7 +84,7 @@ impl FungibleToken for StakeTokenContract {
             amount,
             &env::current_account_id(),
             NO_DEPOSIT.value(),
-            resolve_transfer_gas.value(),
+            resolve_transfer_gas,
         ))
     }
 
@@ -505,6 +515,7 @@ mod test_transfer {
 #[cfg(test)]
 mod test_transfer_call {
     use super::*;
+    use crate::domain::TGAS;
     use crate::interface::AccountManagement;
     use crate::near::YOCTO;
     use crate::test_utils::*;

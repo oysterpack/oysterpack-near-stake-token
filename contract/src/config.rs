@@ -9,11 +9,6 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 /// ensure the contract is operational
 pub const CONTRACT_MIN_OPERATIONAL_BALANCE: YoctoNear = YoctoNear(YOCTO);
 
-/// Fee for function call promise.
-pub const GAS_FOR_PROMISE: Gas = Gas(5_000_000_000_000);
-/// Fee for the `.then` call.
-pub const GAS_FOR_DATA_DEPENDENCY: Gas = Gas(10_000_000_000_000);
-
 #[derive(Debug, BorshSerialize, BorshDeserialize, Clone, Copy)]
 pub struct Config {
     storage_cost_per_byte: YoctoNear,
@@ -93,6 +88,9 @@ fn assert_gas_range(gas: Gas, min: u8, max: u8, field: &str) {
 pub struct GasConfig {
     staking_pool: StakingPoolGasConfig,
     callbacks: CallBacksGasConfig,
+
+    function_call_promise: Gas,
+    function_call_promise_data_dependency: Gas,
 }
 
 impl GasConfig {
@@ -102,6 +100,14 @@ impl GasConfig {
 
     pub fn callbacks(&self) -> CallBacksGasConfig {
         self.callbacks
+    }
+
+    pub fn function_call_promise(&self) -> Gas {
+        self.function_call_promise
+    }
+
+    pub fn function_call_promise_data_dependency(&self) -> Gas {
+        self.function_call_promise_data_dependency
     }
 
     /// if validate is true, then merge performs some sanity checks on the config to
@@ -115,6 +121,13 @@ impl GasConfig {
         }
         if let Some(config) = config.staking_pool {
             self.staking_pool.merge(config, validate);
+        }
+
+        if let Some(gas) = config.function_call_promise {
+            self.function_call_promise = gas.into();
+        }
+        if let Some(gas) = config.function_call_promise_data_dependency {
+            self.function_call_promise_data_dependency = gas.into();
         }
 
         if validate {
@@ -150,6 +163,8 @@ impl Default for GasConfig {
         Self {
             staking_pool: Default::default(),
             callbacks: Default::default(),
+            function_call_promise: TGAS * 5,
+            function_call_promise_data_dependency: TGAS * 10,
         }
     }
 }
@@ -265,6 +280,9 @@ pub struct CallBacksGasConfig {
     on_run_redeem_stake_batch: Gas,
     on_redeeming_stake_pending_withdrawal: Gas,
     on_redeeming_stake_post_withdrawal: Gas,
+
+    /// used by FungibleToken transfer call workflow
+    resolve_transfer_gas: Gas,
 }
 
 impl CallBacksGasConfig {
@@ -323,6 +341,13 @@ impl CallBacksGasConfig {
             }
             self.on_redeeming_stake_post_withdrawal = gas;
         }
+        if let Some(gas) = config.resolve_transfer_gas {
+            let gas = gas.into();
+            if validate {
+                assert_gas_range(gas, 5, 20, "callbacks::resolve_transfer_gas");
+            }
+            self.resolve_transfer_gas = gas;
+        }
     }
 
     pub fn on_deposit_and_stake(&self) -> Gas {
@@ -352,6 +377,10 @@ impl CallBacksGasConfig {
     pub fn on_unstake(&self) -> Gas {
         self.on_unstake
     }
+
+    pub fn resolve_transfer_gas(&self) -> Gas {
+        self.resolve_transfer_gas
+    }
 }
 
 impl Default for CallBacksGasConfig {
@@ -367,6 +396,7 @@ impl Default for CallBacksGasConfig {
 
             on_redeeming_stake_pending_withdrawal: TGAS * 85,
             on_redeeming_stake_post_withdrawal: TGAS * 5,
+            resolve_transfer_gas: TGAS * 10,
         }
     }
 }
@@ -388,6 +418,7 @@ mod test {
                 on_run_redeem_stake_batch: Some((TGAS * 72).into()),
                 on_redeeming_stake_pending_withdrawal: Some((TGAS * 73).into()),
                 on_redeeming_stake_post_withdrawal: Some((TGAS * 9).into()),
+                resolve_transfer_gas: Some((TGAS * 10).into()),
             },
             true,
         );

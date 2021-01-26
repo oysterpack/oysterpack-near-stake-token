@@ -1,9 +1,7 @@
 //required in order for near_bindgen macro to work outside of lib.rs
-use crate::config::GAS_FOR_PROMISE;
-use crate::domain::{YoctoStake, TGAS};
 use crate::*;
 use crate::{
-    domain::{self, YoctoNear},
+    domain::{self, YoctoNear, YoctoStake, TGAS},
     errors::illegal_state::STAKE_BATCH_SHOULD_EXIST,
     ext_staking_workflow_callbacks,
     interface::staking_service::events::{NearLiquidityAdded, PendingWithdrawalCleared, Staked},
@@ -302,7 +300,10 @@ impl StakeTokenContract {
             &env::current_account_id(),
             NO_DEPOSIT.into(),
             // pass on remaining gas
-            env::prepaid_gas() - env::used_gas() - GAS_FOR_PROMISE.value() - TGAS.value(),
+            env::prepaid_gas()
+                - env::used_gas()
+                - self.config.gas_config().function_call_promise().value()
+                - TGAS.value(),
         )
     }
 }

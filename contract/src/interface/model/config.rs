@@ -20,6 +20,9 @@ pub struct Config {
 pub struct GasConfig {
     pub staking_pool: Option<StakingPoolGasConfig>,
     pub callbacks: Option<CallBacksGasConfig>,
+
+    pub function_call_promise: Option<Gas>,
+    pub function_call_promise_data_dependency: Option<Gas>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -45,6 +48,9 @@ pub struct CallBacksGasConfig {
     pub on_run_redeem_stake_batch: Option<Gas>,
     pub on_redeeming_stake_pending_withdrawal: Option<Gas>,
     pub on_redeeming_stake_post_withdrawal: Option<Gas>,
+
+    /// used by FungibleToken transfer call workflow
+    pub resolve_transfer_gas: Option<Gas>,
 }
 
 impl From<config::Config> for Config {
@@ -62,6 +68,10 @@ impl From<config::GasConfig> for GasConfig {
         Self {
             staking_pool: Some(value.staking_pool().into()),
             callbacks: Some(value.callbacks().into()),
+            function_call_promise: Some(value.function_call_promise().into()),
+            function_call_promise_data_dependency: Some(
+                value.function_call_promise_data_dependency().into(),
+            ),
         }
     }
 }
@@ -93,6 +103,7 @@ impl From<config::CallBacksGasConfig> for CallBacksGasConfig {
             on_redeeming_stake_post_withdrawal: Some(
                 value.on_redeeming_stake_post_withdrawal().into(),
             ),
+            resolve_transfer_gas: Some(value.resolve_transfer_gas().into()),
         }
     }
 }
