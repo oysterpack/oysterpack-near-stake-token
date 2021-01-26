@@ -298,14 +298,11 @@ impl StakeTokenContract {
     }
 
     pub(crate) fn invoke_process_stake_batch(&self) -> Promise {
-        // pass on remaining gas
-        let remaining_compute = TGAS.value();
-        let gas =
-            env::prepaid_gas() - env::used_gas() - GAS_FOR_PROMISE.value() - remaining_compute;
         ext_staking_workflow_callbacks::process_staked_batch(
             &env::current_account_id(),
             NO_DEPOSIT.into(),
-            gas,
+            // pass on remaining gas
+            env::prepaid_gas() - env::used_gas() - GAS_FOR_PROMISE.value() - TGAS.value(),
         )
     }
 }

@@ -51,6 +51,7 @@ impl FungibleToken for StakeTokenContract {
         self.ft_transfer(receiver_id.clone(), amount.clone(), _memo);
 
         let resolve_transfer_gas: Gas = TGAS * 10;
+        // pass along remainder of prepaid  gas to receiver contract
         let gas = {
             env::prepaid_gas()
                 - env::used_gas()

@@ -9,8 +9,6 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 /// ensure the contract is operational
 pub const CONTRACT_MIN_OPERATIONAL_BALANCE: YoctoNear = YoctoNear(YOCTO);
 
-/// Basic compute.
-pub const GAS_BASE_COMPUTE: Gas = Gas(5_000_000_000_000);
 /// Fee for function call promise.
 pub const GAS_FOR_PROMISE: Gas = Gas(5_000_000_000_000);
 /// Fee for the `.then` call.
@@ -360,7 +358,7 @@ impl Default for CallBacksGasConfig {
     fn default() -> Self {
         Self {
             on_run_stake_batch: TGAS * 135,
-            on_deposit_and_stake: TGAS * 10,
+            on_deposit_and_stake: TGAS * 15,
 
             unlock: TGAS * 4,
 
