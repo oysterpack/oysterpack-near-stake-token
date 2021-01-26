@@ -10,6 +10,10 @@ use near_sdk::near_bindgen;
 
 #[near_bindgen]
 impl Operator for StakeTokenContract {
+    fn operator_id(&self) -> AccountId {
+        self.operator_id.clone()
+    }
+
     fn contract_state(&self) -> ContractState {
         ContractState {
             block: domain::BlockTimeHeight::from_env().into(),

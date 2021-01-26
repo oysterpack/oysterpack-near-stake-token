@@ -1197,7 +1197,6 @@ mod test_deposit {
     use crate::interface::{AccountManagement, Operator};
     use crate::{near::YOCTO, test_utils::*};
     use near_sdk::{env, testing_env, MockedBlockchain, VMContext};
-    use std::convert::TryInto;
 
     /// Given the contract is not locked
     /// When an account deposits funds to be staked
@@ -1225,7 +1224,7 @@ mod test_deposit {
         ) {
             // check account stake batch
             let account = contract
-                .lookup_account(context.predecessor_account_id.try_into().unwrap())
+                .lookup_account(to_valid_account_id(&context.predecessor_account_id))
                 .unwrap();
             let account_stake_batch = account.stake_batch.as_ref().unwrap();
             assert_eq!(
@@ -1304,7 +1303,7 @@ mod test_deposit {
         {
             // check account STAKE batches
             let account = contract
-                .lookup_account(test_context.account_id.try_into().unwrap())
+                .lookup_account(to_valid_account_id(test_context.account_id))
                 .unwrap();
 
             let stake_batch = account.stake_batch.as_ref().unwrap();
@@ -1353,7 +1352,7 @@ mod test_deposit {
             assert_eq!(batch_id_3, batch_id_2);
             // check account STAKE batches
             let account = contract
-                .lookup_account(context.predecessor_account_id.try_into().unwrap())
+                .lookup_account(to_valid_account_id(&context.predecessor_account_id))
                 .unwrap();
 
             assert!(account.stake_batch.is_none());
@@ -1405,6 +1404,75 @@ mod test_deposit {
         context.attached_deposit = contract.min_required_near_deposit().value();
         testing_env!(context);
         contract.deposit();
+    }
+
+    #[test]
+    fn with_receipts_to_claim() {
+        // Arrange
+        let mut test_ctx = TestContext::with_registered_account();
+        let contract = &mut test_ctx.contract;
+
+        let mut context = test_ctx.context.clone();
+        context.attached_deposit = YOCTO;
+        testing_env!(context.clone());
+        let batch_id = contract.deposit();
+        context.storage_usage = env::storage_usage();
+
+        context.attached_deposit = 0;
+        testing_env!(context.clone());
+        contract.stake();
+        context.storage_usage = env::storage_usage();
+
+        // progress the staking workflow to completion
+        {
+            context.attached_deposit = 0;
+            testing_env!(context.clone());
+            contract.on_deposit_and_stake(
+                None,
+                StakingPoolAccount {
+                    account_id: context.predecessor_account_id.clone(),
+                    unstaked_balance: 7.into(),
+                    staked_balance: (YOCTO - 7).into(),
+                    can_withdraw: true,
+                },
+            );
+            context.storage_usage = env::storage_usage();
+
+            testing_env!(context.clone());
+            contract.process_staked_batch();
+            context.storage_usage = env::storage_usage();
+
+            context.predecessor_account_id = contract.operator_id();
+            testing_env!(context.clone());
+            contract.clear_stake_batch_lock();
+            context.storage_usage = env::storage_usage();
+        }
+
+        // at this point, the user should have unclaimed batch receipt funds
+        context.is_view = true;
+        testing_env!(context.clone());
+        let receipt = contract
+            .stake_batch_receipt(batch_id.clone().into())
+            .unwrap();
+        assert_eq!(receipt.staked_near, YOCTO.into());
+
+        // Act
+        context.is_view = false;
+        context.predecessor_account_id = test_ctx.account_id.to_string();
+        context.attached_deposit = 2 * YOCTO;
+        testing_env!(context.clone());
+        contract.deposit();
+
+        // Assert
+        let account = contract
+            .lookup_account(to_valid_account_id(test_ctx.account_id))
+            .unwrap();
+        assert_eq!(account.stake.unwrap().amount.value(), YOCTO);
+
+        // check receipt was claimed
+        context.is_view = true;
+        testing_env!(context.clone());
+        assert!(contract.stake_batch_receipt(batch_id.into()).is_none());
     }
 }
 

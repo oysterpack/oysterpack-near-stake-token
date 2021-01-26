@@ -1,7 +1,10 @@
 use crate::interface::{model::contract_state::ContractState, Config};
+use near_sdk::AccountId;
 
 /// provides functions to support DevOps
 pub trait Operator {
+    fn operator_id(&self) -> AccountId;
+
     /// returns the contract's state
     /// - useful for monitoring and debugging
     fn contract_state(&self) -> ContractState;
