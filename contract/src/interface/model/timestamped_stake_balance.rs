@@ -2,11 +2,9 @@ use crate::{
     domain,
     interface::{BlockHeight, BlockTimestamp, EpochHeight, YoctoStake},
 };
-use near_sdk::{
-    serde::{Deserialize, Serialize},
-};
+use near_sdk::serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct TimestampedStakeBalance {
     pub amount: YoctoStake,

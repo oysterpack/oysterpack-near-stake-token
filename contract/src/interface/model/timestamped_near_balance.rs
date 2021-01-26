@@ -2,11 +2,9 @@ use crate::{
     domain,
     interface::{BlockHeight, BlockTimestamp, EpochHeight, YoctoNear},
 };
-use near_sdk::{
-    serde::{Deserialize, Serialize},
-};
+use near_sdk::serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct TimestampedNearBalance {
     pub amount: YoctoNear,

@@ -1191,6 +1191,224 @@ pub trait ExtStakingWorkflowCallbacks {
 }
 
 #[cfg(test)]
+mod test_deposit {
+    use super::*;
+
+    use crate::interface::{AccountManagement, Operator};
+    use crate::{near::YOCTO, test_utils::*};
+    use near_sdk::{env, testing_env, MockedBlockchain, VMContext};
+    use std::convert::TryInto;
+
+    /// Given the contract is not locked
+    /// When an account deposits funds to be staked
+    /// Then the funds are deposited into the current stake batch on the account
+    /// And the funds are deposited into the current stake batch on the contract
+    #[test]
+    fn when_contract_not_locked() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+        let contract = &mut test_context.contract;
+
+        let mut context = test_context.context.clone();
+        context.attached_deposit = YOCTO;
+        testing_env!(context.clone());
+
+        // Act
+        let batch_id = contract.deposit();
+        context.storage_usage = env::storage_usage();
+
+        fn check_stake_batch(
+            contract: &mut StakeTokenContract,
+            context: VMContext,
+            batch_id: BatchId,
+            expected_balance: YoctoNear,
+        ) {
+            // check account stake batch
+            let account = contract
+                .lookup_account(context.predecessor_account_id.try_into().unwrap())
+                .unwrap();
+            let account_stake_batch = account.stake_batch.as_ref().unwrap();
+            assert_eq!(
+                account_stake_batch.balance.amount.value(),
+                expected_balance.value()
+            );
+            assert_eq!(account_stake_batch.id, batch_id);
+            assert!(account.next_stake_batch.is_none());
+
+            // check contract state
+            {
+                let state = contract.contract_state();
+                let contract_stake_batch = state.stake_batch.as_ref().unwrap();
+                assert_eq!(contract_stake_batch.balance, account_stake_batch.balance);
+                assert!(state.next_stake_batch.is_none());
+                assert_eq!(
+                    state.balances.customer_batched_stake_deposits.value(),
+                    account_stake_batch.balance.amount.value()
+                );
+                assert_eq!(
+                    state.balances.total_user_accounts_balance.value(),
+                    account_stake_batch.balance.amount.value()
+                        + account.storage_escrow.amount.value()
+                );
+            }
+        };
+
+        // Assert
+        check_stake_batch(contract, context.clone(), batch_id.clone(), YOCTO.into());
+
+        // Act
+        // user makes another deposit into same StakeBatch
+        context.attached_deposit = YOCTO;
+        testing_env!(context.clone());
+        let batch_id_2 = contract.deposit();
+        context.storage_usage = env::storage_usage();
+
+        // Assert
+        assert_eq!(
+            batch_id, batch_id_2,
+            "NEAR should have been deposited into same batch"
+        );
+
+        check_stake_batch(contract, context.clone(), batch_id_2, (2 * YOCTO).into());
+    }
+
+    /// Given the contract is locked
+    /// When an account deposits funds to be staked
+    /// Then the funds are deposited into the next stake batch on the account
+    /// And the funds are deposited into the next stake batch on the contract
+    #[test]
+    fn when_contract_locked() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+        let contract = &mut test_context.contract;
+
+        let mut context = test_context.context.clone();
+        context.attached_deposit = YOCTO;
+        testing_env!(context.clone());
+        let batch_id = contract.deposit();
+        context.storage_usage = env::storage_usage();
+
+        context.attached_deposit = 0;
+        testing_env!(context.clone());
+        contract.stake(); // locks the contract
+        context.storage_usage = env::storage_usage();
+
+        // Act
+        context.attached_deposit = 2 * YOCTO;
+        testing_env!(context.clone());
+        let batch_id_2 = contract.deposit();
+        context.storage_usage = env::storage_usage();
+        assert_ne!(batch_id, batch_id_2);
+
+        // Assert
+        {
+            // check account STAKE batches
+            let account = contract
+                .lookup_account(test_context.account_id.try_into().unwrap())
+                .unwrap();
+
+            let stake_batch = account.stake_batch.as_ref().unwrap();
+            assert_eq!(stake_batch.balance.amount.value(), YOCTO);
+            assert_eq!(stake_batch.id, batch_id);
+
+            let next_stake_batch = account.next_stake_batch.as_ref().unwrap();
+            assert_eq!(next_stake_batch.balance.amount.value(), (2 * YOCTO));
+            assert_eq!(next_stake_batch.id, batch_id_2);
+
+            {
+                let state = contract.contract_state();
+
+                let contract_stake_batch = state.stake_batch.as_ref().unwrap();
+                assert_eq!(contract_stake_batch.id, stake_batch.id);
+                assert_eq!(
+                    contract_stake_batch.balance.amount,
+                    stake_batch.balance.amount
+                );
+
+                let contract_next_stake_batch = state.next_stake_batch.as_ref().unwrap();
+                assert_eq!(contract_next_stake_batch.id, next_stake_batch.id);
+                assert_eq!(
+                    contract_next_stake_batch.balance.amount,
+                    next_stake_batch.balance.amount
+                );
+            }
+        }
+
+        // Arrange - When another account deposits, then funds should go into next Stakebatch
+        let user_2 = "user-2.near";
+        context.predecessor_account_id = user_2.to_string();
+        context.attached_deposit = contract.account_storage_fee().value();
+        testing_env!(context.clone());
+        contract.register_account();
+        context.storage_usage = env::storage_usage();
+
+        // Act
+        context.attached_deposit = 3 * YOCTO;
+        testing_env!(context.clone());
+        let batch_id_3 = contract.deposit();
+        context.storage_usage = env::storage_usage();
+
+        // Assert
+        {
+            assert_eq!(batch_id_3, batch_id_2);
+            // check account STAKE batches
+            let account = contract
+                .lookup_account(context.predecessor_account_id.try_into().unwrap())
+                .unwrap();
+
+            assert!(account.stake_batch.is_none());
+
+            let next_stake_batch = account.next_stake_batch.as_ref().unwrap();
+            assert_eq!(next_stake_batch.balance.amount.value(), (3 * YOCTO));
+            assert_eq!(next_stake_batch.id, batch_id_3);
+
+            {
+                let state = contract.contract_state();
+
+                let contract_next_stake_batch = state.next_stake_batch.as_ref().unwrap();
+                assert_eq!(contract_next_stake_batch.id, next_stake_batch.id);
+                assert_eq!(contract_next_stake_batch.balance.amount.value(), 5 * YOCTO);
+            }
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "account is not registered")]
+    fn account_not_registered() {
+        let mut test_ctx = TestContext::new();
+        let contract = &mut test_ctx.contract;
+
+        let mut context = test_ctx.context.clone();
+        context.predecessor_account_id = "unregistered-user.near".to_string();
+        context.attached_deposit = YOCTO;
+        contract.deposit();
+    }
+
+    #[test]
+    #[should_panic(expected = "minimum required NEAR deposit is")]
+    fn deposit_lt_min_required_deposit() {
+        let mut test_ctx = TestContext::with_registered_account();
+        let contract = &mut test_ctx.contract;
+
+        let mut context = test_ctx.context.clone();
+        context.attached_deposit = contract.min_required_near_deposit().value() - 1;
+        testing_env!(context);
+        contract.deposit();
+    }
+
+    #[test]
+    fn deposit_eq_min_required_deposit() {
+        let mut test_ctx = TestContext::with_registered_account();
+        let contract = &mut test_ctx.contract;
+
+        let mut context = test_ctx.context.clone();
+        context.attached_deposit = contract.min_required_near_deposit().value();
+        testing_env!(context);
+        contract.deposit();
+    }
+}
+
+#[cfg(test)]
 mod test_stake {
     use super::*;
 
@@ -2610,150 +2828,6 @@ mod test {
     };
     use near_sdk::{json_types::ValidAccountId, testing_env, MockedBlockchain};
     use std::convert::{TryFrom, TryInto};
-
-    /// Given the contract is not locked
-    /// When an account deposits funds to be staked
-    /// Then the funds are deposited into the current stake batch on the account
-    /// And the funds are deposited into the current stake batch on the contract
-    #[test]
-    fn deposit_contract_not_locked() {
-        let mut test_context = TestContext::with_registered_account();
-        let mut context = test_context.context.clone();
-        let contract = &mut test_context.contract;
-
-        context.attached_deposit = 100 * YOCTO;
-        testing_env!(context.clone());
-
-        let batch_id = contract.deposit();
-
-        // Then the funds are deposited into the current stake batch on the account
-        let account_id = test_context.account_id;
-        let account = contract
-            .lookup_account(account_id.try_into().unwrap())
-            .unwrap();
-        let stake_batch = account.stake_batch.unwrap();
-        assert_eq!(stake_batch.balance.amount.value(), context.attached_deposit);
-        assert_eq!(stake_batch.id, batch_id);
-        assert!(account.next_stake_batch.is_none());
-
-        // And the funds are deposited into the current stake batch on the contract
-        assert_eq!(
-            contract.stake_batch.unwrap().balance().amount(),
-            context.attached_deposit.into()
-        );
-        assert!(contract.next_stake_batch.is_none());
-
-        // add another deposit to the batch
-        context.attached_deposit = 100 * YOCTO;
-        testing_env!(context.clone());
-        let batch_id_2 = contract.deposit();
-        assert_eq!(batch_id, batch_id_2);
-
-        let account = contract
-            .lookup_account(account_id.try_into().unwrap())
-            .unwrap();
-        let stake_batch = account.stake_batch.unwrap();
-        assert_eq!(
-            stake_batch.balance.amount.value(),
-            context.attached_deposit * 2
-        );
-        assert_eq!(stake_batch.id, batch_id);
-        assert!(account.next_stake_batch.is_none());
-
-        // And the funds are deposited into the current stake batch on the contract
-        assert_eq!(
-            contract.stake_batch.unwrap().balance().amount().value(),
-            context.attached_deposit * 2
-        );
-        assert!(contract.next_stake_batch.is_none());
-    }
-
-    /// Given the contract is locked
-    /// When an account deposits funds to be staked
-    /// Then the funds are deposited into the next stake batch on the account
-    /// And the funds are deposited into the next stake batch on the contract
-    #[test]
-    fn deposit_contract_locked() {
-        let mut test_context = TestContext::with_registered_account();
-        let mut context = test_context.context.clone();
-        let contract = &mut test_context.contract;
-        contract.stake_batch_lock = Some(StakeLock::Staking);
-
-        context.attached_deposit = 100 * YOCTO;
-        testing_env!(context.clone());
-
-        let batch_id = contract.deposit();
-        let account = contract
-            .lookup_account(test_context.account_id.try_into().unwrap())
-            .unwrap();
-        assert!(account.stake_batch.is_none());
-        let stake_batch = account.next_stake_batch.unwrap();
-        assert_eq!(stake_batch.balance.amount.value(), context.attached_deposit);
-        assert_eq!(stake_batch.id, batch_id);
-        assert!(account.stake_batch.is_none());
-
-        // And the funds are deposited into the next stake batch on the contract
-        assert_eq!(
-            contract.next_stake_batch.unwrap().balance().amount(),
-            context.attached_deposit.into()
-        );
-        assert!(contract.stake_batch.is_none());
-    }
-
-    /// Given the contract is not locked
-    /// When the account deposits funds to be staked
-    /// Then the funds are deposited into the current stake batch
-    /// Given the contract is then locked
-    /// When the account deposits funds to be staked
-    /// Then the funds are deposited into the next stake batch
-    /// And both the contract and account have funds in the current and next stake batches
-    #[test]
-    fn deposit_contract_not_locked_and_then_locked() {
-        let mut test_context = TestContext::with_registered_account();
-        let mut context = test_context.context.clone();
-        let contract = &mut test_context.contract;
-
-        context.attached_deposit = 100 * YOCTO;
-        testing_env!(context.clone());
-
-        let batch_id = contract.deposit();
-        let account = contract
-            .lookup_account(test_context.account_id.try_into().unwrap())
-            .unwrap();
-        assert!(account.next_stake_batch.is_none());
-        let stake_batch = account.stake_batch.unwrap();
-        assert_eq!(stake_batch.balance.amount.value(), context.attached_deposit);
-        assert_eq!(stake_batch.id, batch_id);
-
-        assert!(contract.next_stake_batch.is_none());
-        assert_eq!(
-            contract.stake_batch.unwrap().balance().amount(),
-            context.attached_deposit.into()
-        );
-
-        contract.stake_batch_lock = Some(StakeLock::Staking);
-
-        context.attached_deposit = 50 * YOCTO;
-        testing_env!(context.clone());
-
-        let next_batch_id = contract.deposit();
-        let account = contract
-            .lookup_account(test_context.account_id.try_into().unwrap())
-            .unwrap();
-        assert_eq!(account.stake_batch.unwrap().id, batch_id);
-        let next_stake_batch = account.next_stake_batch.unwrap();
-        assert_eq!(
-            next_stake_batch.balance.amount.value(),
-            context.attached_deposit
-        );
-        assert_eq!(next_stake_batch.id, next_batch_id);
-
-        assert_eq!(contract.stake_batch.unwrap().id().value(), batch_id.0 .0);
-        assert_eq!(
-            contract.next_stake_batch.unwrap().id().value(),
-            next_batch_id.0 .0
-        );
-    }
 
     /// Given the account has no funds in stake batches
     /// When funds are claimed

@@ -4,11 +4,12 @@ use crate::domain::TGAS;
 use crate::interface::{AccountManagement, YoctoNear};
 use crate::near_env::Env;
 use crate::{near::*, StakeTokenContract};
-use near_sdk::json_types::ValidAccountId;
-use near_sdk::test_utils::get_created_receipts;
 use near_sdk::{
+    json_types::ValidAccountId,
     serde::{Deserialize, Serialize},
-    serde_json, testing_env, AccountId, MockedBlockchain, PromiseResult, VMContext,
+    serde_json,
+    test_utils::get_created_receipts,
+    testing_env, AccountId, MockedBlockchain, PromiseResult, VMContext,
 };
 use std::convert::TryInto;
 
@@ -70,6 +71,7 @@ impl<'a> TestContext<'a> {
         context.account_balance += contract.account_storage_fee().value();
 
         context.attached_deposit = 0;
+        context.storage_usage = contract.contract_initial_storage_usage.value();
         testing_env!(context.clone());
 
         Self {
