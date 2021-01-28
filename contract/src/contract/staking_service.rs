@@ -1821,24 +1821,82 @@ mod test_stake {
 
         let mut context = test_ctx.context.clone();
         context.attached_deposit = YOCTO;
+        const CONTRACT_EARNINGS: u128 = 10 * YOCTO;
+        context.account_balance += CONTRACT_EARNINGS;
         testing_env!(context.clone());
         contract.deposit();
         context.storage_usage = env::storage_usage();
 
         context.attached_deposit = 0;
-        context.account_balance += 10 * YOCTO;
         testing_env!(context.clone());
 
         contract.collected_earnings += domain::YoctoNear(2 * YOCTO);
+        let collected_earnings = contract.collected_earnings;
         let owner_balance = contract.contract_owner_balance;
         let contract_owner_earnings = contract.contract_owner_earnings();
         let user_accounts_earnings = contract.user_accounts_earnings();
+        let total_earnings_before_distribution = contract.total_earnings();
+        let total_user_accounts_balance = contract.total_user_accounts_balance();
 
         // Act
         contract.stake();
-        assert!(contract.contract_owner_balance > owner_balance);
 
         // Assert
+        println!(
+            r#"
+contract_owner_earnings_percentage = {}%
+
+total_earnings = {} -> {}
+context.account_balance = {} -> {}
+contract_owner_balance = {} -> {}
+contract_owner_earnings = {} -> {}
+expected contract_owner_balance = {}
+user_accounts_earnings = {} -> {}
+total_user_accounts_balance = {} -> {}
+collected_earnings: {} -> {}
+"#,
+            contract.config.contract_owner_earnings_percentage(),
+            //
+            total_earnings_before_distribution,
+            contract.total_earnings(),
+            //
+            context.account_balance,
+            env::account_balance(),
+            //
+            owner_balance,
+            contract.contract_owner_balance,
+            //
+            contract_owner_earnings,
+            contract.contract_owner_earnings(),
+            owner_balance + contract_owner_earnings,
+            //
+            user_accounts_earnings,
+            contract.user_accounts_earnings(),
+            //
+            total_user_accounts_balance,
+            contract.total_user_accounts_balance(),
+            //
+            collected_earnings,
+            contract.collected_earnings
+        );
+        assert_eq!(total_earnings_before_distribution.value(), 9 * YOCTO);
+        assert_eq!(contract.total_earnings(), 0.into());
+        assert_eq!(contract_owner_earnings, user_accounts_earnings); // 50/50
+
+        assert_eq!(
+            context.account_balance,
+            test_ctx.context.clone().account_balance + CONTRACT_EARNINGS
+        );
+        assert_eq!(
+            context.account_balance,
+            env::account_balance() + contract_owner_earnings.value() + YOCTO
+        );
+
+        assert_eq!(
+            contract.contract_owner_balance,
+            owner_balance + contract_owner_earnings,
+            "earnings should have been distributed to owner balance"
+        );
         assert_eq!(contract.collected_earnings.value(), 0);
         let receipts = deserialize_receipts();
         let deposit_and_stake_func_call_receipt = &receipts[0];
@@ -1850,7 +1908,12 @@ mod test_stake {
                 ..
             } => {
                 assert_eq!(method_name, "deposit_and_stake");
-                assert_eq!(*deposit, user_accounts_earnings.value() + YOCTO);
+                assert_eq!(user_accounts_earnings.value(), (9 * YOCTO / 2));
+                assert_eq!(
+                    *deposit,
+                    user_accounts_earnings.value() + YOCTO,
+                    "contract earnings should have been distributed to users through staking"
+                );
             }
             _ => panic!("expected `deposit_and_stake` func call on staking pool"),
         }

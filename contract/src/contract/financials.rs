@@ -99,7 +99,7 @@ impl StakeTokenContract {
     }
 
     pub fn user_accounts_earnings(&self) -> YoctoNear {
-        self.contract_earnings() - self.contract_owner_earnings()
+        self.total_earnings() - self.contract_owner_earnings()
     }
 
     pub fn contract_owner_storage_usage_cost(&self) -> YoctoNear {
