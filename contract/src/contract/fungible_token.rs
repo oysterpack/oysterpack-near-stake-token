@@ -114,32 +114,34 @@ impl ResolveTransferCall for StakeTokenContract {
         receiver_id: ValidAccountId,
         amount: TokenAmount,
     ) -> PromiseOrValue<TokenAmount> {
-        let unused_amount: TokenAmount = match self.promise_result(0) {
-            PromiseResult::Successful(result) => {
-                serde_json::from_slice(&result).expect("unused token amount")
-            }
-            _ => amount.clone(),
-        };
+        let unused_amount = {
+            let unused_amount: TokenAmount = match self.promise_result(0) {
+                PromiseResult::Successful(result) => {
+                    serde_json::from_slice(&result).expect("unused token amount")
+                }
+                _ => amount.clone(),
+            };
 
-        let unused_amount = if unused_amount.value() > amount.value() {
-            log!(
-                "WARNING: unused_amount({}) > amount({}) - refunding full amount back to sender",
-                unused_amount,
+            if unused_amount.value() > amount.value() {
+                log!(
+                    "WARNING: unused_amount({}) > amount({}) - refunding full amount back to sender",
+                    unused_amount,
+                    amount
+                );
                 amount
-            );
-            amount
-        } else {
-            unused_amount
+            } else {
+                unused_amount
+            }
         };
 
         let refund_amount = if unused_amount.value() > 0 {
-            log!("receiver returned unused amount: {}", unused_amount);
+            log!("unused amount: {}", unused_amount);
             let mut sender = self.registered_account(sender_id.as_ref());
             let mut receiver = self.registered_account(receiver_id.as_ref());
             match receiver.stake.as_mut() {
                 Some(balance) => {
                     let refund_amount = if balance.amount().value() < unused_amount.value() {
-                        log!("ERROR: partial refund will be applied because receiver STAKE balance is less than specified unused amount");
+                        log!("ERROR: partial refund will be applied because receiver STAKE balance is insufficient");
                         balance.amount()
                     } else {
                         unused_amount.value().into()
@@ -149,7 +151,7 @@ impl ResolveTransferCall for StakeTokenContract {
 
                     self.save_registered_account(&receiver);
                     self.save_registered_account(&sender);
-                    log!("sender has been refunded: {}", refund_amount.value());
+                    log!("sender refunded: {}", refund_amount.value());
                     refund_amount.value().into()
                 }
                 None => {
@@ -160,6 +162,7 @@ impl ResolveTransferCall for StakeTokenContract {
         } else {
             unused_amount
         };
+
         PromiseOrValue::Value(refund_amount)
     }
 }

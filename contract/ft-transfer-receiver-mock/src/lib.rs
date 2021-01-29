@@ -35,39 +35,18 @@ impl TransferReceiver for TransferReceiverMock {
         match msg {
             Message::Panic => panic!("BOOM!"),
             Message::Accept {
-                transfer_relay_percent,
                 transfer_relay,
                 refund_percent,
             } => {
-                if let Some(account_id) = transfer_relay {
-                    let transfer_relay_amount =
-                        amount.value() * transfer_relay_percent as u128 / 100;
-                    Promise::new(env::predecessor_account_id())
-                        .function_call(
-                            b"ft_transfer".to_vec(),
-                            json!({
-                            "receiver_id": account_id,
-                            "amount": TokenAmount::from(transfer_relay_amount)
-                            })
-                            .to_string()
-                            .into_bytes(),
-                            1,
-                            10 * TGAS,
-                        )
-                        .then(
-                            Promise::new(env::current_account_id()).function_call(
-                                b"resolve_ft_on_transfer".to_vec(),
-                                json!({
-                                "amount": amount,
-                                "refund_percent": refund_percent
-                                })
-                                .to_string()
-                                .into_bytes(),
-                                0,
-                                5 * TGAS,
-                            ),
-                        )
-                        .into()
+                if let Some(relay) = transfer_relay {
+                    let transfer_relay_amount = amount.value() * relay.percent as u128 / 100;
+                    self.invoke_ft_transfer(
+                        &env::predecessor_account_id(),
+                        &relay.account_id,
+                        transfer_relay_amount.into(),
+                    )
+                    .then(self.invoke_resolve_ft_on_transfer(amount, refund_percent))
+                    .into()
                 } else {
                     let refund_amount = amount.value() * refund_percent as u128 / 100;
                     PromiseOrValue::Value(refund_amount.into())
@@ -109,7 +88,16 @@ impl TransferReceiverMock {
         receiver_id: ValidAccountId,
         amount: TokenAmount,
     ) -> Promise {
-        Promise::new(token_contract.as_ref().to_string()).function_call(
+        self.invoke_ft_transfer(token_contract.as_ref(), receiver_id.as_ref(), amount)
+    }
+
+    fn invoke_ft_transfer(
+        &self,
+        token_contract: &str,
+        receiver_id: &str,
+        amount: TokenAmount,
+    ) -> Promise {
+        Promise::new(token_contract.to_string()).function_call(
             b"ft_transfer".to_vec(),
             json!({
             "receiver_id": receiver_id,
@@ -119,6 +107,20 @@ impl TransferReceiverMock {
             .into_bytes(),
             1,
             10 * TGAS,
+        )
+    }
+
+    fn invoke_resolve_ft_on_transfer(&self, amount: TokenAmount, refund_percent: u8) -> Promise {
+        Promise::new(env::current_account_id()).function_call(
+            b"resolve_ft_on_transfer".to_vec(),
+            json!({
+            "amount": amount,
+            "refund_percent": refund_percent
+            })
+            .to_string()
+            .into_bytes(),
+            0,
+            5 * TGAS,
         )
     }
 }
@@ -134,13 +136,18 @@ pub enum Message {
         refund_percent: u8,
         /// if set, then receiver funds will be transferred over to this account to simulate spending
         /// the received tokens
-        transfer_relay: Option<AccountId>,
-
-        /// specifies percentage of received amount to transfer over
-        transfer_relay_percent: u8,
+        transfer_relay: Option<TransferRelay>,
     },
     // used to instruct the receiver to panic to simulate failure snenario
     Panic,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct TransferRelay {
+    account_id: AccountId,
+    /// specifies percentage of received amount to transfer over
+    percent: u8,
 }
 
 pub trait TransferReceiver {
@@ -217,7 +224,6 @@ mod tests {
         let msg = Message::Accept {
             refund_percent: 0,
             transfer_relay: None,
-            transfer_relay_percent: 0,
         };
         let json = serde_json::to_string_pretty(&msg).unwrap();
         println!("{}", json);
@@ -225,7 +231,7 @@ mod tests {
         let json = json!({
         "Accept": {
             "refund_percent": 0,
-            "transfer_relay_percent": 0
+            "transfer_relay": {"account_id": "account.near", "percent": 50}
           }
         });
         let json = serde_json::to_string(&json).unwrap();
@@ -235,14 +241,19 @@ mod tests {
             Message::Accept {
                 refund_percent,
                 transfer_relay,
-                transfer_relay_percent,
             } => {
                 println!(
-                    "refund_percent={}% transfer_relay={:?} transfer_relay_percent={}%",
-                    refund_percent, transfer_relay, transfer_relay_percent
+                    "refund_percent={}% transfer_relay={:?}",
+                    refund_percent, transfer_relay
                 )
             }
             Message::Panic => panic!("expected Accept message type"),
         }
+
+        let msg = Message::Panic;
+        let json = serde_json::to_string_pretty(&msg).unwrap();
+        println!("{}", json);
+        let msg: Message = serde_json::from_str(&json).unwrap();
+        println!("{:?}", msg);
     }
 }
