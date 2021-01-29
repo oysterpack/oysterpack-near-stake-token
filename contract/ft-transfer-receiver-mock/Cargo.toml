@@ -1,0 +1,11 @@
+[package]
+name = "ft-transfer-receiver-mock"
+version = "0.1.0"
+authors = ["oysterpack.inc <oysterpack.inc@gmail.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = { git = "https://github.com/near/near-sdk-rs",  tag = "2.4.0" }

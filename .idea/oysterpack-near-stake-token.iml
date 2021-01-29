@@ -7,6 +7,7 @@
       <sourceFolder url="file://$MODULE_DIR$/contract-test/contract/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/staking-pool/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/contract/staking-pool-mock/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/contract/ft-transfer-receiver-mock/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/.cache" />
       <excludeFolder url="file://$MODULE_DIR$/contract/res" />
       <excludeFolder url="file://$MODULE_DIR$/contract/target" />

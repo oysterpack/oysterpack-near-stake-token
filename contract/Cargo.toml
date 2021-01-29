@@ -31,4 +31,4 @@ panic = "abort"
 overflow-checks = true
 
 [workspace]
-members = ["staking-pool-mock"]
+members = ["staking-pool-mock", "ft-transfer-receiver-mock"]

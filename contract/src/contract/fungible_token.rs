@@ -27,6 +27,7 @@ impl FungibleToken for StakeTokenContract {
         let stake_amount: YoctoStake = amount.value().into();
 
         let mut sender = self.predecessor_registered_account();
+        self.claim_receipt_funds(&mut sender);
         sender.apply_stake_debit(stake_amount);
         sender.apply_near_credit(1.into());
 
@@ -870,7 +871,7 @@ mod test_resolve_transfer_call {
     use near_sdk::{serde_json, testing_env, MockedBlockchain};
 
     #[test]
-    fn resolve_transfer_call_err_receiver_has_balance_for_full_refund() {
+    fn err_receiver_has_balance_for_full_refund() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
         let contract = &mut test_ctx.contract;
@@ -920,7 +921,7 @@ mod test_resolve_transfer_call {
     }
 
     #[test]
-    fn resolve_transfer_call_err_receiver_has_balance_for_partial_refund() {
+    fn err_receiver_has_balance_for_partial_refund() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
         let contract = &mut test_ctx.contract;
@@ -970,7 +971,7 @@ mod test_resolve_transfer_call {
     }
 
     #[test]
-    fn resolve_transfer_call_err_receiver_has_zero_balance() {
+    fn err_receiver_has_zero_balance() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
         let contract = &mut test_ctx.contract;
@@ -1012,7 +1013,7 @@ mod test_resolve_transfer_call {
     }
 
     #[test]
-    pub fn resolve_ok_zero_refund() {
+    pub fn ok_zero_refund() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
         let contract = &mut test_ctx.contract;
@@ -1046,7 +1047,7 @@ mod test_resolve_transfer_call {
     }
 
     #[test]
-    pub fn resolve_ok_with_refund() {
+    pub fn ok_with_refund() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
         let contract = &mut test_ctx.contract;
@@ -1102,7 +1103,7 @@ mod test_resolve_transfer_call {
     }
 
     #[test]
-    pub fn resolve_ok_with_refund_and_receiver_zero_balance() {
+    pub fn ok_with_refund_and_receiver_zero_balance() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
         let contract = &mut test_ctx.contract;
@@ -1136,7 +1137,7 @@ mod test_resolve_transfer_call {
     }
 
     #[test]
-    pub fn resolve_ok_with_refund_and_receiver_balance_insufficient() {
+    pub fn ok_with_refund_and_receiver_balance_insufficient() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
         let contract = &mut test_ctx.contract;
@@ -1175,7 +1176,7 @@ mod test_resolve_transfer_call {
     }
 
     #[test]
-    pub fn resolve_ok_with_refund_gt_transfer_amount() {
+    pub fn ok_with_refund_gt_transfer_amount() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
         let contract = &mut test_ctx.contract;

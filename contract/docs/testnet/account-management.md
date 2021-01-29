@@ -6,6 +6,7 @@ near view $CONTRACT total_registered_accounts
 
 near view $CONTRACT lookup_account --args '{"account_id":"alfio-zappala-oysterpack.testnet"}'
 near view $CONTRACT lookup_account --args '{"account_id":"oysterpack.testnet"}'
+near view $CONTRACT lookup_account --args '{"account_id":"dev-1611907846758-1343432"}'
 
 near view $CONTRACT account_registered --args '{"account_id":"alfio-zappala-oysterpack.testnet"}'
 

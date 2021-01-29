@@ -1,5 +1,4 @@
 use near_sdk::{
-    borsh::{self, BorshDeserialize, BorshSerialize},
     json_types::{ValidAccountId, U128},
     serde::{Deserialize, Serialize},
     Promise, PromiseOrValue,
@@ -266,7 +265,7 @@ impl Display for Memo {
 /// > was requested by multiple members of the community who reviewed this standard.
 /// >
 /// - https://eips.ethereum.org/EIPS/eip-777#data
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct TransferCallMessage(pub String);
 

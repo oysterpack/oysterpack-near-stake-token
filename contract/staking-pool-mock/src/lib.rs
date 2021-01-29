@@ -14,8 +14,8 @@ use std::convert::TryFrom;
 
 // uncomment to build wasm file
 // comment out to run sim-tests
-// #[global_allocator]
-// static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
+#[global_allocator]
+static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
