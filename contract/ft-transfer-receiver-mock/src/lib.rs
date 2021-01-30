@@ -1,3 +1,4 @@
+use near_sdk::serde::export::TryFrom;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env,
@@ -31,7 +32,7 @@ impl TransferReceiver for TransferReceiverMock {
         msg: String,
     ) -> PromiseOrValue<TokenAmount> {
         log!("{:#?}", msg);
-        let msg = serde_json::from_str(&msg).expect("invalid msg");
+        let msg = Message::try_from(&msg).expect("invalid msg");
         match msg {
             Message::Panic => panic!("BOOM!"),
             Message::Accept {
@@ -125,31 +126,6 @@ impl TransferReceiverMock {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-#[serde(crate = "near_sdk::serde")]
-pub enum Message {
-    /// used to instruct the receiver to accept the transfer and specifies instructions on how
-    /// to handle it to simulate different test scenarios
-    Accept {
-        /// specifies how much to refund
-        /// - over refund can be simulated by specifying a percentage > 100
-        refund_percent: u8,
-        /// if set, then receiver funds will be transferred over to this account to simulate spending
-        /// the received tokens
-        transfer_relay: Option<TransferRelay>,
-    },
-    // used to instruct the receiver to panic to simulate failure snenario
-    Panic,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-#[serde(crate = "near_sdk::serde")]
-pub struct TransferRelay {
-    account_id: AccountId,
-    /// specifies percentage of received amount to transfer over
-    percent: u8,
-}
-
 pub trait TransferReceiver {
     /// Callback to receive tokens.
     ///
@@ -211,6 +187,39 @@ impl Default for TokenAmount {
     fn default() -> Self {
         Self(U128(0))
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub enum Message {
+    /// used to instruct the receiver to accept the transfer and specifies instructions on how
+    /// to handle it to simulate different test scenarios
+    Accept {
+        /// specifies how much to refund
+        /// - over refund can be simulated by specifying a percentage > 100
+        refund_percent: u8,
+        /// if set, then receiver funds will be transferred over to this account to simulate spending
+        /// the received tokens
+        transfer_relay: Option<TransferRelay>,
+    },
+    // used to instruct the receiver to panic to simulate failure snenario
+    Panic,
+}
+
+impl TryFrom<&str> for Message {
+    type Error = serde_json::Error;
+
+    fn try_from(json: &str) -> Result<Self, Self::Error> {
+        serde_json::from_str(json)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct TransferRelay {
+    account_id: AccountId,
+    /// specifies percentage of received amount to transfer over
+    percent: u8,
 }
 
 #[cfg(test)]

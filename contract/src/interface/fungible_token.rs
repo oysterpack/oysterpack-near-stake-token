@@ -56,7 +56,7 @@ pub trait FungibleToken {
     ///
     /// Arguments:
     /// - `receiver_id` - the account ID of the receiver.
-    /// - `amount` - the amount of tokens to transfer. must be a positive number in decimal string representation.
+    /// - `amount` - the amount of tokens to transfer - unsigned integer in string representation.
     /// - `memo` - an optional string field in a free form to associate a memo with this transfer.
     ///
     /// ## Panics
@@ -92,7 +92,7 @@ pub trait FungibleToken {
     ///
     /// Arguments:
     /// - `receiver_id` - the account ID of the receiver contract. This contract will be called.
-    /// - `amount` - the amount of tokens to transfer. Must be a positive number in decimal string representation.
+    /// - `amount` - the amount of tokens to transfer - unsigned integer in string representation.
     /// - `msg` - a string message that will be passed to `ft_on_transfer` contract call.
     /// - `memo` - an optional string field in a free form to associate a memo with this transfer.
     ///
@@ -220,20 +220,7 @@ impl Default for TokenAmount {
     }
 }
 
-/// > Similarly to bank transfer and payment orders, the memo argument allows to reference transfer
-/// > to other event (on-chain or off-chain). It is a schema less, so user can use it to reference
-/// > an external document, invoice, order ID, ticket ID, or other on-chain transaction. With memo
-/// > you can set a transfer reason, often required for compliance.
-/// >
-/// > This is also useful and very convenient for implementing FATA (Financial Action Task Force)
-/// > guidelines (section 7(b) ). Especially a requirement for VASPs (Virtual Asset Service Providers)
-/// > to collect and transfer customer information during transactions. VASP is any entity which
-/// > provides to a user token custody, management, exchange or investment services.
-/// > With ERC-20 (and NEP-21) it is not possible to do it in atomic way. With memo field, we can
-/// > provide such reference in the same transaction and atomically bind it to the money transfer.
-///
-/// - https://github.com/near/NEPs/issues/136
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Memo(pub String);
 
@@ -251,20 +238,6 @@ impl From<&str> for Memo {
     }
 }
 
-impl Display for Memo {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-/// > The mint, send and burn processes can all make use of a data and operatorData fields which are
-/// > passed to any movement (mint, send or burn). Those fields may be empty for simple use cases,
-/// > or they may contain valuable information related to the movement of tokens, similar to
-/// > information attached to a bank transfer by the sender or the bank itself.
-/// > The use of a data field is equally present in other standard proposals such as EIP-223, and
-/// > was requested by multiple members of the community who reviewed this standard.
-/// >
-/// - https://eips.ethereum.org/EIPS/eip-777#data
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct TransferCallMessage(pub String);
