@@ -9,6 +9,7 @@
 export NEAR_ENV=testnet
 #export CONTRACT=stake.oysterpack.testnet
 export CONTRACT=stake-1.oysterpack.testnet
+export CONTRACT=stake-demo.oysterpack.testnet
 
 # recreating stake.oysterpack.testnet account
 near delete $CONTRACT oysterpack.testnet

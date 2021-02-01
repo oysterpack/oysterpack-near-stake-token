@@ -29,6 +29,7 @@ impl FungibleToken for StakeTokenContract {
         let mut sender = self.predecessor_registered_account();
         self.claim_receipt_funds(&mut sender);
         sender.apply_stake_debit(stake_amount);
+        // apply the 1 yoctoNEAR that was attached to the sender account's NEAR balance
         sender.apply_near_credit(1.into());
 
         let mut receiver = self.registered_account(receiver_id.as_ref());
@@ -48,36 +49,13 @@ impl FungibleToken for StakeTokenContract {
     ) -> Promise {
         self.ft_transfer(receiver_id.clone(), amount.clone(), _memo);
 
-        let resolve_transfer_gas = self
-            .config
-            .gas_config()
-            .callbacks()
-            .resolve_transfer_gas()
-            .value();
-        // pass along remainder of prepaid  gas to receiver contract
-        let gas = {
-            env::prepaid_gas()
-                - env::used_gas()
-                - resolve_transfer_gas
-                // ft_on_transfer
-                - self.config.gas_config().function_call_promise().value()
-                // ft_resolve_transfer_call
-                - self.config.gas_config().function_call_promise().value()
-                // ft_resolve_transfer_call data dependency
-                - self
-                    .config
-                    .gas_config()
-                    .function_call_promise_data_dependency()
-                    .value()
-        };
-
         ext_transfer_receiver::ft_on_transfer(
             env::predecessor_account_id(),
             amount.clone(),
             msg,
             receiver_id.as_ref(),
             NO_DEPOSIT.value(),
-            gas,
+            self.ft_on_transfer_gas(),
         )
         .then(ext_resolve_transfer_call::ft_resolve_transfer_call(
             env::predecessor_account_id(),
@@ -85,7 +63,7 @@ impl FungibleToken for StakeTokenContract {
             amount,
             &env::current_account_id(),
             NO_DEPOSIT.value(),
-            resolve_transfer_gas,
+            self.resolve_transfer_gas(),
         ))
     }
 
@@ -105,6 +83,59 @@ impl FungibleToken for StakeTokenContract {
     }
 }
 
+impl StakeTokenContract {
+    fn resolve_transfer_gas(&self) -> u64 {
+        self.config
+            .gas_config()
+            .callbacks()
+            .resolve_transfer_gas()
+            .value()
+    }
+
+    // pass along remainder of prepaid  gas to receiver contract
+    fn ft_on_transfer_gas(&self) -> u64 {
+        env::prepaid_gas()
+            - env::used_gas()
+            - self.resolve_transfer_gas()
+            // ft_on_transfer
+            - self.config.gas_config().function_call_promise().value()
+            // ft_resolve_transfer_call
+            - self.config.gas_config().function_call_promise().value()
+            // ft_resolve_transfer_call data dependency
+            - self
+            .config
+            .gas_config()
+            .function_call_promise_data_dependency()
+            .value()
+    }
+
+    /// the unused amount is retrieved from the `TransferReceiver::ft_on_transfer` promise result
+    fn transfer_call_receiver_unused_amount(&self, transfer_amount: TokenAmount) -> TokenAmount {
+        let unused_amount: TokenAmount = match self.promise_result(0) {
+            PromiseResult::Successful(result) => {
+                serde_json::from_slice(&result).expect("unused token amount")
+            }
+            _ => {
+                log!(
+                    "ERROR: transfer call failed on receiver contract - full transfer amount will be refunded"
+                );
+                transfer_amount.clone()
+            }
+        };
+
+        if unused_amount.value() > transfer_amount.value() {
+            log!(
+                "WARNING: unused_amount({}) > amount({}) - full transfer amount will be refunded",
+                unused_amount,
+                transfer_amount
+            );
+            transfer_amount
+        } else {
+            unused_amount
+        }
+    }
+}
+
 #[near_bindgen]
 impl ResolveTransferCall for StakeTokenContract {
     #[private]
@@ -114,25 +145,7 @@ impl ResolveTransferCall for StakeTokenContract {
         receiver_id: ValidAccountId,
         amount: TokenAmount,
     ) -> PromiseOrValue<TokenAmount> {
-        let unused_amount = {
-            let unused_amount: TokenAmount = match self.promise_result(0) {
-                PromiseResult::Successful(result) => {
-                    serde_json::from_slice(&result).expect("unused token amount")
-                }
-                _ => amount.clone(),
-            };
-
-            if unused_amount.value() > amount.value() {
-                log!(
-                    "WARNING: unused_amount({}) > amount({}) - refunding full amount back to sender",
-                    unused_amount,
-                    amount
-                );
-                amount
-            } else {
-                unused_amount
-            }
-        };
+        let unused_amount = self.transfer_call_receiver_unused_amount(amount);
 
         let refund_amount = if unused_amount.value() > 0 {
             log!("unused amount: {}", unused_amount);
@@ -141,7 +154,7 @@ impl ResolveTransferCall for StakeTokenContract {
             match receiver.stake.as_mut() {
                 Some(balance) => {
                     let refund_amount = if balance.amount().value() < unused_amount.value() {
-                        log!("ERROR: partial refund will be applied because receiver STAKE balance is insufficient");
+                        log!("ERROR: partial amount will be refunded because receiver STAKE balance is insufficient");
                         balance.amount()
                     } else {
                         unused_amount.value().into()
@@ -155,7 +168,7 @@ impl ResolveTransferCall for StakeTokenContract {
                     refund_amount.value().into()
                 }
                 None => {
-                    log!("ERROR: receiver STAKE balance is zero");
+                    log!("ERROR: refund is not possible because receiver STAKE balance is zero");
                     0.into()
                 }
             }
@@ -613,6 +626,34 @@ mod test_transfer_call {
                 _ => panic!("expected `ft_on_transfer` function call"),
             }
         }
+        {
+            let receipt = &receipts[1];
+            match &receipt.actions[0] {
+                Action::FunctionCall {
+                    method_name,
+                    args,
+                    deposit,
+                    gas,
+                } => {
+                    assert_eq!(method_name, "ft_resolve_transfer_call");
+                    assert_eq!(*deposit, 0);
+                    let args: ResolveTransferCallArgs = serde_json::from_str(args).unwrap();
+                    assert_eq!(args.sender_id, to_valid_account_id(sender_id));
+                    assert_eq!(args.receiver_id, to_valid_account_id(receiver_id));
+                    assert_eq!(args.amount, transfer_amount.into());
+                    assert_eq!(
+                        *gas,
+                        contract
+                            .config
+                            .gas_config()
+                            .callbacks()
+                            .resolve_transfer_gas()
+                            .value()
+                    )
+                }
+                _ => panic!("expected `ft_on_transfer` function call"),
+            }
+        }
 
         // Act - transfer with memo
         testing_env!(context.clone());
@@ -862,6 +903,14 @@ mod test_transfer_call {
         sender_id: ValidAccountId,
         amount: TokenAmount,
         msg: TransferCallMessage,
+    }
+
+    #[derive(Deserialize, Debug)]
+    #[serde(crate = "near_sdk::serde")]
+    struct ResolveTransferCallArgs {
+        sender_id: ValidAccountId,
+        receiver_id: ValidAccountId,
+        amount: TokenAmount,
     }
 }
 
