@@ -3,6 +3,8 @@
 near view $CONTRACT contract_state
 
 near view $CONTRACT config
+
+near view $CONTRACT metadata
 ```
 
 ### Stateful Func Calls

@@ -8,7 +8,6 @@ use crate::near::log;
 use crate::*;
 use near_sdk::near_bindgen;
 
-// YBHdPpe867!KMFTvFSTWbnxy
 #[near_bindgen]
 impl ContractFinancials for StakeTokenContract {
     fn balances(&self) -> ContractBalances {
