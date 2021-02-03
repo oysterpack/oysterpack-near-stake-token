@@ -10,7 +10,7 @@ const METADATA_FT: &str = "http://near.org/contract/metadata/fungible-token";
 
 #[near_bindgen]
 impl MetaData for StakeTokenContract {
-    fn metadata(&self, uri: String) -> Option<Value> {
+    fn metadata(uri: String) -> Option<Value> {
         match uri.as_str() {
             METADATA_FT => {
                 let md = TokenMetadata {
@@ -27,7 +27,7 @@ impl MetaData for StakeTokenContract {
         }
     }
 
-    fn metadata_uris(&self) -> Vec<String> {
+    fn metadata_uris() -> Vec<String> {
         vec![METADATA_FT.to_string()]
     }
 }
