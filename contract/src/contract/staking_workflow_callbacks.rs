@@ -274,7 +274,7 @@ impl StakeTokenContract {
         )
     }
 
-    pub(crate) fn invoke_release_run_stake_batch_lock(&self) -> Promise {
+    pub(crate) fn invoke_clear_stake_batch_lock(&self) -> Promise {
         ext_staking_workflow_callbacks::clear_stake_batch_lock(
             &env::current_account_id(),
             NO_DEPOSIT.into(),

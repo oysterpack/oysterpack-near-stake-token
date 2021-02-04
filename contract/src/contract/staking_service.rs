@@ -533,7 +533,7 @@ impl StakeTokenContract {
                 .get_account()
                 .promise()
                 .then(self.invoke_on_run_stake_batch())
-                .then(self.invoke_release_run_stake_batch_lock())
+                .then(self.invoke_clear_stake_batch_lock())
         } else {
             // if liquidity is not needed, then lets stake it
             // NOTE: liquidity belongs to the stakers - some will leak over when we withdraw all from
@@ -545,7 +545,7 @@ impl StakeTokenContract {
                 .get_account()
                 .promise()
                 .then(self.invoke_on_deposit_and_stake(None))
-                .then(self.invoke_release_run_stake_batch_lock())
+                .then(self.invoke_clear_stake_batch_lock())
         }
     }
 
@@ -2237,6 +2237,44 @@ collected_earnings: {} -> {}
         let balances = test_context.balances();
         assert_eq!(balances.near_liquidity_pool.value(), 0);
         assert_eq!(balances.total_available_unstaked_near.value(), YOCTO);
+    }
+
+    #[test]
+    fn clear_stake_batch_lock_when_staked_should_retain_lock() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+
+        let mut context = test_context.context.clone();
+        context.attached_deposit = YOCTO;
+        testing_env!(context);
+        test_context.deposit_and_stake();
+
+        testing_env!(test_context.context.clone());
+        test_context.on_deposit_and_stake(
+            None,
+            StakingPoolAccount {
+                account_id: env::current_account_id(),
+                unstaked_balance: 0.into(),
+                staked_balance: YOCTO.into(),
+                can_withdraw: true,
+            },
+        );
+
+        // simulate StakeTokenContract::process_staked_batch() fails by not calling it
+
+        // Act
+        let mut context = test_context.context.clone();
+        context.predecessor_account_id = env::current_account_id();
+        testing_env!(context);
+        test_context.clear_stake_batch_lock();
+
+        match test_context.stake_batch_lock {
+            Some(StakeLock::Staked { .. }) => println!("{:?}", test_context.stake_batch_lock),
+            _ => panic!(
+                "expected Staked but was: {:?}",
+                test_context.stake_batch_lock
+            ),
+        }
     }
 }
 
