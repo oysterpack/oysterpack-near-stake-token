@@ -241,3 +241,10 @@ pub struct CheckStakeArgs {
 pub struct OnDepositAndStakeArgs {
     pub near_liquidity: Option<YoctoNear>,
 }
+
+#[derive(Deserialize)]
+#[serde(crate = "near_sdk::serde")]
+#[allow(dead_code)]
+pub struct GetStakedAccountBalanceArgs {
+    pub account_id: String,
+}
