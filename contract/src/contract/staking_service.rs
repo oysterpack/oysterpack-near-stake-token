@@ -2077,6 +2077,167 @@ collected_earnings: {} -> {}
         let balances = test_context.balances();
         assert_eq!(balances.near_liquidity_pool.value(), YOCTO / 2);
     }
+
+    #[test]
+    fn when_partial_batch_balance_is_used_for_liquidity() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+        // user deposits and stakes 1 NEAR
+        {
+            let mut context = test_context.context.clone();
+            context.attached_deposit = YOCTO;
+            testing_env!(context);
+            test_context.deposit_and_stake();
+            test_context.on_deposit_and_stake(
+                None,
+                StakingPoolAccount {
+                    account_id: env::current_account_id(),
+                    unstaked_balance: 0.into(),
+                    staked_balance: YOCTO.into(),
+                    can_withdraw: true,
+                },
+            );
+            test_context.process_staked_batch();
+        }
+        // user redeems all to create pending withdrawal that requires liquidity
+        {
+            testing_env!(test_context.context.clone());
+            test_context.redeem_all_and_unstake();
+
+            let mut context = test_context.context.clone();
+            context.predecessor_account_id = env::current_account_id();
+            testing_env!(context);
+            test_context.on_run_redeem_stake_batch(StakingPoolAccount {
+                account_id: env::current_account_id(),
+                unstaked_balance: 0.into(),
+                staked_balance: YOCTO.into(),
+                can_withdraw: true,
+            });
+
+            set_env_with_success_promise_result(&mut test_context);
+            test_context.on_unstake();
+            test_context.clear_redeem_stake_batch_lock();
+        }
+
+        // Act - deposit and stake 2 NEAR - 1 NEAR will be added to liquidity
+        let mut context = test_context.context.clone();
+        context.attached_deposit = (YOCTO * 2).into();
+        testing_env!(context);
+        test_context.deposit_and_stake();
+
+        // Assert
+        let receipts = deserialize_receipts();
+        assert_eq!(receipts.len(), 3);
+        {
+            let receipt = &receipts[0];
+            match &receipt.actions[0] {
+                Action::FunctionCall { method_name, .. } => assert_eq!(method_name, "get_account"),
+                _ => panic!("expected FunctionCall"),
+            }
+        }
+        {
+            let receipt = &receipts[1];
+            match &receipt.actions[0] {
+                Action::FunctionCall { method_name, .. } => {
+                    assert_eq!(method_name, "on_run_stake_batch")
+                }
+                _ => panic!("expected FunctionCall"),
+            }
+        }
+        {
+            let receipt = &receipts[2];
+            match &receipt.actions[0] {
+                Action::FunctionCall { method_name, .. } => {
+                    assert_eq!(method_name, "clear_stake_batch_lock")
+                }
+                _ => panic!("expected FunctionCall"),
+            }
+        }
+
+        // Act - progress stake workflow
+        let mut context = test_context.context.clone();
+        context.predecessor_account_id = env::current_account_id();
+        testing_env!(context);
+        test_context.on_run_stake_batch(StakingPoolAccount {
+            account_id: env::current_account_id(),
+            unstaked_balance: YOCTO.into(),
+            staked_balance: 0.into(),
+            can_withdraw: false,
+        });
+
+        let receipts = deserialize_receipts();
+        assert_eq!(receipts.len(), 2);
+        {
+            let receipt = &receipts[0];
+            match &receipt.actions[0] {
+                Action::FunctionCall { method_name, .. } => assert_eq!(method_name, "deposit"),
+                _ => panic!("expected FunctionCall"),
+            }
+
+            match &receipt.actions[1] {
+                Action::FunctionCall { method_name, .. } => assert_eq!(method_name, "stake"),
+                _ => panic!("expected FunctionCall"),
+            }
+
+            match &receipt.actions[2] {
+                Action::FunctionCall { method_name, .. } => assert_eq!(method_name, "get_account"),
+                _ => panic!("expected FunctionCall"),
+            }
+        }
+        {
+            let receipt = &receipts[1];
+            match &receipt.actions[0] {
+                Action::FunctionCall {
+                    method_name, args, ..
+                } => {
+                    assert_eq!(method_name, "on_deposit_and_stake");
+                    let args: OnDepositAndStakeArgs = serde_json::from_str(args).unwrap();
+                    assert_eq!(args.near_liquidity.unwrap().value(), YOCTO);
+                }
+                _ => panic!("expected FunctionCall"),
+            }
+        }
+
+        let mut context = test_context.context.clone();
+        context.predecessor_account_id = env::current_account_id();
+        testing_env!(context);
+        test_context.on_deposit_and_stake(
+            Some((YOCTO).into()),
+            StakingPoolAccount {
+                account_id: env::current_account_id(),
+                unstaked_balance: 0.into(),
+                staked_balance: (YOCTO * 2).into(),
+                can_withdraw: false,
+            },
+        );
+        println!("on_deposit_and_stake receipts");
+        let receipts = deserialize_receipts();
+        assert_eq!(receipts.len(), 1);
+        {
+            let receipt = &receipts[0];
+            match &receipt.actions[0] {
+                Action::FunctionCall { method_name, .. } => {
+                    assert_eq!(method_name, "process_staked_batch")
+                }
+                _ => panic!("expected FunctionCall"),
+            }
+        }
+
+        let mut context = test_context.context.clone();
+        context.predecessor_account_id = env::current_account_id();
+        testing_env!(context);
+        test_context.process_staked_batch();
+
+        testing_env!(test_context.context.clone());
+        // enough liquidity was added to clear the pending withdrawal
+        assert!(test_context.pending_withdrawal().is_none());
+
+        // funds from liquidity pool should have been moved over to unstaked NEAR balance, which is
+        // available for withdrawal
+        let balances = test_context.balances();
+        assert_eq!(balances.near_liquidity_pool.value(), 0);
+        assert_eq!(balances.total_available_unstaked_near.value(), YOCTO);
+    }
 }
 
 #[cfg(test)]
