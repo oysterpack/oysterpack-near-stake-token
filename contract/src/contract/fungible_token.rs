@@ -216,7 +216,7 @@ pub trait ExtResolveTransferCall {
 mod test_transfer {
 
     use super::*;
-    use crate::interface::AccountManagement;
+    use crate::interface::StakingService;
     use crate::near::YOCTO;
     use crate::test_utils::*;
     use near_sdk::{testing_env, MockedBlockchain};
@@ -225,39 +225,27 @@ mod test_transfer {
     pub fn transfer_ok() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
-        let contract = &mut test_ctx.contract;
 
         let sender_id = test_ctx.account_id;
         let receiver_id = "receiver.near";
+        test_ctx.register_account(receiver_id);
 
-        // register receiver account
-        {
-            let mut context = test_ctx.context.clone();
-            context.predecessor_account_id = receiver_id.to_string();
-            context.attached_deposit = YOCTO;
-            testing_env!(context);
-            contract.register_account();
-        }
-
-        assert!(contract.account_registered(to_valid_account_id(sender_id)));
-        assert!(contract.account_registered(to_valid_account_id(receiver_id)));
-
-        assert_eq!(contract.ft_total_supply(), 0.into());
+        assert_eq!(test_ctx.ft_total_supply(), 0.into());
         assert_eq!(
-            contract.ft_balance_of(to_valid_account_id(sender_id)),
+            test_ctx.ft_balance_of(to_valid_account_id(sender_id)),
             0.into()
         );
         assert_eq!(
-            contract.ft_balance_of(to_valid_account_id(receiver_id)),
+            test_ctx.ft_balance_of(to_valid_account_id(receiver_id)),
             0.into()
         );
 
         // credit the sender with STAKE
-        let mut sender = contract.registered_account(sender_id);
+        let mut sender = test_ctx.registered_account(sender_id);
         let total_supply = YoctoStake(100 * YOCTO);
         sender.apply_stake_credit(total_supply);
-        contract.total_stake.credit(total_supply);
-        contract.save_registered_account(&sender);
+        test_ctx.total_stake.credit(total_supply);
+        test_ctx.save_registered_account(&sender);
 
         // Act - transfer with no memo
         let mut context = test_ctx.context.clone();
@@ -265,54 +253,119 @@ mod test_transfer {
         context.attached_deposit = 1; // 1 yoctoNEAR is required to transfer
         testing_env!(context.clone());
         let transfer_amount = 10 * YOCTO;
-        contract.ft_transfer(
+        test_ctx.ft_transfer(
             to_valid_account_id(receiver_id),
             transfer_amount.into(),
             None,
         );
 
         // Assert
-        assert_eq!(contract.ft_total_supply().value(), total_supply.value());
+        assert_eq!(test_ctx.ft_total_supply().value(), total_supply.value());
         assert_eq!(
-            contract
+            test_ctx
                 .ft_balance_of(to_valid_account_id(sender_id))
                 .value(),
             total_supply.value() - transfer_amount
         );
         assert_eq!(
-            contract
+            test_ctx
                 .ft_balance_of(to_valid_account_id(receiver_id))
                 .value(),
             transfer_amount
         );
-        let sender = contract.predecessor_registered_account();
+        let sender = test_ctx.predecessor_registered_account();
         assert_eq!(sender.near.unwrap().amount().value(), 1,
                    "expected the attached 1 yoctoNEAR for the transfer to be credited to the account's NEAR balance");
 
         // Act - transfer with memo
         testing_env!(context.clone());
-        contract.ft_transfer(
+        test_ctx.ft_transfer(
             to_valid_account_id(receiver_id),
             transfer_amount.into(),
             Some("memo".into()),
         );
-        let sender = contract.predecessor_registered_account();
+        let sender = test_ctx.predecessor_registered_account();
         assert_eq!(sender.near.unwrap().amount().value(), 2,
                    "expected the attached 1 yoctoNEAR for the transfer to be credited to the account's NEAR balance");
 
         // Assert
-        assert_eq!(contract.ft_total_supply().value(), total_supply.value());
+        assert_eq!(test_ctx.ft_total_supply().value(), total_supply.value());
         assert_eq!(
-            contract
+            test_ctx
                 .ft_balance_of(to_valid_account_id(sender_id))
                 .value(),
             total_supply.value() - (transfer_amount * 2)
         );
         assert_eq!(
-            contract
+            test_ctx
                 .ft_balance_of(to_valid_account_id(receiver_id))
                 .value(),
             transfer_amount * 2
+        );
+    }
+
+    /// funds should be claimed to update balances before attempting the transfer
+    #[test]
+    fn transfer_with_unclaimed_receipts() {
+        // Arrange
+        let mut test_ctx = TestContext::with_registered_account();
+
+        let sender_id = test_ctx.account_id;
+        let receiver_id = "receiver.near";
+        test_ctx.register_account(receiver_id);
+
+        {
+            let mut context = test_ctx.context.clone();
+            context.predecessor_account_id = sender_id.to_string();
+            context.attached_deposit = YOCTO;
+            testing_env!(context);
+            test_ctx.deposit_and_stake();
+        }
+        // progress the stake batch to completion
+        {
+            let mut context = test_ctx.context.clone();
+            context.predecessor_account_id = env::current_account_id();
+            testing_env!(context);
+            test_ctx.on_deposit_and_stake(
+                None,
+                StakingPoolAccount {
+                    account_id: env::current_account_id(),
+                    unstaked_balance: 0.into(),
+                    staked_balance: YOCTO.into(),
+                    can_withdraw: false,
+                },
+            );
+            test_ctx.process_staked_batch();
+        }
+
+        // Act
+        let mut context = test_ctx.context.clone();
+        context.predecessor_account_id = sender_id.to_string();
+        context.attached_deposit = 1; // 1 yoctoNEAR is required to transfer
+        testing_env!(context.clone());
+        let transfer_amount = YOCTO;
+        test_ctx.ft_transfer(
+            to_valid_account_id(receiver_id),
+            transfer_amount.into(),
+            None,
+        );
+
+        // Assert
+        assert_eq!(
+            test_ctx.ft_total_supply(),
+            test_ctx.ft_balance_of(to_valid_account_id(receiver_id))
+        );
+        assert_eq!(
+            test_ctx
+                .ft_balance_of(to_valid_account_id(sender_id))
+                .value(),
+            0
+        );
+        assert_eq!(
+            test_ctx
+                .ft_balance_of(to_valid_account_id(receiver_id))
+                .value(),
+            transfer_amount
         );
     }
 
@@ -321,7 +374,6 @@ mod test_transfer {
     fn sender_not_registered() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
-        let contract = &mut test_ctx.contract;
 
         let sender_id = "sender.near"; // not registered
         let receiver_id = test_ctx.account_id; // registered
@@ -332,7 +384,7 @@ mod test_transfer {
         context.attached_deposit = 1; // 1 yoctoNEAR is required to transfer
         testing_env!(context.clone());
         let transfer_amount = 10 * YOCTO;
-        contract.ft_transfer(
+        test_ctx.ft_transfer(
             to_valid_account_id(receiver_id),
             transfer_amount.into(),
             None,
@@ -344,17 +396,16 @@ mod test_transfer {
     fn receiver_not_registered() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
-        let contract = &mut test_ctx.contract;
 
         let sender_id = test_ctx.account_id; // registered
         let receiver_id = "receiver.near"; // registered
 
         // credit the sender with STAKE
-        let mut sender = contract.registered_account(sender_id);
+        let mut sender = test_ctx.registered_account(sender_id);
         let total_supply = YoctoStake(100 * YOCTO);
         sender.apply_stake_credit(total_supply);
-        contract.total_stake.credit(total_supply);
-        contract.save_registered_account(&sender);
+        test_ctx.total_stake.credit(total_supply);
+        test_ctx.save_registered_account(&sender);
 
         // Act - transfer with no memo
         let mut context = test_ctx.context.clone();
@@ -362,7 +413,7 @@ mod test_transfer {
         context.attached_deposit = 1; // 1 yoctoNEAR is required to transfer
         testing_env!(context.clone());
         let transfer_amount = 10 * YOCTO;
-        contract.ft_transfer(
+        test_ctx.ft_transfer(
             to_valid_account_id(receiver_id),
             transfer_amount.into(),
             None,
@@ -374,33 +425,24 @@ mod test_transfer {
     pub fn zero_yocto_near_attached() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
-        let contract = &mut test_ctx.contract;
 
         let sender_id = test_ctx.account_id;
         let receiver_id = "receiver.near";
-
-        // register receiver account
-        {
-            let mut context = test_ctx.context.clone();
-            context.predecessor_account_id = receiver_id.to_string();
-            context.attached_deposit = YOCTO;
-            testing_env!(context);
-            contract.register_account();
-        }
+        test_ctx.register_account(receiver_id);
 
         // credit the sender with STAKE
-        let mut sender = contract.registered_account(sender_id);
+        let mut sender = test_ctx.registered_account(sender_id);
         let total_supply = YoctoStake(100 * YOCTO);
         sender.apply_stake_credit(total_supply);
-        contract.total_stake.credit(total_supply);
-        contract.save_registered_account(&sender);
+        test_ctx.total_stake.credit(total_supply);
+        test_ctx.save_registered_account(&sender);
 
         // Act - transfer with no memo
         let mut context = test_ctx.context.clone();
         context.predecessor_account_id = sender_id.to_string();
         testing_env!(context.clone());
         let transfer_amount = 10 * YOCTO;
-        contract.ft_transfer(
+        test_ctx.ft_transfer(
             to_valid_account_id(receiver_id),
             transfer_amount.into(),
             None,
@@ -412,26 +454,17 @@ mod test_transfer {
     pub fn two_yocto_near_attached() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
-        let contract = &mut test_ctx.contract;
 
         let sender_id = test_ctx.account_id;
         let receiver_id = "receiver.near";
-
-        // register receiver account
-        {
-            let mut context = test_ctx.context.clone();
-            context.predecessor_account_id = receiver_id.to_string();
-            context.attached_deposit = YOCTO;
-            testing_env!(context);
-            contract.register_account();
-        }
+        test_ctx.register_account(receiver_id);
 
         // credit the sender with STAKE
-        let mut sender = contract.registered_account(sender_id);
+        let mut sender = test_ctx.registered_account(sender_id);
         let total_supply = YoctoStake(100 * YOCTO);
         sender.apply_stake_credit(total_supply);
-        contract.total_stake.credit(total_supply);
-        contract.save_registered_account(&sender);
+        test_ctx.total_stake.credit(total_supply);
+        test_ctx.save_registered_account(&sender);
 
         // Act - transfer with no memo
         let mut context = test_ctx.context.clone();
@@ -439,7 +472,7 @@ mod test_transfer {
         context.attached_deposit = 2;
         testing_env!(context.clone());
         let transfer_amount = 10 * YOCTO;
-        contract.ft_transfer(
+        test_ctx.ft_transfer(
             to_valid_account_id(receiver_id),
             transfer_amount.into(),
             None,
@@ -451,26 +484,17 @@ mod test_transfer {
     pub fn zero_transfer_amount() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
-        let contract = &mut test_ctx.contract;
 
         let sender_id = test_ctx.account_id;
         let receiver_id = "receiver.near";
-
-        // register receiver account
-        {
-            let mut context = test_ctx.context.clone();
-            context.predecessor_account_id = receiver_id.to_string();
-            context.attached_deposit = YOCTO;
-            testing_env!(context);
-            contract.register_account();
-        }
+        test_ctx.register_account(receiver_id);
 
         // credit the sender with STAKE
-        let mut sender = contract.registered_account(sender_id);
+        let mut sender = test_ctx.registered_account(sender_id);
         let total_supply = YoctoStake(100 * YOCTO);
         sender.apply_stake_credit(total_supply);
-        contract.total_stake.credit(total_supply);
-        contract.save_registered_account(&sender);
+        test_ctx.total_stake.credit(total_supply);
+        test_ctx.save_registered_account(&sender);
 
         // Act - transfer with no memo
         let mut context = test_ctx.context.clone();
@@ -478,7 +502,7 @@ mod test_transfer {
         context.attached_deposit = 1;
         testing_env!(context.clone());
         let transfer_amount = 0;
-        contract.ft_transfer(
+        test_ctx.ft_transfer(
             to_valid_account_id(receiver_id),
             transfer_amount.into(),
             None,
@@ -490,26 +514,17 @@ mod test_transfer {
     pub fn sender_balance_with_insufficient_funds() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
-        let contract = &mut test_ctx.contract;
 
         let sender_id = test_ctx.account_id;
         let receiver_id = "receiver.near";
-
-        // register receiver account
-        {
-            let mut context = test_ctx.context.clone();
-            context.predecessor_account_id = receiver_id.to_string();
-            context.attached_deposit = YOCTO;
-            testing_env!(context);
-            contract.register_account();
-        }
+        test_ctx.register_account(receiver_id);
 
         // credit the sender with STAKE
-        let mut sender = contract.registered_account(sender_id);
+        let mut sender = test_ctx.registered_account(sender_id);
         let total_supply = YoctoStake(1 * YOCTO);
         sender.apply_stake_credit(total_supply);
-        contract.total_stake.credit(total_supply);
-        contract.save_registered_account(&sender);
+        test_ctx.total_stake.credit(total_supply);
+        test_ctx.save_registered_account(&sender);
 
         // Act - transfer with no memo
         let mut context = test_ctx.context.clone();
@@ -517,7 +532,7 @@ mod test_transfer {
         context.attached_deposit = 1;
         testing_env!(context.clone());
         let transfer_amount = 2 * YOCTO;
-        contract.ft_transfer(
+        test_ctx.ft_transfer(
             to_valid_account_id(receiver_id),
             transfer_amount.into(),
             None,
@@ -529,7 +544,7 @@ mod test_transfer {
 mod test_transfer_call {
     use super::*;
     use crate::domain::TGAS;
-    use crate::interface::AccountManagement;
+    use crate::interface::StakingService;
     use crate::near::YOCTO;
     use crate::test_utils::*;
     use near_sdk::{serde::Deserialize, serde_json, testing_env, MockedBlockchain};
@@ -538,39 +553,27 @@ mod test_transfer_call {
     pub fn transfer_ok() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
-        let contract = &mut test_ctx.contract;
 
         let sender_id = test_ctx.account_id;
         let receiver_id = "receiver.near";
+        test_ctx.register_account(receiver_id);
 
-        // register receiver account
-        {
-            let mut context = test_ctx.context.clone();
-            context.predecessor_account_id = receiver_id.to_string();
-            context.attached_deposit = YOCTO;
-            testing_env!(context);
-            contract.register_account();
-        }
-
-        assert!(contract.account_registered(to_valid_account_id(sender_id)));
-        assert!(contract.account_registered(to_valid_account_id(receiver_id)));
-
-        assert_eq!(contract.ft_total_supply(), 0.into());
+        assert_eq!(test_ctx.ft_total_supply(), 0.into());
         assert_eq!(
-            contract.ft_balance_of(to_valid_account_id(sender_id)),
+            test_ctx.ft_balance_of(to_valid_account_id(sender_id)),
             0.into()
         );
         assert_eq!(
-            contract.ft_balance_of(to_valid_account_id(receiver_id)),
+            test_ctx.ft_balance_of(to_valid_account_id(receiver_id)),
             0.into()
         );
 
         // credit the sender with STAKE
-        let mut sender = contract.registered_account(sender_id);
+        let mut sender = test_ctx.registered_account(sender_id);
         let total_supply = YoctoStake(100 * YOCTO);
         sender.apply_stake_credit(total_supply);
-        contract.total_stake.credit(total_supply);
-        contract.save_registered_account(&sender);
+        test_ctx.total_stake.credit(total_supply);
+        test_ctx.save_registered_account(&sender);
 
         // Act - transfer with no memo
         let mut context = test_ctx.context.clone();
@@ -579,7 +582,7 @@ mod test_transfer_call {
         testing_env!(context.clone());
         let transfer_amount = 10 * YOCTO;
         let msg = TransferCallMessage::from("pay");
-        contract.ft_transfer_call(
+        test_ctx.ft_transfer_call(
             to_valid_account_id(receiver_id),
             transfer_amount.into(),
             msg.clone(),
@@ -587,20 +590,20 @@ mod test_transfer_call {
         );
 
         // Assert
-        assert_eq!(contract.ft_total_supply().value(), total_supply.value());
+        assert_eq!(test_ctx.ft_total_supply().value(), total_supply.value());
         assert_eq!(
-            contract
+            test_ctx
                 .ft_balance_of(to_valid_account_id(sender_id))
                 .value(),
             total_supply.value() - transfer_amount
         );
         assert_eq!(
-            contract
+            test_ctx
                 .ft_balance_of(to_valid_account_id(receiver_id))
                 .value(),
             transfer_amount
         );
-        let sender = contract.predecessor_registered_account();
+        let sender = test_ctx.predecessor_registered_account();
         assert_eq!(sender.near.unwrap().amount().value(), 1,
                    "expected the attached 1 yoctoNEAR for the transfer to be credited to the account's NEAR balance");
 
@@ -643,7 +646,7 @@ mod test_transfer_call {
                     assert_eq!(args.amount, transfer_amount.into());
                     assert_eq!(
                         *gas,
-                        contract
+                        test_ctx
                             .config
                             .gas_config()
                             .callbacks()
@@ -657,29 +660,91 @@ mod test_transfer_call {
 
         // Act - transfer with memo
         testing_env!(context.clone());
-        contract.ft_transfer_call(
+        test_ctx.ft_transfer_call(
             to_valid_account_id(receiver_id),
             transfer_amount.into(),
             "pay".into(),
             Some("memo".into()),
         );
-        let sender = contract.predecessor_registered_account();
+        let sender = test_ctx.predecessor_registered_account();
         assert_eq!(sender.near.unwrap().amount().value(), 2,
                    "expected the attached 1 yoctoNEAR for the transfer to be credited to the account's NEAR balance");
 
         // Assert
-        assert_eq!(contract.ft_total_supply().value(), total_supply.value());
+        assert_eq!(test_ctx.ft_total_supply().value(), total_supply.value());
         assert_eq!(
-            contract
+            test_ctx
                 .ft_balance_of(to_valid_account_id(sender_id))
                 .value(),
             total_supply.value() - (transfer_amount * 2)
         );
         assert_eq!(
-            contract
+            test_ctx
                 .ft_balance_of(to_valid_account_id(receiver_id))
                 .value(),
             transfer_amount * 2
+        );
+    }
+
+    /// funds should be claimed to update balances before attempting the transfer
+    #[test]
+    fn transfer_with_unclaimed_receipts() {
+        // Arrange
+        let mut test_ctx = TestContext::with_registered_account();
+
+        let sender_id = test_ctx.account_id;
+        let receiver_id = "receiver.near";
+        test_ctx.register_account(receiver_id);
+
+        {
+            let mut context = test_ctx.context.clone();
+            context.predecessor_account_id = sender_id.to_string();
+            context.attached_deposit = YOCTO;
+            testing_env!(context);
+            test_ctx.deposit_and_stake();
+        }
+        // progress the stake batch to completion
+        {
+            let mut context = test_ctx.context.clone();
+            context.predecessor_account_id = env::current_account_id();
+            testing_env!(context);
+            test_ctx.on_deposit_and_stake(
+                None,
+                StakingPoolAccount {
+                    account_id: env::current_account_id(),
+                    unstaked_balance: 0.into(),
+                    staked_balance: YOCTO.into(),
+                    can_withdraw: false,
+                },
+            );
+            test_ctx.process_staked_batch();
+        }
+
+        // Act
+        let mut context = test_ctx.context.clone();
+        context.predecessor_account_id = sender_id.to_string();
+        context.attached_deposit = 1; // 1 yoctoNEAR is required to transfer
+        testing_env!(context.clone());
+        let transfer_amount = YOCTO;
+        test_ctx.ft_transfer_call(
+            to_valid_account_id(receiver_id),
+            transfer_amount.into(),
+            "msg".into(),
+            None,
+        );
+
+        // Assert
+        assert_eq!(
+            test_ctx
+                .ft_balance_of(to_valid_account_id(sender_id))
+                .value(),
+            0
+        );
+        assert_eq!(
+            test_ctx
+                .ft_balance_of(to_valid_account_id(receiver_id))
+                .value(),
+            transfer_amount
         );
     }
 
@@ -688,7 +753,6 @@ mod test_transfer_call {
     fn sender_not_registered() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
-        let contract = &mut test_ctx.contract;
 
         let sender_id = "sender.near"; // not registered
         let receiver_id = test_ctx.account_id; // registered
@@ -699,7 +763,7 @@ mod test_transfer_call {
         context.attached_deposit = 1; // 1 yoctoNEAR is required to transfer
         testing_env!(context.clone());
         let transfer_amount = 10 * YOCTO;
-        contract.ft_transfer_call(
+        test_ctx.ft_transfer_call(
             to_valid_account_id(receiver_id),
             transfer_amount.into(),
             "pay".into(),
@@ -712,17 +776,16 @@ mod test_transfer_call {
     fn receiver_not_registered() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
-        let contract = &mut test_ctx.contract;
 
         let sender_id = test_ctx.account_id; // registered
         let receiver_id = "receiver.near"; // registered
 
         // credit the sender with STAKE
-        let mut sender = contract.registered_account(sender_id);
+        let mut sender = test_ctx.registered_account(sender_id);
         let total_supply = YoctoStake(100 * YOCTO);
         sender.apply_stake_credit(total_supply);
-        contract.total_stake.credit(total_supply);
-        contract.save_registered_account(&sender);
+        test_ctx.total_stake.credit(total_supply);
+        test_ctx.save_registered_account(&sender);
 
         // Act - transfer with no memo
         let mut context = test_ctx.context.clone();
@@ -730,7 +793,7 @@ mod test_transfer_call {
         context.attached_deposit = 1; // 1 yoctoNEAR is required to transfer
         testing_env!(context.clone());
         let transfer_amount = 10 * YOCTO;
-        contract.ft_transfer_call(
+        test_ctx.ft_transfer_call(
             to_valid_account_id(receiver_id),
             transfer_amount.into(),
             "pay".into(),
@@ -743,33 +806,24 @@ mod test_transfer_call {
     pub fn zero_yocto_near_attached() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
-        let contract = &mut test_ctx.contract;
 
         let sender_id = test_ctx.account_id;
         let receiver_id = "receiver.near";
-
-        // register receiver account
-        {
-            let mut context = test_ctx.context.clone();
-            context.predecessor_account_id = receiver_id.to_string();
-            context.attached_deposit = YOCTO;
-            testing_env!(context);
-            contract.register_account();
-        }
+        test_ctx.register_account(receiver_id);
 
         // credit the sender with STAKE
-        let mut sender = contract.registered_account(sender_id);
+        let mut sender = test_ctx.registered_account(sender_id);
         let total_supply = YoctoStake(100 * YOCTO);
         sender.apply_stake_credit(total_supply);
-        contract.total_stake.credit(total_supply);
-        contract.save_registered_account(&sender);
+        test_ctx.total_stake.credit(total_supply);
+        test_ctx.save_registered_account(&sender);
 
         // Act - transfer with no memo
         let mut context = test_ctx.context.clone();
         context.predecessor_account_id = sender_id.to_string();
         testing_env!(context.clone());
         let transfer_amount = 10 * YOCTO;
-        contract.ft_transfer_call(
+        test_ctx.ft_transfer_call(
             to_valid_account_id(receiver_id),
             transfer_amount.into(),
             "pay".into(),
@@ -782,26 +836,17 @@ mod test_transfer_call {
     pub fn two_yocto_near_attached() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
-        let contract = &mut test_ctx.contract;
 
         let sender_id = test_ctx.account_id;
         let receiver_id = "receiver.near";
-
-        // register receiver account
-        {
-            let mut context = test_ctx.context.clone();
-            context.predecessor_account_id = receiver_id.to_string();
-            context.attached_deposit = YOCTO;
-            testing_env!(context);
-            contract.register_account();
-        }
+        test_ctx.register_account(receiver_id);
 
         // credit the sender with STAKE
-        let mut sender = contract.registered_account(sender_id);
+        let mut sender = test_ctx.registered_account(sender_id);
         let total_supply = YoctoStake(100 * YOCTO);
         sender.apply_stake_credit(total_supply);
-        contract.total_stake.credit(total_supply);
-        contract.save_registered_account(&sender);
+        test_ctx.total_stake.credit(total_supply);
+        test_ctx.save_registered_account(&sender);
 
         // Act - transfer with no memo
         let mut context = test_ctx.context.clone();
@@ -809,7 +854,7 @@ mod test_transfer_call {
         context.attached_deposit = 2;
         testing_env!(context.clone());
         let transfer_amount = 10 * YOCTO;
-        contract.ft_transfer_call(
+        test_ctx.ft_transfer_call(
             to_valid_account_id(receiver_id),
             transfer_amount.into(),
             "pay".into(),
@@ -822,26 +867,17 @@ mod test_transfer_call {
     pub fn zero_transfer_amount() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
-        let contract = &mut test_ctx.contract;
 
         let sender_id = test_ctx.account_id;
         let receiver_id = "receiver.near";
-
-        // register receiver account
-        {
-            let mut context = test_ctx.context.clone();
-            context.predecessor_account_id = receiver_id.to_string();
-            context.attached_deposit = YOCTO;
-            testing_env!(context);
-            contract.register_account();
-        }
+        test_ctx.register_account(receiver_id);
 
         // credit the sender with STAKE
-        let mut sender = contract.registered_account(sender_id);
+        let mut sender = test_ctx.registered_account(sender_id);
         let total_supply = YoctoStake(100 * YOCTO);
         sender.apply_stake_credit(total_supply);
-        contract.total_stake.credit(total_supply);
-        contract.save_registered_account(&sender);
+        test_ctx.total_stake.credit(total_supply);
+        test_ctx.save_registered_account(&sender);
 
         // Act - transfer with no memo
         let mut context = test_ctx.context.clone();
@@ -849,7 +885,7 @@ mod test_transfer_call {
         context.attached_deposit = 1;
         testing_env!(context.clone());
         let transfer_amount = 0;
-        contract.ft_transfer_call(
+        test_ctx.ft_transfer_call(
             to_valid_account_id(receiver_id),
             transfer_amount.into(),
             "pay".into(),
@@ -862,26 +898,17 @@ mod test_transfer_call {
     pub fn sender_balance_with_insufficient_funds() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
-        let contract = &mut test_ctx.contract;
 
         let sender_id = test_ctx.account_id;
         let receiver_id = "receiver.near";
-
-        // register receiver account
-        {
-            let mut context = test_ctx.context.clone();
-            context.predecessor_account_id = receiver_id.to_string();
-            context.attached_deposit = YOCTO;
-            testing_env!(context);
-            contract.register_account();
-        }
+        test_ctx.register_account(receiver_id);
 
         // credit the sender with STAKE
-        let mut sender = contract.registered_account(sender_id);
+        let mut sender = test_ctx.registered_account(sender_id);
         let total_supply = YoctoStake(1 * YOCTO);
         sender.apply_stake_credit(total_supply);
-        contract.total_stake.credit(total_supply);
-        contract.save_registered_account(&sender);
+        test_ctx.total_stake.credit(total_supply);
+        test_ctx.save_registered_account(&sender);
 
         // Act - transfer with no memo
         let mut context = test_ctx.context.clone();
@@ -889,7 +916,7 @@ mod test_transfer_call {
         context.attached_deposit = 1;
         testing_env!(context.clone());
         let transfer_amount = 2 * YOCTO;
-        contract.ft_transfer_call(
+        test_ctx.ft_transfer_call(
             to_valid_account_id(receiver_id),
             transfer_amount.into(),
             "pay".into(),
@@ -917,43 +944,30 @@ mod test_transfer_call {
 #[cfg(test)]
 mod test_resolve_transfer_call {
     use super::*;
-    use crate::interface::AccountManagement;
     use crate::near::YOCTO;
     use crate::test_utils::*;
+    #[allow(unused_imports)]
     use near_sdk::{serde_json, testing_env, MockedBlockchain};
 
     #[test]
     fn err_receiver_has_balance_for_full_refund() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
-        let contract = &mut test_ctx.contract;
 
         let sender_id = test_ctx.account_id;
         let receiver_id = "receiver.near";
-
-        let mut context = test_ctx.context.clone();
-        context.predecessor_account_id = receiver_id.to_string();
-
-        // register receiver account and credit STAKE
+        test_ctx.register_account(receiver_id);
+        // credit STAKE to receiver
         {
-            let mut context = test_ctx.context.clone();
-            context.predecessor_account_id = receiver_id.to_string();
-            context.attached_deposit = YOCTO;
-            testing_env!(context.clone());
-            contract.register_account();
-
-            context.attached_deposit = 0;
-            testing_env!(context.clone());
-
-            let mut receiver = contract.predecessor_registered_account();
+            let mut receiver = test_ctx.predecessor_registered_account();
             receiver.apply_stake_credit(YOCTO.into());
-            contract.save_registered_account(&receiver);
+            test_ctx.save_registered_account(&receiver);
         }
 
-        set_env_with_promise_result(contract, promise_result_failed);
+        set_env_with_promise_result(&mut test_ctx, promise_result_failed);
 
         // Act
-        let result = contract.ft_resolve_transfer_call(
+        let result = test_ctx.ft_resolve_transfer_call(
             to_valid_account_id(sender_id),
             to_valid_account_id(receiver_id),
             YOCTO.into(),
@@ -963,9 +977,9 @@ mod test_resolve_transfer_call {
         match result {
             PromiseOrValue::Value(refund_amount) => {
                 assert_eq!(refund_amount.value(), YOCTO.into());
-                let receiver = contract.registered_account(receiver_id);
+                let receiver = test_ctx.registered_account(receiver_id);
                 assert!(receiver.stake.is_none());
-                let sender = contract.registered_account(sender_id);
+                let sender = test_ctx.registered_account(sender_id);
                 assert_eq!(sender.stake.unwrap().amount(), YOCTO.into());
             }
             _ => panic!("expected value to be returned"),
@@ -976,34 +990,21 @@ mod test_resolve_transfer_call {
     fn err_receiver_has_balance_for_partial_refund() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
-        let contract = &mut test_ctx.contract;
 
         let sender_id = test_ctx.account_id;
         let receiver_id = "receiver.near";
-
-        let mut context = test_ctx.context.clone();
-        context.predecessor_account_id = receiver_id.to_string();
-
-        // register receiver account and credit STAKE
+        test_ctx.register_account(receiver_id);
+        // credit STAKE to receiver
         {
-            let mut context = test_ctx.context.clone();
-            context.predecessor_account_id = receiver_id.to_string();
-            context.attached_deposit = YOCTO;
-            testing_env!(context.clone());
-            contract.register_account();
-
-            context.attached_deposit = 0;
-            testing_env!(context.clone());
-
-            let mut receiver = contract.predecessor_registered_account();
+            let mut receiver = test_ctx.predecessor_registered_account();
             receiver.apply_stake_credit(YOCTO.into());
-            contract.save_registered_account(&receiver);
+            test_ctx.save_registered_account(&receiver);
         }
 
-        set_env_with_promise_result(contract, promise_result_failed);
+        set_env_with_promise_result(&mut test_ctx, promise_result_failed);
 
         // Act
-        let result = contract.ft_resolve_transfer_call(
+        let result = test_ctx.ft_resolve_transfer_call(
             to_valid_account_id(sender_id),
             to_valid_account_id(receiver_id),
             (2 * YOCTO).into(),
@@ -1013,9 +1014,9 @@ mod test_resolve_transfer_call {
         match result {
             PromiseOrValue::Value(refund_amount) => {
                 assert_eq!(refund_amount.value(), YOCTO.into());
-                let receiver = contract.registered_account(receiver_id);
+                let receiver = test_ctx.registered_account(receiver_id);
                 assert!(receiver.stake.is_none());
-                let sender = contract.registered_account(sender_id);
+                let sender = test_ctx.registered_account(sender_id);
                 assert_eq!(sender.stake.unwrap().amount(), YOCTO.into());
             }
             _ => panic!("expected value to be returned"),
@@ -1026,30 +1027,15 @@ mod test_resolve_transfer_call {
     fn err_receiver_has_zero_balance() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
-        let contract = &mut test_ctx.contract;
 
         let sender_id = test_ctx.account_id;
         let receiver_id = "receiver.near";
+        test_ctx.register_account(receiver_id);
 
-        let mut context = test_ctx.context.clone();
-        context.predecessor_account_id = receiver_id.to_string();
-
-        // register receiver account and credit STAKE
-        {
-            let mut context = test_ctx.context.clone();
-            context.predecessor_account_id = receiver_id.to_string();
-            context.attached_deposit = YOCTO;
-            testing_env!(context.clone());
-            contract.register_account();
-
-            context.attached_deposit = 0;
-            testing_env!(context.clone());
-        }
-
-        set_env_with_promise_result(contract, promise_result_failed);
+        set_env_with_promise_result(&mut test_ctx, promise_result_failed);
 
         // Act
-        let result = contract.ft_resolve_transfer_call(
+        let result = test_ctx.ft_resolve_transfer_call(
             to_valid_account_id(sender_id),
             to_valid_account_id(receiver_id),
             (2 * YOCTO).into(),
@@ -1068,24 +1054,15 @@ mod test_resolve_transfer_call {
     pub fn ok_zero_refund() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
-        let contract = &mut test_ctx.contract;
 
         let sender_id = test_ctx.account_id;
         let receiver_id = "receiver.near";
+        test_ctx.register_account(receiver_id);
 
-        // register receiver account
-        {
-            let mut context = test_ctx.context.clone();
-            context.predecessor_account_id = receiver_id.to_string();
-            context.attached_deposit = YOCTO;
-            testing_env!(context);
-            contract.register_account();
-        }
-
-        set_env_with_promise_result(contract, promise_result_zero_refund);
+        set_env_with_promise_result(&mut test_ctx, promise_result_zero_refund);
 
         // Act
-        let result = contract.ft_resolve_transfer_call(
+        let result = test_ctx.ft_resolve_transfer_call(
             to_valid_account_id(sender_id),
             to_valid_account_id(receiver_id),
             YOCTO.into(),
@@ -1102,29 +1079,20 @@ mod test_resolve_transfer_call {
     pub fn ok_with_refund() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
-        let contract = &mut test_ctx.contract;
 
         let sender_id = test_ctx.account_id;
         let receiver_id = "receiver.near";
-
-        // register receiver account
-        {
-            let mut context = test_ctx.context.clone();
-            context.predecessor_account_id = receiver_id.to_string();
-            context.attached_deposit = YOCTO;
-            testing_env!(context);
-            contract.register_account();
-        }
+        test_ctx.register_account(receiver_id);
 
         // credit the receiver with STAKE
-        let mut receiver = contract.registered_account(receiver_id);
+        let mut receiver = test_ctx.registered_account(receiver_id);
         receiver.apply_stake_credit((100 * YOCTO).into());
-        contract.save_registered_account(&receiver);
+        test_ctx.save_registered_account(&receiver);
 
-        set_env_with_promise_result(contract, promise_result_with_refund);
+        set_env_with_promise_result(&mut test_ctx, promise_result_with_refund);
 
         // Act
-        let result = contract.ft_resolve_transfer_call(
+        let result = test_ctx.ft_resolve_transfer_call(
             to_valid_account_id(sender_id),
             to_valid_account_id(receiver_id),
             YOCTO.into(),
@@ -1137,7 +1105,7 @@ mod test_resolve_transfer_call {
         }
 
         assert_eq!(
-            contract
+            test_ctx
                 .registered_account(receiver_id)
                 .stake
                 .unwrap()
@@ -1145,7 +1113,7 @@ mod test_resolve_transfer_call {
             (99 * YOCTO).into()
         );
         assert_eq!(
-            contract
+            test_ctx
                 .registered_account(sender_id)
                 .stake
                 .unwrap()
@@ -1158,24 +1126,15 @@ mod test_resolve_transfer_call {
     pub fn ok_with_refund_and_receiver_zero_balance() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
-        let contract = &mut test_ctx.contract;
 
         let sender_id = test_ctx.account_id;
         let receiver_id = "receiver.near";
+        test_ctx.register_account(receiver_id);
 
-        // register receiver account
-        {
-            let mut context = test_ctx.context.clone();
-            context.predecessor_account_id = receiver_id.to_string();
-            context.attached_deposit = YOCTO;
-            testing_env!(context);
-            contract.register_account();
-        }
-
-        set_env_with_promise_result(contract, promise_result_with_refund);
+        set_env_with_promise_result(&mut test_ctx, promise_result_with_refund);
 
         // Act
-        let result = contract.ft_resolve_transfer_call(
+        let result = test_ctx.ft_resolve_transfer_call(
             to_valid_account_id(sender_id),
             to_valid_account_id(receiver_id),
             YOCTO.into(),
@@ -1192,29 +1151,20 @@ mod test_resolve_transfer_call {
     pub fn ok_with_refund_and_receiver_balance_insufficient() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
-        let contract = &mut test_ctx.contract;
 
         let sender_id = test_ctx.account_id;
         let receiver_id = "receiver.near";
-
-        // register receiver account
-        {
-            let mut context = test_ctx.context.clone();
-            context.predecessor_account_id = receiver_id.to_string();
-            context.attached_deposit = YOCTO;
-            testing_env!(context);
-            contract.register_account();
-        }
+        test_ctx.register_account(receiver_id);
 
         // credit the receiver with STAKE
-        let mut receiver = contract.registered_account(receiver_id);
+        let mut receiver = test_ctx.registered_account(receiver_id);
         receiver.apply_stake_credit((YOCTO / 10).into());
-        contract.save_registered_account(&receiver);
+        test_ctx.save_registered_account(&receiver);
 
-        set_env_with_promise_result(contract, promise_result_with_refund);
+        set_env_with_promise_result(&mut test_ctx, promise_result_with_refund);
 
         // Act
-        let result = contract.ft_resolve_transfer_call(
+        let result = test_ctx.ft_resolve_transfer_call(
             to_valid_account_id(sender_id),
             to_valid_account_id(receiver_id),
             YOCTO.into(),
@@ -1231,29 +1181,20 @@ mod test_resolve_transfer_call {
     pub fn ok_with_refund_gt_transfer_amount() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
-        let contract = &mut test_ctx.contract;
 
         let sender_id = test_ctx.account_id;
         let receiver_id = "receiver.near";
-
-        // register receiver account
-        {
-            let mut context = test_ctx.context.clone();
-            context.predecessor_account_id = receiver_id.to_string();
-            context.attached_deposit = YOCTO;
-            testing_env!(context);
-            contract.register_account();
-        }
+        test_ctx.register_account(receiver_id);
 
         // credit the receiver with STAKE
-        let mut receiver = contract.registered_account(receiver_id);
+        let mut receiver = test_ctx.registered_account(receiver_id);
         receiver.apply_stake_credit((100 * YOCTO).into());
-        contract.save_registered_account(&receiver);
+        test_ctx.save_registered_account(&receiver);
 
-        set_env_with_promise_result(contract, promise_result_with_overrefund);
+        set_env_with_promise_result(&mut test_ctx, promise_result_with_overrefund);
 
         // Act
-        let result = contract.ft_resolve_transfer_call(
+        let result = test_ctx.ft_resolve_transfer_call(
             to_valid_account_id(sender_id),
             to_valid_account_id(receiver_id),
             YOCTO.into(),
@@ -1266,7 +1207,7 @@ mod test_resolve_transfer_call {
         }
 
         assert_eq!(
-            contract
+            test_ctx
                 .registered_account(receiver_id)
                 .stake
                 .unwrap()
@@ -1274,7 +1215,7 @@ mod test_resolve_transfer_call {
             (99 * YOCTO).into()
         );
         assert_eq!(
-            contract
+            test_ctx
                 .registered_account(sender_id)
                 .stake
                 .unwrap()

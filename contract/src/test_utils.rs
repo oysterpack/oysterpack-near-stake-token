@@ -12,6 +12,7 @@ use near_sdk::{
     testing_env, AccountId, MockedBlockchain, PromiseResult, VMContext,
 };
 use std::convert::TryInto;
+use std::ops::{Deref, DerefMut};
 
 pub const EXPECTED_ACCOUNT_STORAGE_USAGE: u64 = 681;
 
@@ -91,10 +92,9 @@ impl<'a> TestContext<'a> {
 
     pub fn register_account(&mut self, account_id: &str) {
         let mut context = self.set_predecessor_account_id(account_id);
-        let contract = &mut self.contract;
         context.attached_deposit = YOCTO;
         testing_env!(context.clone());
-        contract.register_account();
+        self.contract.register_account();
 
         context.attached_deposit = 0;
         testing_env!(context);
@@ -104,6 +104,20 @@ impl<'a> TestContext<'a> {
         let mut context = self.context.clone();
         context.predecessor_account_id = account_id.to_string();
         context
+    }
+}
+
+impl<'a> Deref for TestContext<'a> {
+    type Target = StakeTokenContract;
+
+    fn deref(&self) -> &Self::Target {
+        &self.contract
+    }
+}
+
+impl<'a> DerefMut for TestContext<'a> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.contract
     }
 }
 
