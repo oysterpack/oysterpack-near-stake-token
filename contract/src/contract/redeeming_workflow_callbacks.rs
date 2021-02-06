@@ -41,8 +41,8 @@ impl StakeTokenContract {
 
         // update the cached STAKE token value
         let staked_balance = self.staked_near_balance(
-            staking_pool_account.staked_balance.0.into(),
-            staking_pool_account.unstaked_balance.0.into(),
+            staking_pool_account.staked_balance.into(),
+            staking_pool_account.unstaked_balance.into(),
         );
         self.update_stake_token_value(staked_balance);
 
@@ -159,8 +159,8 @@ impl StakeTokenContract {
         )
     }
 
-    pub(crate) fn invoke_release_run_redeem_stake_batch_unstaking_lock(&self) -> Promise {
-        ext_redeeming_workflow_callbacks::clear_redeem_stake_batch_lock(
+    pub(crate) fn invoke_clear_redeem_lock(&self) -> Promise {
+        ext_redeeming_workflow_callbacks::clear_redeem_lock(
             &env::current_account_id(),
             NO_DEPOSIT.into(),
             self.config.gas_config().callbacks().unlock().value(),

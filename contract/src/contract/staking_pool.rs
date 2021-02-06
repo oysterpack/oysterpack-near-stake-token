@@ -22,6 +22,18 @@ impl<'a> StakingPoolPromiseBuilder<'a> {
         self.0
     }
 
+    pub fn ping(self) -> Self {
+        Self(
+            self.0.function_call(
+                b"ping".to_vec(),
+                NO_ARGS.to_vec(),
+                NO_DEPOSIT.into(),
+                self.1.gas_config().staking_pool().ping().value(),
+            ),
+            self.1,
+        )
+    }
+
     pub fn get_account(self) -> Self {
         Self(
             self.0.function_call(

@@ -1,5 +1,7 @@
 //required in order for near_bindgen macro to work outside of lib.rs
 use crate::core::U256;
+use crate::interface::Operator;
+use crate::near::NO_DEPOSIT;
 use crate::*;
 use crate::{
     domain::{self, Account, RedeemLock, RedeemStakeBatch, RegisteredAccount, StakeBatch},
@@ -9,7 +11,10 @@ use crate::{
             STAKE_BATCH_SHOULD_EXIST,
         },
         redeeming_stake_errors::NO_REDEEM_STAKE_BATCH_TO_RUN,
-        staking_errors::{BLOCKED_BY_BATCH_RUNNING, NO_FUNDS_IN_STAKE_BATCH_TO_WITHDRAW},
+        staking_errors::{
+            BLOCKED_BY_BATCH_RUNNING, BLOCKED_BY_STAKE_TOKEN_VALUE_REFRESH,
+            NO_FUNDS_IN_STAKE_BATCH_TO_WITHDRAW,
+        },
         staking_service::{
             BATCH_BALANCE_INSUFFICIENT, DEPOSIT_REQUIRED_FOR_STAKE,
             INSUFFICIENT_STAKE_FOR_REDEEM_REQUEST, ZERO_REDEEM_AMOUNT,
@@ -20,6 +25,7 @@ use crate::{
         YoctoStake,
     },
     near::{log, YOCTO},
+    staking_pool::StakingPoolPromiseBuilder,
 };
 use near_sdk::{
     env, ext_contract, near_bindgen,
@@ -71,6 +77,9 @@ impl StakingService for StakeTokenContract {
                 let batch = self.stake_batch.expect(STAKE_BATCH_SHOULD_EXIST);
                 self.process_staked_batch();
                 PromiseOrValue::Value(batch.id().into())
+            }
+            Some(StakeLock::RefreshingStakeTokenValue) => {
+                panic!(BLOCKED_BY_STAKE_TOKEN_VALUE_REFRESH)
             }
         }
     }
@@ -357,7 +366,7 @@ impl StakingService for StakeTokenContract {
                     .get_account()
                     .promise()
                     .then(self.invoke_on_run_redeem_stake_batch())
-                    .then(self.invoke_release_run_redeem_stake_batch_unstaking_lock())
+                    .then(self.invoke_clear_redeem_lock())
             }
             Some(RedeemLock::PendingWithdrawal) => self
                 .staking_pool_promise()
@@ -439,6 +448,43 @@ impl StakingService for StakeTokenContract {
 
     fn min_required_deposit_to_stake(&self) -> YoctoNear {
         self.min_required_near_deposit().into()
+    }
+
+    fn refresh_stake_token_value(&mut self) -> Promise {
+        match self.stake_batch_lock {
+            None => {
+                assert!(!self.is_unstaking(), BLOCKED_BY_BATCH_RUNNING);
+                self.stake_batch_lock = Some(StakeLock::RefreshingStakeTokenValue);
+                StakingPoolPromiseBuilder::new(self.staking_pool_id.clone(), &self.config)
+                    .ping()
+                    .get_account()
+                    .promise()
+                    .then(self.invoke_refresh_stake_token_value())
+            }
+            Some(StakeLock::RefreshingStakeTokenValue) => {
+                panic!(BLOCKED_BY_STAKE_TOKEN_VALUE_REFRESH)
+            }
+            Some(_) => panic!(BLOCKED_BY_BATCH_RUNNING),
+        }
+    }
+
+    fn stake_token_value(&self) -> Option<interface::StakeTokenValue> {
+        if self.total_stake.amount().value() == 0 {
+            return Some(self.stake_token_value.into());
+        }
+
+        let current = env::epoch_height()
+            == self
+                .stake_token_value
+                .block_time_height()
+                .epoch_height()
+                .value();
+
+        if current {
+            Some(self.stake_token_value.into())
+        } else {
+            None
+        }
     }
 }
 
@@ -533,7 +579,7 @@ impl StakeTokenContract {
                 .get_account()
                 .promise()
                 .then(self.invoke_on_run_stake_batch())
-                .then(self.invoke_clear_stake_batch_lock())
+                .then(self.invoke_clear_stake_lock())
         } else {
             // if liquidity is not needed, then lets stake it
             // NOTE: liquidity belongs to the stakers - some will leak over when we withdraw all from
@@ -545,7 +591,7 @@ impl StakeTokenContract {
                 .get_account()
                 .promise()
                 .then(self.invoke_on_deposit_and_stake(None))
-                .then(self.invoke_clear_stake_batch_lock())
+                .then(self.invoke_clear_stake_lock())
         }
     }
 
@@ -1147,7 +1193,7 @@ pub trait ExtRedeemingWorkflowCallbacks {
     /// 2. set the redeem stake batch lock state to pending withdrawal
     fn on_unstake(&mut self);
 
-    fn clear_redeem_stake_batch_lock(&mut self);
+    fn clear_redeem_lock(&mut self);
 
     /// batch ID is returned when all unstaked NEAR has been withdrawn
     fn on_redeeming_stake_pending_withdrawal(
@@ -1187,7 +1233,46 @@ pub trait ExtStakingWorkflowCallbacks {
     fn process_staked_batch(&mut self);
 
     /// defined on [Operator] interface
-    fn clear_stake_batch_lock(&mut self);
+    fn clear_stake_lock(&mut self);
+}
+
+#[ext_contract(ext_callbacks)]
+pub trait Callbacks {
+    fn on_refresh_stake_token_value(
+        &mut self,
+        #[callback] staking_pool_account: StakingPoolAccount,
+    );
+}
+
+#[near_bindgen]
+impl StakeTokenContract {
+    #[private]
+    pub fn on_refresh_stake_token_value(
+        &mut self,
+        #[callback] staking_pool_account: StakingPoolAccount,
+    ) -> interface::StakeTokenValue {
+        let staked_balance = self.staked_near_balance(
+            staking_pool_account.staked_balance.into(),
+            staking_pool_account.unstaked_balance.into(),
+        );
+        self.update_stake_token_value(staked_balance);
+        self.clear_stake_lock();
+        self.stake_token_value.into()
+    }
+}
+
+impl StakeTokenContract {
+    fn invoke_refresh_stake_token_value(&self) -> Promise {
+        ext_callbacks::on_refresh_stake_token_value(
+            &env::current_account_id(),
+            NO_DEPOSIT.value(),
+            self.config
+                .gas_config()
+                .callbacks()
+                .on_refresh_stake_token_value()
+                .value(),
+        )
+    }
 }
 
 #[cfg(test)]
@@ -1453,7 +1538,7 @@ mod test_deposit {
 
             context.predecessor_account_id = contract.operator_id();
             testing_env!(context.clone());
-            contract.clear_stake_batch_lock();
+            contract.clear_stake_lock();
             context.storage_usage = env::storage_usage();
         }
 
@@ -1482,6 +1567,238 @@ mod test_deposit {
         context.is_view = true;
         testing_env!(context.clone());
         assert!(contract.stake_batch_receipt(batch_id.into()).is_none());
+    }
+}
+
+#[cfg(test)]
+mod test_stake_token_value {
+    use super::*;
+
+    use crate::{near::YOCTO, test_utils::*};
+    use near_sdk::{testing_env, MockedBlockchain};
+
+    #[test]
+    fn total_stake_balance_is_zero() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+
+        let mut context = test_context.context.clone();
+        context.epoch_height = 100;
+        testing_env!(context);
+        test_context.total_stake.credit(0.into());
+        test_context.update_stake_token_value(0.into());
+
+        // Act - explict false
+        let stake_token_value = test_context.stake_token_value();
+
+        // Assert
+        match stake_token_value {
+            Some(stake_token_value) => {
+                assert_eq!(
+                    stake_token_value.block_time_height.epoch_height,
+                    test_context
+                        .stake_token_value
+                        .block_time_height()
+                        .epoch_height()
+                        .into()
+                )
+            }
+            _ => panic!("expected value to be returned"),
+        }
+    }
+
+    #[test]
+    fn is_current() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+
+        let mut context = test_context.context.clone();
+        context.epoch_height = 100;
+        testing_env!(context);
+        test_context.total_stake.credit(YOCTO.into());
+        test_context.update_stake_token_value(YOCTO.into());
+
+        // Act - explict false
+        let stake_token_value = test_context.stake_token_value();
+
+        // Assert
+        match stake_token_value {
+            Some(stake_token_value) => {
+                assert_eq!(
+                    stake_token_value.block_time_height.epoch_height,
+                    test_context
+                        .stake_token_value
+                        .block_time_height()
+                        .epoch_height()
+                        .into()
+                )
+            }
+            _ => panic!("expected value to be returned"),
+        }
+    }
+
+    #[test]
+    fn is_stale() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+
+        let mut context = test_context.context.clone();
+        context.epoch_height = 100;
+        testing_env!(context);
+        test_context.total_stake.credit(YOCTO.into());
+        test_context.update_stake_token_value(YOCTO.into());
+
+        let mut context = test_context.context.clone();
+        context.epoch_height = 101;
+        testing_env!(context);
+
+        // Act - explict false
+        let stake_token_value = test_context.stake_token_value();
+
+        // Assert
+        assert!(stake_token_value.is_none());
+    }
+}
+
+#[cfg(test)]
+mod test_refresh_stake_token_value {
+    use super::*;
+
+    use crate::{near::YOCTO, test_utils::*};
+    use near_sdk::{testing_env, MockedBlockchain};
+
+    #[test]
+    #[should_panic(expected = "action is blocked because a batch is running")]
+    fn has_staking_lock() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+        test_context.stake_batch_lock = Some(StakeLock::Staking);
+
+        // Act
+        test_context.refresh_stake_token_value();
+    }
+
+    #[test]
+    #[should_panic(expected = "action is blocked because a batch is running")]
+    fn has_staked_lock() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+        test_context.stake_batch_lock = Some(StakeLock::Staked {
+            near_liquidity: None,
+            staked_balance: Default::default(),
+            unstaked_balance: Default::default(),
+        });
+
+        // Act
+        test_context.refresh_stake_token_value();
+    }
+
+    #[test]
+    #[should_panic(expected = "action is blocked because a batch is running")]
+    fn has_unstaking_lock() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+        test_context.redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
+
+        // Act
+        test_context.refresh_stake_token_value();
+    }
+
+    #[test]
+    #[should_panic(expected = "action is blocked because STAKE token value is being refreshed")]
+    fn has_refreshing_stake_token_value_lock() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+        test_context.stake_batch_lock = Some(StakeLock::RefreshingStakeTokenValue);
+
+        // Act
+        test_context.refresh_stake_token_value();
+    }
+
+    #[test]
+    fn no_locks() {
+        // Arrange
+        let mut test_context = TestContext::with_registered_account();
+
+        let mut context = test_context.context.clone();
+        context.epoch_height = 100;
+        testing_env!(context);
+        test_context.total_stake.credit(YOCTO.into());
+        test_context.update_stake_token_value(YOCTO.into());
+
+        // Act
+        test_context.refresh_stake_token_value();
+
+        // Assert
+        let receipts = deserialize_receipts();
+        assert_eq!(receipts.len(), 2);
+        {
+            let receipt = &receipts[0];
+            let actions = &receipt.actions;
+            assert_eq!(actions.len(), 2);
+            {
+                let action = &actions[0];
+                match action {
+                    Action::FunctionCall {
+                        method_name, gas, ..
+                    } => {
+                        assert_eq!(method_name, "ping");
+                        assert_eq!(
+                            *gas,
+                            test_context
+                                .config
+                                .gas_config()
+                                .staking_pool()
+                                .ping()
+                                .value()
+                        );
+                    }
+                    _ => panic!("expected function call"),
+                }
+            }
+            {
+                let action = &actions[1];
+                match action {
+                    Action::FunctionCall {
+                        method_name, gas, ..
+                    } => {
+                        assert_eq!(method_name, "get_account");
+                        assert_eq!(
+                            *gas,
+                            test_context
+                                .config
+                                .gas_config()
+                                .staking_pool()
+                                .get_account()
+                                .value()
+                        );
+                    }
+                    _ => panic!("expected function call"),
+                }
+            }
+        }
+        {
+            let receipt = &receipts[1];
+            assert_eq!(receipt.actions.len(), 1);
+            let action = &receipt.actions[0];
+            match action {
+                Action::FunctionCall {
+                    method_name, gas, ..
+                } => {
+                    assert_eq!(method_name, "on_refresh_stake_token_value");
+                    assert_eq!(
+                        *gas,
+                        test_context
+                            .config
+                            .gas_config()
+                            .callbacks()
+                            .on_refresh_stake_token_value()
+                            .value()
+                    );
+                }
+                _ => panic!("expected function call"),
+            }
+        }
     }
 }
 
@@ -1557,7 +1874,7 @@ mod test_stake {
                 let action = &receipt.actions[0];
                 match action {
                     Action::FunctionCall { method_name, .. } => {
-                        assert_eq!(method_name, "clear_stake_batch_lock")
+                        assert_eq!(method_name, "clear_stake_lock")
                     }
                     _ => panic!("expected `clear_stake_batch_lock` callback"),
                 }
@@ -1630,7 +1947,7 @@ mod test_stake {
 
                         context.predecessor_account_id = env::current_account_id();
                         testing_env!(context.clone());
-                        contract.clear_stake_batch_lock();
+                        contract.clear_stake_lock();
                     }
                     _ => panic!("expected StakeLock::Staked"),
                 };
@@ -1780,9 +2097,9 @@ mod test_stake {
                 let action = &receipt.actions[0];
                 match action {
                     Action::FunctionCall { method_name, .. } => {
-                        assert_eq!(method_name, "clear_stake_batch_lock")
+                        assert_eq!(method_name, "clear_stake_lock")
                     }
-                    _ => panic!("expected `clear_stake_batch_lock` callback"),
+                    _ => panic!("expected `clear_stake_lock` callback"),
                 }
             }
         }
@@ -1966,7 +2283,7 @@ collected_earnings: {} -> {}
 
             set_env_with_success_promise_result(&mut test_context);
             test_context.on_unstake();
-            test_context.clear_redeem_stake_batch_lock();
+            test_context.clear_redeem_lock();
         }
 
         // Act - deposit and stake
@@ -1998,7 +2315,7 @@ collected_earnings: {} -> {}
             let receipt = &receipts[2];
             match &receipt.actions[0] {
                 Action::FunctionCall { method_name, .. } => {
-                    assert_eq!(method_name, "clear_stake_batch_lock")
+                    assert_eq!(method_name, "clear_stake_lock")
                 }
                 _ => panic!("expected FunctionCall"),
             }
@@ -2116,7 +2433,7 @@ collected_earnings: {} -> {}
 
             set_env_with_success_promise_result(&mut test_context);
             test_context.on_unstake();
-            test_context.clear_redeem_stake_batch_lock();
+            test_context.clear_redeem_lock();
         }
 
         // Act - deposit and stake 2 NEAR - 1 NEAR will be added to liquidity
@@ -2148,7 +2465,7 @@ collected_earnings: {} -> {}
             let receipt = &receipts[2];
             match &receipt.actions[0] {
                 Action::FunctionCall { method_name, .. } => {
-                    assert_eq!(method_name, "clear_stake_batch_lock")
+                    assert_eq!(method_name, "clear_stake_lock")
                 }
                 _ => panic!("expected FunctionCall"),
             }
@@ -2266,7 +2583,7 @@ collected_earnings: {} -> {}
         let mut context = test_context.context.clone();
         context.predecessor_account_id = env::current_account_id();
         testing_env!(context);
-        test_context.clear_stake_batch_lock();
+        test_context.clear_stake_lock();
 
         match test_context.stake_batch_lock {
             Some(StakeLock::Staked { .. }) => println!("{:?}", test_context.stake_batch_lock),
@@ -3990,9 +4307,9 @@ mod test {
             let action = &receipt.actions[0];
             match action {
                 Action::FunctionCall { method_name, .. } => {
-                    assert_eq!(method_name, "clear_stake_batch_lock")
+                    assert_eq!(method_name, "clear_stake_lock")
                 }
-                _ => panic!("expected `clear_stake_batch_lock` callback"),
+                _ => panic!("expected `clear_stake_lock` callback"),
             }
         }
     }
@@ -4052,7 +4369,7 @@ mod test {
                         {
                             context.predecessor_account_id = context.current_account_id.clone();
                             testing_env!(context.clone());
-                            contract.clear_stake_batch_lock();
+                            contract.clear_stake_lock();
                             assert!(!contract.stake_batch_locked());
                         }
                     }
@@ -4395,7 +4712,7 @@ mod test {
                 Action::FunctionCall {
                     method_name, args, ..
                 } => {
-                    assert_eq!(method_name, "clear_redeem_stake_batch_lock");
+                    assert_eq!(method_name, "clear_redeem_lock");
                     assert!(args.is_empty());
                 }
                 _ => panic!("expected func call action"),
@@ -4465,7 +4782,7 @@ mod test {
                 Action::FunctionCall {
                     method_name, args, ..
                 } => {
-                    assert_eq!(method_name, "clear_redeem_stake_batch_lock");
+                    assert_eq!(method_name, "clear_redeem_lock");
                     assert!(args.is_empty());
                 }
                 _ => panic!("expected func call action"),

@@ -19,6 +19,7 @@ pub enum StakeLock {
         staked_balance: YoctoNear,
         unstaked_balance: YoctoNear,
     },
+    RefreshingStakeTokenValue,
 }
 
 impl From<domain::StakeLock> for StakeLock {
@@ -34,6 +35,7 @@ impl From<domain::StakeLock> for StakeLock {
                 staked_balance: staked_balance.into(),
                 unstaked_balance: unstaked_balance.into(),
             },
+            domain::StakeLock::RefreshingStakeTokenValue => StakeLock::RefreshingStakeTokenValue,
         }
     }
 }

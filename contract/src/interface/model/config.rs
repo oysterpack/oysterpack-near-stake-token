@@ -34,6 +34,7 @@ pub struct StakingPoolGasConfig {
     pub unstake: Option<Gas>,
     pub withdraw: Option<Gas>,
     pub get_account: Option<Gas>,
+    pub ping: Option<Gas>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -51,6 +52,8 @@ pub struct CallBacksGasConfig {
 
     /// used by FungibleToken transfer call workflow
     pub resolve_transfer_gas: Option<Gas>,
+
+    pub refresh_stake_token_value: Option<Gas>,
 }
 
 impl From<config::Config> for Config {
@@ -85,6 +88,7 @@ impl From<config::StakingPoolGasConfig> for StakingPoolGasConfig {
             unstake: Some(value.unstake().into()),
             withdraw: Some(value.withdraw().into()),
             get_account: Some(value.get_account().into()),
+            ping: Some(value.ping().into()),
         }
     }
 }
@@ -104,6 +108,7 @@ impl From<config::CallBacksGasConfig> for CallBacksGasConfig {
                 value.on_redeeming_stake_post_withdrawal().into(),
             ),
             resolve_transfer_gas: Some(value.resolve_transfer_gas().into()),
+            refresh_stake_token_value: Some(value.on_refresh_stake_token_value().into()),
         }
     }
 }

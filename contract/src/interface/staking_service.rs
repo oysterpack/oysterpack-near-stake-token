@@ -1,5 +1,5 @@
 use crate::interface::{
-    BatchId, RedeemStakeBatchReceipt, StakeBatchReceipt, YoctoNear, YoctoStake,
+    BatchId, RedeemStakeBatchReceipt, StakeBatchReceipt, StakeTokenValue, YoctoNear, YoctoStake,
 };
 use near_sdk::{json_types::ValidAccountId, AccountId, Promise, PromiseOrValue};
 
@@ -343,6 +343,40 @@ pub trait StakingService {
     /// NOTE: the min required deposit amount is conservative and the exact STAKE token value will
     /// only be known when the deposit is staked into the staking pool
     fn min_required_deposit_to_stake(&self) -> YoctoNear;
+
+    /// The only reliable way to get an accurate STAKE token value is to lock the balances on the contract
+    /// while retrieving the updated staking pool account balances. The cached STAKE token value is
+    /// considered current if the lookup is within the same epoch period because staking rewards are
+    /// only issued per epoch. To ensure that all staking pool rewards have been applied, then specify
+    /// `refresh=true` which will always ping the staking pool contract and fetch balances.
+    ///
+    /// - If refresh is true, then the [`StakeTokenValue`] is always refreshed from the staking pool.
+    /// - If refresh is not specified or false:
+    ///   - if the epoch has changed for the cached [`StakeTokenValue`], then the [`StakeTokenValue`]
+    ///     is refreshed from the staking pool.
+    ///   - otherwise the cached STAKE token value is returned
+    ///
+    /// ### [`StakeTokenValue`] Refresh Workflow
+    /// 1. Lock the contract to lock the balances while refreshing the STAKE token value
+    /// 2. Submit as batch transaction to staking pool:
+    ///    2.1 Ping the staking pool contract to distribute rewards
+    ///    2.2 Get updated staking account balances from the staking pool
+    /// 3. Update the cached [`StakeTokenValue`]
+    /// 4. Unlock the contract
+    ///
+    /// ### Panics
+    /// - if the contract is locked
+    fn refresh_stake_token_value(&mut self) -> Promise;
+
+    /// If the STAKE token value was last updated within the same epoch, then it is considered current
+    /// and returned because staking rewards are distributed per epoch.
+    ///
+    /// Otherwise, the STAKE token value is considered stale and None is returned. This should signal
+    /// the client to refresh the STAKE token value - [`refresh_stake_token_value`].
+    ///
+    /// ### NOTES
+    /// The STAKE token value is refreshed each time the NEAR is staked and when STAKE is redeemed.
+    fn stake_token_value(&self) -> Option<StakeTokenValue>;
 }
 
 pub mod events {

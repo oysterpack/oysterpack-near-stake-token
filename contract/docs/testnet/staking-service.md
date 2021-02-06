@@ -7,10 +7,14 @@ near view $CONTRACT pending_withdrawal
 near view $CONTRACT stake_batch_receipt --args '{"batch_id":"15"}'
 
 near view $CONTRACT redeem_stake_batch_receipt --args '{"batch_id":"3"}'
+
+near view $CONTRACT stake_token_value --accountId oysterpack.testnet
 ```
 
 ### Stateful Func Calls
 ```shell
+near call $CONTRACT refresh_stake_token_value --accountId oysterpack.testnet 
+
 near call $CONTRACT deposit --accountId alfio-zappala-oysterpack.testnet --amount 1
 near call $CONTRACT deposit --accountId oysterpack.testnet --amount 1
 near call $CONTRACT deposit --accountId 1.alfio-zappala-oysterpack.testnet --amount 2
@@ -68,7 +72,9 @@ near call $STAKING_POOL unstake_all --accountId $CONTRACT
 
 near call $STAKING_POOL stake --accountId $CONTRACT --args '{"amount":"1000000000000000000000000"}' --gas 300000000000000
 
-near call $STAKING_POOL withdraw_all --accountId $CONTRACT --gas 300000000000000
+near call $STAKING_POOL withdraw_all --accountId $CONTRACT
+
+near call $STAKING_POOL ping --accountId $CONTRACT
 ```
 
 1000000000000000000000000     = 1 NEAR

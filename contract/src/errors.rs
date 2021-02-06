@@ -24,6 +24,9 @@ pub mod staking_pool_failures {
 pub mod staking_errors {
     pub const BLOCKED_BY_BATCH_RUNNING: &str = "action is blocked because a batch is running";
 
+    pub const BLOCKED_BY_STAKE_TOKEN_VALUE_REFRESH: &str =
+        "action is blocked because STAKE token value is being refreshed";
+
     pub const NO_FUNDS_IN_STAKE_BATCH_TO_WITHDRAW: &str = "there are no funds in stake batch";
 }
 

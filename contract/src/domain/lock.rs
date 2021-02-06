@@ -42,4 +42,6 @@ pub enum StakeLock {
         staked_balance: YoctoNear,
         unstaked_balance: YoctoNear,
     },
+    /// balances need to be locked while refreshing STAKE token value
+    RefreshingStakeTokenValue,
 }

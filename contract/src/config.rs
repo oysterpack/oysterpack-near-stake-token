@@ -177,6 +177,7 @@ pub struct StakingPoolGasConfig {
     unstake: Gas,
     withdraw: Gas,
     get_account: Gas,
+    ping: Gas,
 }
 
 impl Default for StakingPoolGasConfig {
@@ -188,6 +189,7 @@ impl Default for StakingPoolGasConfig {
             stake: TGAS * 45,
             unstake: TGAS * 45,
             withdraw: TGAS * 45,
+            ping: TGAS * 45,
         }
     }
 }
@@ -215,6 +217,10 @@ impl StakingPoolGasConfig {
 
     pub fn get_account(&self) -> Gas {
         self.get_account
+    }
+
+    pub fn ping(&self) -> Gas {
+        self.ping
     }
 
     pub fn merge(&mut self, config: interface::StakingPoolGasConfig, validate: bool) {
@@ -283,6 +289,8 @@ pub struct CallBacksGasConfig {
 
     /// used by FungibleToken transfer call workflow
     resolve_transfer_gas: Gas,
+
+    on_refresh_stake_token_value: Gas,
 }
 
 impl CallBacksGasConfig {
@@ -381,6 +389,10 @@ impl CallBacksGasConfig {
     pub fn resolve_transfer_gas(&self) -> Gas {
         self.resolve_transfer_gas
     }
+
+    pub fn on_refresh_stake_token_value(&self) -> Gas {
+        self.on_refresh_stake_token_value
+    }
 }
 
 impl Default for CallBacksGasConfig {
@@ -397,6 +409,8 @@ impl Default for CallBacksGasConfig {
             on_redeeming_stake_pending_withdrawal: TGAS * 85,
             on_redeeming_stake_post_withdrawal: TGAS * 5,
             resolve_transfer_gas: TGAS * 10,
+
+            on_refresh_stake_token_value: TGAS * 15,
         }
     }
 }
@@ -419,6 +433,7 @@ mod test {
                 on_redeeming_stake_pending_withdrawal: Some((TGAS * 73).into()),
                 on_redeeming_stake_post_withdrawal: Some((TGAS * 9).into()),
                 resolve_transfer_gas: Some((TGAS * 10).into()),
+                refresh_stake_token_value: Some((TGAS * 15).into()),
             },
             true,
         );
@@ -442,6 +457,7 @@ mod test {
                 unstake: Some((TGAS * 72).into()),
                 withdraw: Some((TGAS * 73).into()),
                 get_account: Some((TGAS * 7).into()),
+                ping: Some((TGAS * 74).into()),
             },
             true,
         );

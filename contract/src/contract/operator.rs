@@ -72,17 +72,22 @@ impl Operator for StakeTokenContract {
         self.config.into()
     }
 
-    fn clear_stake_batch_lock(&mut self) {
+    fn clear_stake_lock(&mut self) {
         self.assert_predecessor_is_self_or_operator();
 
         // we only want to release the stake batch lock if the batch funds have not transferred over
         // to the staking pool
-        if let Some(StakeLock::Staking) = self.stake_batch_lock {
+        let unlock = match self.stake_batch_lock {
+            Some(StakeLock::Staking) => true,
+            Some(StakeLock::RefreshingStakeTokenValue) => true,
+            _ => false,
+        };
+        if unlock {
             self.stake_batch_lock = None;
         }
     }
 
-    fn clear_redeem_stake_batch_lock(&mut self) {
+    fn clear_redeem_lock(&mut self) {
         self.assert_predecessor_is_self_or_operator();
 
         if let Some(RedeemLock::Unstaking) = self.redeem_stake_batch_lock {
@@ -106,7 +111,7 @@ mod test {
         contract.redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
         context.predecessor_account_id = context.current_account_id.clone();
         testing_env!(context);
-        contract.clear_redeem_stake_batch_lock();
+        contract.clear_redeem_lock();
 
         assert!(contract.redeem_stake_batch_lock.is_none());
     }
@@ -120,7 +125,7 @@ mod test {
         contract.redeem_stake_batch_lock = Some(RedeemLock::Unstaking);
         context.predecessor_account_id = contract.operator_id.clone();
         testing_env!(context);
-        contract.clear_redeem_stake_batch_lock();
+        contract.clear_redeem_lock();
         assert!(contract.redeem_stake_batch_lock.is_none());
     }
 
@@ -136,7 +141,7 @@ mod test {
         testing_env!(context.clone());
 
         // Act
-        contract.clear_redeem_stake_batch_lock();
+        contract.clear_redeem_lock();
 
         // Assert
         assert_eq!(
@@ -153,7 +158,7 @@ mod test {
         let contract = &mut context.contract;
 
         // Act
-        contract.clear_redeem_stake_batch_lock();
+        contract.clear_redeem_lock();
     }
 
     #[test]
