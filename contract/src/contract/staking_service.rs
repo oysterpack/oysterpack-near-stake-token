@@ -1735,6 +1735,7 @@ mod test_stake {
     use super::*;
 
     use crate::interface::{ContractFinancials, Operator};
+    use crate::test_domain::OnDepositAndStakeArgs;
     use crate::{near::YOCTO, test_utils::*};
     use near_sdk::{env, serde_json, testing_env, MockedBlockchain};
 
@@ -3786,6 +3787,7 @@ mod test {
 
     use crate::domain::BlockTimeHeight;
     use crate::near::UNSTAKED_NEAR_FUNDS_NUM_EPOCHS_TO_UNLOCK;
+    use crate::test_domain::GetStakedAccountBalanceArgs;
     use crate::{
         interface::{AccountManagement, Operator},
         near::YOCTO,
@@ -5194,7 +5196,7 @@ mod test {
         context.is_view = true;
         testing_env!(context.clone());
         let account = contract
-            .lookup_account(to_valid_account_id(TEST_ACCOUNT_ID))
+            .lookup_account(to_valid_account_id(test_ctx.account_id))
             .unwrap();
         assert!(account.stake_batch.is_none());
         assert!(account.redeem_stake_batch.is_none());
@@ -5453,5 +5455,23 @@ mod test {
             old_stake_token_value.stake_to_near(YOCTO.into()),
             new_stake_token_value.stake_to_near(YOCTO.into())
         );
+    }
+}
+
+#[cfg(test)]
+pub mod test_domain {
+    use super::*;
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    #[serde(crate = "near_sdk::serde")]
+    pub struct OnDepositAndStakeArgs {
+        pub near_liquidity: Option<YoctoNear>,
+    }
+
+    #[derive(Deserialize)]
+    #[serde(crate = "near_sdk::serde")]
+    #[allow(dead_code)]
+    pub struct GetStakedAccountBalanceArgs {
+        pub account_id: String,
     }
 }

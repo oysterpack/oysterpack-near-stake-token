@@ -314,6 +314,7 @@ mod test {
 
     use super::*;
     use crate::contract::staking_pool::GetAccountArgs;
+    use crate::staking_pool::StakeArgs;
     use crate::{
         interface::{AccountManagement, StakingService},
         near::YOCTO,

@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use crate::domain::TGAS;
-use crate::interface::{AccountManagement, YoctoNear};
+use crate::interface::AccountManagement;
 use crate::near_env::Env;
 use crate::{near::*, StakeTokenContract};
 use near_sdk::{
@@ -9,12 +9,10 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
     serde_json,
     test_utils::get_created_receipts,
-    testing_env, AccountId, MockedBlockchain, PromiseResult, VMContext,
+    testing_env, MockedBlockchain, PromiseResult, VMContext,
 };
 use std::convert::TryInto;
 use std::ops::{Deref, DerefMut};
-
-pub const EXPECTED_ACCOUNT_STORAGE_USAGE: u64 = 681;
 
 pub struct TestContext<'a> {
     pub contract: StakeTokenContract,
@@ -22,15 +20,14 @@ pub struct TestContext<'a> {
     pub context: VMContext,
 }
 
-pub const TEST_ACCOUNT_ID: &str = "oysterpack.near";
-
-pub const TEST_STAKING_POOL_ID: &str = "staking-pool.near";
-pub const TEST_OWNER_ID: &str = "owner.stake.oysterpack.near";
-pub const TEST_OPERATOR_ID: &str = "operator.stake.oysterpack.near";
-
 pub fn to_valid_account_id(account_id: &str) -> ValidAccountId {
     account_id.try_into().unwrap()
 }
+
+const TEST_ACCOUNT_ID: &str = "oysterpack.near";
+const TEST_STAKING_POOL_ID: &str = "staking-pool.near";
+pub const TEST_OWNER_ID: &str = "owner.stake.oysterpack.near";
+pub const TEST_OPERATOR_ID: &str = "operator.stake.oysterpack.near";
 
 impl<'a> TestContext<'a> {
     pub fn with_vm_context(context: VMContext) -> Self {
@@ -121,13 +118,9 @@ impl<'a> DerefMut for TestContext<'a> {
     }
 }
 
-pub fn stake_contract_account_id() -> AccountId {
-    "stake.oysterpack.near".to_string()
-}
-
 pub fn new_context(predecessor_account_id: &str) -> VMContext {
     VMContext {
-        current_account_id: stake_contract_account_id(),
+        current_account_id: "stake.oysterpack.near".to_string(),
         signer_account_id: predecessor_account_id.to_string(),
         signer_account_pk: vec![0, 1, 2],
         predecessor_account_id: predecessor_account_id.to_string(),
@@ -222,29 +215,4 @@ pub fn set_env_with_failed_promise_result(contract: &mut StakeTokenContract) {
         promise_results_count_: promise_results_count,
         promise_result_: promise_result,
     });
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(crate = "near_sdk::serde")]
-pub struct StakeArgs {
-    pub amount: near_sdk::json_types::U128,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(crate = "near_sdk::serde")]
-pub struct CheckStakeArgs {
-    pub near_liquidity: Option<YoctoNear>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(crate = "near_sdk::serde")]
-pub struct OnDepositAndStakeArgs {
-    pub near_liquidity: Option<YoctoNear>,
-}
-
-#[derive(Deserialize)]
-#[serde(crate = "near_sdk::serde")]
-#[allow(dead_code)]
-pub struct GetStakedAccountBalanceArgs {
-    pub account_id: String,
 }

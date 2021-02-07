@@ -357,7 +357,6 @@ impl StakeTokenContract {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::interface::StakingService;
     use crate::{interface::AccountManagement, test_utils::*};
     use near_sdk::{testing_env, MockedBlockchain};
 
@@ -386,63 +385,60 @@ mod test {
     /// And there should be no receipts
     #[test]
     fn contract_init() {
-        let mut vm_ctx = new_context(TEST_ACCOUNT_ID);
-        vm_ctx.block_index = 10;
-        let mut test_ctx = TestContext::with_vm_context(vm_ctx);
-        let contract = &mut test_ctx.contract;
+        // Arrange
+        let test_ctx = TestContext::new();
 
-        assert_eq!(&contract.staking_pool_id(), TEST_STAKING_POOL_ID);
-
-        // Then [StakeTokenContract::account_storage_usage] is dynamically computed
+        // Assert
+        pub const EXPECTED_ACCOUNT_STORAGE_USAGE: u64 = 681;
         assert_eq!(
-            contract.account_storage_usage.value(),
+            test_ctx.account_storage_usage.value(),
             EXPECTED_ACCOUNT_STORAGE_USAGE
         );
         assert_eq!(
-            contract.account_storage_fee().value(),
+            test_ctx.account_storage_fee().value(),
             EXPECTED_ACCOUNT_STORAGE_USAGE as u128
-                * contract.config.storage_cost_per_byte().value()
+                * test_ctx.config.storage_cost_per_byte().value()
         );
 
         assert_eq!(
-            contract.total_registered_accounts().0,
+            test_ctx.total_registered_accounts().0,
             0,
             "there should be no accounts registered"
         );
         assert_eq!(
-            contract.config_change_block_height.value(),
-            10,
+            test_ctx.config_change_block_height.value(),
+            0,
             "config change block height should be set from the NEAR runtime env"
         );
         assert!(
-            !contract.stake_batch_locked(),
+            !test_ctx.stake_batch_locked(),
             "contract should not be locked"
         );
         assert_eq!(
-            contract.total_near.amount().value(),
+            test_ctx.total_near.amount().value(),
             0,
             "the total NEAR balance aggregated across all account should be zero"
         );
         assert_eq!(
-            contract.total_stake.amount().value(),
+            test_ctx.total_stake.amount().value(),
             0,
             "the total STAKE supply should be zero"
         );
         assert_eq!(
-            contract.batch_id_sequence.value(),
+            test_ctx.batch_id_sequence.value(),
             0,
             "batch ID sequence should be zero"
         );
         // And batches should be None
-        assert!(contract.stake_batch.is_none());
-        assert!(contract.redeem_stake_batch.is_none());
+        assert!(test_ctx.stake_batch.is_none());
+        assert!(test_ctx.redeem_stake_batch.is_none());
 
-        assert_eq!(contract.owner_id, TEST_OWNER_ID);
-        assert_eq!(contract.operator_id, TEST_OPERATOR_ID);
+        assert_eq!(test_ctx.owner_id, TEST_OWNER_ID);
+        assert_eq!(test_ctx.operator_id, TEST_OPERATOR_ID);
 
         println!(
             "initial_contract_storage_usage = {:?}",
-            contract.contract_initial_storage_usage
+            test_ctx.contract_initial_storage_usage
         );
     }
 }
