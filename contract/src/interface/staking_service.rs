@@ -368,15 +368,15 @@ pub trait StakingService {
     /// - if the contract is locked
     fn refresh_stake_token_value(&mut self) -> Promise;
 
-    /// If the STAKE token value was last updated within the same epoch, then it is considered current
-    /// and returned because staking rewards are distributed per epoch.
-    ///
-    /// Otherwise, the STAKE token value is considered stale and None is returned. This should signal
-    /// the client to refresh the STAKE token value - [`refresh_stake_token_value`].
+    /// Returns the latest cached STAKE token value
     ///
     /// ### NOTES
-    /// The STAKE token value is refreshed each time the NEAR is staked and when STAKE is redeemed.
-    fn stake_token_value(&self) -> Option<StakeTokenValue>;
+    /// - If the STAKE token value was last updated within the same epoch, then it is considered
+    ///   current because staking rewards are distributed per epoch.
+    /// - Otherwise, the STAKE token value is considered stale. If the client requires a current
+    ///   STAKE token value then use [`refresh_stake_token_value`].
+    /// - The STAKE token value is refreshed each time the NEAR is staked and when STAKE is redeemed.
+    fn stake_token_value(&self) -> StakeTokenValue;
 }
 
 pub mod events {

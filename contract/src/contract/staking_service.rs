@@ -468,23 +468,8 @@ impl StakingService for StakeTokenContract {
         }
     }
 
-    fn stake_token_value(&self) -> Option<interface::StakeTokenValue> {
-        if self.total_stake.amount().value() == 0 {
-            return Some(self.stake_token_value.into());
-        }
-
-        let current = env::epoch_height()
-            == self
-                .stake_token_value
-                .block_time_height()
-                .epoch_height()
-                .value();
-
-        if current {
-            Some(self.stake_token_value.into())
-        } else {
-            None
-        }
+    fn stake_token_value(&self) -> interface::StakeTokenValue {
+        self.stake_token_value.into()
     }
 }
 
@@ -1578,36 +1563,6 @@ mod test_stake_token_value {
     use near_sdk::{testing_env, MockedBlockchain};
 
     #[test]
-    fn total_stake_balance_is_zero() {
-        // Arrange
-        let mut test_context = TestContext::with_registered_account();
-
-        let mut context = test_context.context.clone();
-        context.epoch_height = 100;
-        testing_env!(context);
-        test_context.total_stake.credit(0.into());
-        test_context.update_stake_token_value(0.into());
-
-        // Act - explict false
-        let stake_token_value = test_context.stake_token_value();
-
-        // Assert
-        match stake_token_value {
-            Some(stake_token_value) => {
-                assert_eq!(
-                    stake_token_value.block_time_height.epoch_height,
-                    test_context
-                        .stake_token_value
-                        .block_time_height()
-                        .epoch_height()
-                        .into()
-                )
-            }
-            _ => panic!("expected value to be returned"),
-        }
-    }
-
-    #[test]
     fn is_current() {
         // Arrange
         let mut test_context = TestContext::with_registered_account();
@@ -1622,41 +1577,14 @@ mod test_stake_token_value {
         let stake_token_value = test_context.stake_token_value();
 
         // Assert
-        match stake_token_value {
-            Some(stake_token_value) => {
-                assert_eq!(
-                    stake_token_value.block_time_height.epoch_height,
-                    test_context
-                        .stake_token_value
-                        .block_time_height()
-                        .epoch_height()
-                        .into()
-                )
-            }
-            _ => panic!("expected value to be returned"),
-        }
-    }
-
-    #[test]
-    fn is_stale() {
-        // Arrange
-        let mut test_context = TestContext::with_registered_account();
-
-        let mut context = test_context.context.clone();
-        context.epoch_height = 100;
-        testing_env!(context);
-        test_context.total_stake.credit(YOCTO.into());
-        test_context.update_stake_token_value(YOCTO.into());
-
-        let mut context = test_context.context.clone();
-        context.epoch_height = 101;
-        testing_env!(context);
-
-        // Act - explict false
-        let stake_token_value = test_context.stake_token_value();
-
-        // Assert
-        assert!(stake_token_value.is_none());
+        assert_eq!(
+            stake_token_value.block_time_height.epoch_height,
+            test_context
+                .stake_token_value
+                .block_time_height()
+                .epoch_height()
+                .into()
+        );
     }
 }
 
