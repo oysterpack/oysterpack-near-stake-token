@@ -946,6 +946,7 @@ mod test_resolve_transfer_call {
     use super::*;
     use crate::near::YOCTO;
     use crate::test_utils::*;
+    use near_sdk::test_utils::get_logs;
     #[allow(unused_imports)]
     use near_sdk::{serde_json, testing_env, MockedBlockchain};
 
@@ -1073,6 +1074,9 @@ mod test_resolve_transfer_call {
             PromiseOrValue::Value(refund_amount) => assert_eq!(refund_amount.value(), 0),
             _ => panic!("expected value to be returned"),
         }
+
+        let logs = get_logs();
+        assert!(logs.is_empty());
     }
 
     #[test]
@@ -1120,6 +1124,12 @@ mod test_resolve_transfer_call {
                 .amount(),
             YOCTO.into()
         );
+
+        let logs = get_logs();
+        println!("{:?}", logs);
+        assert_eq!(logs.len(), 2);
+        assert_eq!(&logs[0], &format!("unused amount: {}", YOCTO));
+        assert_eq!(&logs[1], &format!("sender refunded: {}", YOCTO));
     }
 
     #[test]

@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 
-use crate::domain::TGAS;
 use crate::interface::AccountManagement;
 use crate::near_env::Env;
 use crate::{near::*, StakeTokenContract};
+use near_sdk::test_utils::VMContextBuilder;
 use near_sdk::{
     json_types::ValidAccountId,
     serde::{Deserialize, Serialize},
@@ -48,13 +48,14 @@ impl<'a> TestContext<'a> {
         }
     }
 
+    /// uses [`TEST_ACCOUNT_ID`] as the predecessor account ID
     pub fn new() -> Self {
         TestContext::with_vm_context(new_context(TEST_ACCOUNT_ID))
     }
 
+    /// uses [`TEST_ACCOUNT_ID`] as the predecessor account ID and registers the account with the contract
     pub fn with_registered_account() -> Self {
         let mut context = new_context(TEST_ACCOUNT_ID);
-        context.is_view = false;
         testing_env!(context.clone());
 
         let mut contract = StakeTokenContract::new(
@@ -119,24 +120,12 @@ impl<'a> DerefMut for TestContext<'a> {
 }
 
 pub fn new_context(predecessor_account_id: &str) -> VMContext {
-    VMContext {
-        current_account_id: "stake.oysterpack.near".to_string(),
-        signer_account_id: predecessor_account_id.to_string(),
-        signer_account_pk: vec![0, 1, 2],
-        predecessor_account_id: predecessor_account_id.to_string(),
-        input: vec![],
-        epoch_height: 0,
-        block_index: 0,
-        block_timestamp: 0,
-        account_balance: 10000 * YOCTO,
-        account_locked_balance: 0,
-        storage_usage: 400 * 1000,
-        attached_deposit: 0,
-        prepaid_gas: (TGAS * 200).value(),
-        random_seed: vec![0, 1, 2],
-        is_view: false,
-        output_data_receivers: vec![],
-    }
+    VMContextBuilder::new()
+        .current_account_id("stake.oysterpack.near".to_string())
+        .signer_account_id(predecessor_account_id.to_string())
+        .predecessor_account_id(predecessor_account_id.to_string())
+        .account_balance(10000 * YOCTO)
+        .build()
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
