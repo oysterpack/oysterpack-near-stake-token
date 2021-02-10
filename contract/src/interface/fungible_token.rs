@@ -173,6 +173,10 @@ pub trait ResolveTransferCall {
     ///
     /// Returns amount that was refunded back to the sender.
     ///
+    /// The callback should be designed to never panic.
+    /// - if the `sender_id` is not registered, then refunded STAKE tokens will be burned
+    /// - if the `receiver_id` is not registered, then the contract should be handle it
+    ///
     /// #\[private\]
     fn ft_resolve_transfer_call(
         &mut self,

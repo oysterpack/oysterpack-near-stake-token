@@ -162,6 +162,16 @@ impl Contract {
         }
     }
 
+    pub(crate) fn lookup_registered_account(&self, account_id: &str) -> Option<RegisteredAccount> {
+        let account_id_hash = Hash::from(account_id);
+        self.accounts
+            .get(&Hash::from(account_id))
+            .map(|account| RegisteredAccount {
+                account,
+                id: account_id_hash,
+            })
+    }
+
     pub(crate) fn predecessor_registered_account(&self) -> RegisteredAccount {
         self.registered_account(&env::predecessor_account_id())
     }

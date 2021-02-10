@@ -117,7 +117,7 @@ impl Contract {
             }
             _ => {
                 log!(
-                    "ERROR: transfer call failed on receiver contract - full transfer amount will be refunded"
+                    "ERR: transfer call failed on receiver contract - full transfer amount will be refunded"
                 );
                 transfer_amount.clone()
             }
@@ -149,26 +149,41 @@ impl ResolveTransferCall for Contract {
 
         let refund_amount = if unused_amount.value() > 0 {
             log!("unused amount: {}", unused_amount);
-            let mut sender = self.registered_account(sender_id.as_ref());
-            let mut receiver = self.registered_account(receiver_id.as_ref());
-            match receiver.stake.as_mut() {
-                Some(balance) => {
-                    let refund_amount = if balance.amount().value() < unused_amount.value() {
-                        log!("ERROR: partial amount will be refunded because receiver STAKE balance is insufficient");
-                        balance.amount()
-                    } else {
-                        unused_amount.value().into()
-                    };
-                    receiver.apply_stake_debit(refund_amount);
-                    sender.apply_stake_credit(refund_amount);
 
-                    self.save_registered_account(&receiver);
-                    self.save_registered_account(&sender);
-                    log!("sender refunded: {}", refund_amount.value());
-                    refund_amount.value().into()
-                }
+            match self.lookup_registered_account(receiver_id.as_ref()) {
+                Some(mut receiver) => match receiver.stake.as_mut() {
+                    Some(balance) => {
+                        let refund_amount = if balance.amount().value() < unused_amount.value() {
+                            log!("ERR: partial amount will be refunded because receiver STAKE balance is insufficient");
+                            balance.amount()
+                        } else {
+                            unused_amount.value().into()
+                        };
+                        receiver.apply_stake_debit(refund_amount);
+
+                        self.save_registered_account(&receiver);
+                        match self.lookup_registered_account(sender_id.as_ref()) {
+                            Some(mut sender) => {
+                                sender.apply_stake_credit(refund_amount);
+                                self.save_registered_account(&sender);
+                                log!("sender refunded: {}", refund_amount.value());
+                            }
+                            None => {
+                                log!("ERR: sender account is not registered - refund amount will be burned: {}", refund_amount);
+                                // NOTE: this has the effect of transferring the burned value to the STAKE token,
+                                // i.e., STAKE token value will increase when STAKE is burned
+                                self.total_stake.debit(refund_amount);
+                            }
+                        }
+                        refund_amount.value().into()
+                    }
+                    None => {
+                        log!("ERR: refund is not possible because receiver STAKE balance is zero");
+                        0.into()
+                    }
+                },
                 None => {
-                    log!("ERROR: refund is not possible because receiver STAKE balance is zero");
+                    log!("ERR: refund is not possible because receiver account is not registered");
                     0.into()
                 }
             }
@@ -1080,6 +1095,88 @@ mod test_resolve_transfer_call {
     }
 
     #[test]
+    pub fn ok_zero_refund_receiver_not_registered() {
+        // Arrange
+        let mut test_ctx = TestContext::with_registered_account();
+
+        let sender_id = test_ctx.account_id;
+        let receiver_id = "receiver.near";
+
+        set_env_with_promise_result(&mut test_ctx, promise_result_zero_refund);
+
+        // Act
+        let result = test_ctx.ft_resolve_transfer_call(
+            to_valid_account_id(sender_id),
+            to_valid_account_id(receiver_id),
+            YOCTO.into(),
+        );
+
+        // Assert
+        match result {
+            PromiseOrValue::Value(refund_amount) => assert_eq!(refund_amount.value(), 0),
+            _ => panic!("expected value to be returned"),
+        }
+
+        let logs = get_logs();
+        assert!(logs.is_empty());
+    }
+
+    #[test]
+    pub fn ok_zero_refund_sender_not_registered() {
+        // Arrange
+        let mut test_ctx = TestContext::new();
+
+        let sender_id = test_ctx.account_id;
+        let receiver_id = "receiver.near";
+        test_ctx.register_account(receiver_id);
+
+        set_env_with_promise_result(&mut test_ctx, promise_result_zero_refund);
+
+        // Act
+        let result = test_ctx.ft_resolve_transfer_call(
+            to_valid_account_id(sender_id),
+            to_valid_account_id(receiver_id),
+            YOCTO.into(),
+        );
+
+        // Assert
+        match result {
+            PromiseOrValue::Value(refund_amount) => assert_eq!(refund_amount.value(), 0),
+            _ => panic!("expected value to be returned"),
+        }
+
+        let logs = get_logs();
+        assert!(logs.is_empty());
+    }
+
+    #[test]
+    pub fn ok_zero_refund_sender_and_receiver_not_registered() {
+        // Arrange
+        let mut test_ctx = TestContext::new();
+
+        let sender_id = test_ctx.account_id;
+        let receiver_id = "receiver.near";
+
+        set_env_with_promise_result(&mut test_ctx, promise_result_zero_refund);
+
+        // Act
+        let result = test_ctx.ft_resolve_transfer_call(
+            to_valid_account_id(sender_id),
+            to_valid_account_id(receiver_id),
+            YOCTO.into(),
+        );
+
+        // Assert
+        match result {
+            PromiseOrValue::Value(refund_amount) => assert_eq!(refund_amount.value(), 0),
+            _ => panic!("expected value to be returned"),
+        }
+
+        let logs = get_logs();
+        assert!(logs.is_empty());
+    }
+
+    #[test]
     pub fn ok_with_refund() {
         // Arrange
         let mut test_ctx = TestContext::with_registered_account();
@@ -1130,6 +1227,143 @@ mod test_resolve_transfer_call {
         assert_eq!(logs.len(), 2);
         assert_eq!(&logs[0], &format!("unused amount: {}", YOCTO));
         assert_eq!(&logs[1], &format!("sender refunded: {}", YOCTO));
+    }
+
+    #[test]
+    pub fn ok_with_refund_with_sender_not_registered() {
+        // Arrange
+        let mut test_ctx = TestContext::new();
+
+        let sender_id = test_ctx.account_id;
+        let receiver_id = "receiver.near";
+        test_ctx.register_account(receiver_id);
+
+        // credit the receiver with STAKE
+        let mut receiver = test_ctx.registered_account(receiver_id);
+        receiver.apply_stake_credit((100 * YOCTO).into());
+        test_ctx.save_registered_account(&receiver);
+
+        set_env_with_promise_result(&mut test_ctx, promise_result_with_refund);
+        test_ctx.total_stake.credit((1000 * YOCTO).into());
+
+        // Act
+        let result = test_ctx.ft_resolve_transfer_call(
+            to_valid_account_id(sender_id),
+            to_valid_account_id(receiver_id),
+            YOCTO.into(),
+        );
+
+        // Assert
+        match result {
+            PromiseOrValue::Value(refund_amount) => assert_eq!(refund_amount.value(), YOCTO),
+            _ => panic!("expected value to be returned"),
+        }
+
+        assert_eq!(
+            test_ctx
+                .registered_account(receiver_id)
+                .stake
+                .unwrap()
+                .amount(),
+            (99 * YOCTO).into()
+        );
+        assert_eq!(
+            test_ctx.total_stake.amount(),
+            (999 * YOCTO).into(),
+            "refund amount should have been burned"
+        );
+
+        let logs = get_logs();
+        println!("{:?}", logs);
+        assert_eq!(logs.len(), 2);
+        assert_eq!(&logs[0], &format!("unused amount: {}", YOCTO));
+        assert_eq!(
+            &logs[1],
+            &format!(
+                "ERR: sender account is not registered - refund amount will be burned: {}",
+                YOCTO
+            )
+        );
+    }
+
+    #[test]
+    pub fn ok_with_refund_with_receiver_not_registered() {
+        // Arrange
+        let mut test_ctx = TestContext::with_registered_account();
+
+        let sender_id = test_ctx.account_id;
+        let receiver_id = "receiver.near";
+
+        set_env_with_promise_result(&mut test_ctx, promise_result_with_refund);
+        test_ctx.total_stake.credit((1000 * YOCTO).into());
+
+        // Act
+        let result = test_ctx.ft_resolve_transfer_call(
+            to_valid_account_id(sender_id),
+            to_valid_account_id(receiver_id),
+            YOCTO.into(),
+        );
+
+        // Assert
+        match result {
+            PromiseOrValue::Value(refund_amount) => assert_eq!(refund_amount.value(), 0),
+            _ => panic!("expected value to be returned"),
+        }
+
+        assert_eq!(
+            test_ctx.total_stake.amount(),
+            (1000 * YOCTO).into(),
+            "STAKE supply should not be affected"
+        );
+
+        let logs = get_logs();
+        println!("{:?}", logs);
+        assert_eq!(logs.len(), 2);
+        assert_eq!(&logs[0], &format!("unused amount: {}", YOCTO));
+        assert_eq!(
+            &logs[1],
+            "ERR: refund is not possible because receiver account is not registered"
+        );
+    }
+
+    #[test]
+    pub fn ok_with_refund_with_sender_and_receiver_not_registered() {
+        // Arrange
+        let mut test_ctx = TestContext::new();
+
+        let sender_id = test_ctx.account_id;
+        let receiver_id = "receiver.near";
+
+        set_env_with_promise_result(&mut test_ctx, promise_result_with_refund);
+        test_ctx.total_stake.credit((1000 * YOCTO).into());
+
+        // Act
+        let result = test_ctx.ft_resolve_transfer_call(
+            to_valid_account_id(sender_id),
+            to_valid_account_id(receiver_id),
+            YOCTO.into(),
+        );
+
+        // Assert
+        match result {
+            PromiseOrValue::Value(refund_amount) => assert_eq!(refund_amount.value(), 0),
+            _ => panic!("expected value to be returned"),
+        }
+
+        assert_eq!(
+            test_ctx.total_stake.amount(),
+            (1000 * YOCTO).into(),
+            "STAKE supply should not be affected"
+        );
+
+        let logs = get_logs();
+        println!("{:?}", logs);
+        assert_eq!(logs.len(), 2);
+        assert_eq!(&logs[0], &format!("unused amount: {}", YOCTO));
+        assert_eq!(
+            &logs[1],
+            "ERR: refund is not possible because receiver account is not registered"
+        );
     }
 
     #[test]
