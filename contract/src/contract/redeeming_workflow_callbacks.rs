@@ -20,7 +20,7 @@ use crate::{
 use near_sdk::{env, near_bindgen, Promise, PromiseOrValue};
 
 #[near_bindgen]
-impl StakeTokenContract {
+impl Contract {
     #[private]
     pub fn on_run_redeem_stake_batch(
         &mut self,
@@ -126,7 +126,7 @@ impl StakeTokenContract {
     }
 }
 
-impl StakeTokenContract {
+impl Contract {
     fn create_redeem_stake_batch_receipt(&mut self) {
         let batch = self.redeem_stake_batch.expect(STAKE_BATCH_SHOULD_EXIST);
         let batch_receipt = batch.create_receipt(self.stake_token_value);
@@ -146,7 +146,7 @@ impl StakeTokenContract {
 }
 
 /// redeeming STAKE workflow callback invocations
-impl StakeTokenContract {
+impl Contract {
     pub(crate) fn invoke_on_run_redeem_stake_batch(&self) -> Promise {
         ext_redeeming_workflow_callbacks::on_run_redeem_stake_batch(
             &env::current_account_id(),

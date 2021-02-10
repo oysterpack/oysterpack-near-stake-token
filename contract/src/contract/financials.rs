@@ -9,7 +9,7 @@ use crate::*;
 use near_sdk::near_bindgen;
 
 #[near_bindgen]
-impl ContractFinancials for StakeTokenContract {
+impl ContractFinancials for Contract {
     fn balances(&self) -> ContractBalances {
         ContractBalances {
             total_contract_balance: env::account_balance().into(),
@@ -45,7 +45,7 @@ impl ContractFinancials for StakeTokenContract {
     }
 }
 
-impl StakeTokenContract {
+impl Contract {
     pub fn total_contract_storage_usage_cost(&self) -> YoctoNear {
         (env::storage_usage() as u128 * self.config.storage_cost_per_byte().value()).into()
     }

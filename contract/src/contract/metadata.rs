@@ -9,7 +9,7 @@ use near_sdk::{
 const METADATA_FT: &str = "http://near.org/contract/metadata/fungible-token";
 
 #[near_bindgen]
-impl MetaData for StakeTokenContract {
+impl MetaData for Contract {
     fn metadata(uri: String) -> Option<Value> {
         match uri.as_str() {
             METADATA_FT => {

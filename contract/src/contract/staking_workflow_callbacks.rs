@@ -10,7 +10,7 @@ use crate::{
 use near_sdk::{env, near_bindgen, Promise};
 
 #[near_bindgen]
-impl StakeTokenContract {
+impl Contract {
     /// if unstaked balance is non-zero and liquidity is needed for pending withdrawal, then
     /// [add_liquidity_then_deposit_and_stake](StakeTokenContract::add_liquidity_then_deposit_and_stake)
     ///
@@ -142,7 +142,7 @@ impl StakeTokenContract {
     }
 }
 
-impl StakeTokenContract {
+impl Contract {
     pub fn mint_stake_and_update_stake_token_value(
         &mut self,
         staked_balance: YoctoNear,
@@ -261,7 +261,7 @@ impl StakeTokenContract {
 }
 
 /// staking NEAR workflow callback invocations
-impl StakeTokenContract {
+impl Contract {
     pub(crate) fn invoke_on_run_stake_batch(&self) -> Promise {
         ext_staking_workflow_callbacks::on_run_stake_batch(
             &env::current_account_id(),

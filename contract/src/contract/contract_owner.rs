@@ -10,7 +10,7 @@ use crate::*;
 use near_sdk::{json_types::ValidAccountId, near_bindgen, Promise};
 
 #[near_bindgen]
-impl ContractOwner for StakeTokenContract {
+impl ContractOwner for Contract {
     fn owner_id(&self) -> AccountId {
         self.owner_id.clone()
     }

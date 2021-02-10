@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::domain::YoctoNear;
 use crate::near::NO_DEPOSIT;
-use crate::StakeTokenContract;
+use crate::Contract;
 use near_sdk::{
     env,
     json_types::U128,
@@ -172,7 +172,7 @@ impl From<YoctoNear> for UnStakeArgs {
     }
 }
 
-impl StakeTokenContract {
+impl Contract {
     pub(crate) fn staking_pool_promise(&self) -> StakingPoolPromiseBuilder {
         StakingPoolPromiseBuilder::new(self.staking_pool_id.clone(), &self.config)
     }

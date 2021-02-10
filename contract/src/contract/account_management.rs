@@ -17,7 +17,7 @@ use near_sdk::{
 };
 
 #[near_bindgen]
-impl AccountManagement for StakeTokenContract {
+impl AccountManagement for Contract {
     /// ## Logic
     /// - check attached deposit
     ///   - assert amount is enough to cover storage fees
@@ -148,7 +148,7 @@ impl AccountManagement for StakeTokenContract {
     }
 }
 
-impl StakeTokenContract {
+impl Contract {
     /// ## Panics
     /// if account is not registered
     pub(crate) fn registered_account(&self, account_id: &str) -> RegisteredAccount {

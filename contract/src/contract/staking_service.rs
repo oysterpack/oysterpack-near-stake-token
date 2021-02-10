@@ -34,7 +34,7 @@ use near_sdk::{
 };
 
 #[near_bindgen]
-impl StakingService for StakeTokenContract {
+impl StakingService for Contract {
     fn staking_pool_id(&self) -> AccountId {
         self.staking_pool_id.clone()
     }
@@ -474,7 +474,7 @@ impl StakingService for StakeTokenContract {
 }
 
 // staking pool func call invocations
-impl StakeTokenContract {
+impl Contract {
     fn log_stake_batch(&self, batch_id: domain::BatchId) {
         if let Some(batch) = self.stake_batch {
             if batch_id == batch.id() {
@@ -509,7 +509,7 @@ impl StakeTokenContract {
 }
 
 /// NEAR transfers
-impl StakeTokenContract {
+impl Contract {
     fn withdraw_near_funds(&mut self, account: &mut RegisteredAccount, amount: domain::YoctoNear) {
         self.claim_receipt_funds(account);
         account.apply_near_debit(amount);
@@ -550,7 +550,7 @@ impl StakeTokenContract {
     }
 }
 
-impl StakeTokenContract {
+impl Contract {
     fn run_stake_batch(&mut self) -> Promise {
         assert!(self.can_run_batch(), BLOCKED_BY_BATCH_RUNNING);
         let batch = self.stake_batch.expect(STAKE_BATCH_SHOULD_EXIST);
@@ -867,7 +867,7 @@ impl StakeTokenContract {
 
     fn claim_stake_batch_receipts(&mut self, account: &mut Account) -> bool {
         fn claim_stake_tokens_for_batch(
-            contract: &mut StakeTokenContract,
+            contract: &mut Contract,
             account: &mut Account,
             batch: StakeBatch,
             mut receipt: domain::StakeBatchReceipt,
@@ -922,7 +922,7 @@ impl StakeTokenContract {
     /// claim NEAR tokens for redeeming STAKE
     fn claim_redeem_stake_batch_receipts(&mut self, account: &mut Account) -> bool {
         fn claim_redeemed_stake_for_batch(
-            contract: &mut StakeTokenContract,
+            contract: &mut Contract,
             account: &mut Account,
             account_batch: domain::RedeemStakeBatch,
             mut receipt: domain::RedeemStakeBatchReceipt,
@@ -950,7 +950,7 @@ impl StakeTokenContract {
 
         /// for a pending withdrawal, funds can also be claimed against the liquidity pool
         fn claim_redeemed_stake_for_batch_pending_withdrawal(
-            contract: &mut StakeTokenContract,
+            contract: &mut Contract,
             account: &mut Account,
             account_batch: &mut domain::RedeemStakeBatch,
             mut receipt: domain::RedeemStakeBatchReceipt,
@@ -1230,7 +1230,7 @@ pub trait Callbacks {
 }
 
 #[near_bindgen]
-impl StakeTokenContract {
+impl Contract {
     #[private]
     pub fn on_refresh_stake_token_value(
         &mut self,
@@ -1246,7 +1246,7 @@ impl StakeTokenContract {
     }
 }
 
-impl StakeTokenContract {
+impl Contract {
     fn invoke_refresh_stake_token_value(&self) -> Promise {
         ext_callbacks::on_refresh_stake_token_value(
             &env::current_account_id(),
@@ -1286,7 +1286,7 @@ mod test_deposit {
         context.storage_usage = env::storage_usage();
 
         fn check_stake_batch(
-            test_context: &mut StakeTokenContract,
+            test_context: &mut Contract,
             context: VMContext,
             batch_id: BatchId,
             expected_balance: YoctoNear,

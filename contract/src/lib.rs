@@ -144,7 +144,7 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
-pub struct StakeTokenContract {
+pub struct Contract {
     /// contract owner
     owner_id: AccountId,
 
@@ -239,7 +239,7 @@ pub struct StakeTokenContract {
 }
 
 #[near_bindgen]
-impl StakeTokenContract {
+impl Contract {
     /// ## Notes
     /// - when the contract is deployed it will measure account storage usage
     /// - owner account ID defaults to the operator account ID
@@ -324,7 +324,7 @@ impl StakeTokenContract {
     }
 }
 
-impl StakeTokenContract {
+impl Contract {
     /// this is used to compute the storage usage fees to charge for account registration
     /// - the account is responsible to pay for its storage fees - account storage is allocated, measured,
     ///   and then freed
@@ -368,7 +368,7 @@ mod test {
         context.block_index = 10;
         testing_env!(context);
 
-        StakeTokenContract::default();
+        Contract::default();
     }
 
     /// When the contract is deployed

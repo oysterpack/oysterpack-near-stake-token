@@ -9,7 +9,7 @@ use crate::{
 use near_sdk::near_bindgen;
 
 #[near_bindgen]
-impl Operator for StakeTokenContract {
+impl Operator for Contract {
     fn operator_id(&self) -> AccountId {
         self.operator_id.clone()
     }

@@ -13,7 +13,7 @@ use near_sdk::{
 use near_sdk::{AccountId, PromiseOrValue};
 
 #[near_bindgen]
-impl FungibleToken for StakeTokenContract {
+impl FungibleToken for Contract {
     #[payable]
     fn ft_transfer(
         &mut self,
@@ -83,7 +83,7 @@ impl FungibleToken for StakeTokenContract {
     }
 }
 
-impl StakeTokenContract {
+impl Contract {
     fn resolve_transfer_gas(&self) -> u64 {
         self.config
             .gas_config()
@@ -137,7 +137,7 @@ impl StakeTokenContract {
 }
 
 #[near_bindgen]
-impl ResolveTransferCall for StakeTokenContract {
+impl ResolveTransferCall for Contract {
     #[private]
     fn ft_resolve_transfer_call(
         &mut self,

@@ -14,10 +14,10 @@ pub use staking_service::*;
 use crate::errors::asserts::{
     PREDECESSOR_MUST_BE_OPERATOR, PREDECESSOR_MUST_BE_OWNER, PREDECESSOR_MUST_NE_SELF_OR_OPERATOR,
 };
-use crate::StakeTokenContract;
+use crate::Contract;
 use near_sdk::{env, PromiseResult};
 
-impl StakeTokenContract {
+impl Contract {
     pub fn assert_predecessor_is_self_or_operator(&self) {
         let predecessor_account_id = env::predecessor_account_id();
         assert!(
@@ -51,7 +51,7 @@ impl StakeTokenContract {
 }
 
 #[cfg(not(test))]
-impl StakeTokenContract {
+impl Contract {
     /// checks if the first PromiseResult was successful
     ///
     /// ## Panics
@@ -70,7 +70,7 @@ impl StakeTokenContract {
 
 /// in order to make it easier to unit test Promise func callbacks, we need to abstract away the near env
 #[cfg(test)]
-impl StakeTokenContract {
+impl Contract {
     /// checks if the first PromiseResult was successful
     ///
     /// ## Panics

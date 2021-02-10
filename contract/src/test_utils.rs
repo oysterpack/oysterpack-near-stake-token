@@ -2,7 +2,7 @@
 
 use crate::interface::AccountManagement;
 use crate::near_env::Env;
-use crate::{near::*, StakeTokenContract};
+use crate::{near::*, Contract};
 use near_sdk::test_utils::VMContextBuilder;
 use near_sdk::{
     json_types::ValidAccountId,
@@ -15,7 +15,7 @@ use std::convert::TryInto;
 use std::ops::{Deref, DerefMut};
 
 pub struct TestContext<'a> {
-    pub contract: StakeTokenContract,
+    pub contract: Contract,
     pub account_id: &'a str,
     pub context: VMContext,
 }
@@ -35,7 +35,7 @@ impl<'a> TestContext<'a> {
         context.is_view = false;
         testing_env!(context.clone());
 
-        let contract = StakeTokenContract::new(
+        let contract = Contract::new(
             to_valid_account_id(TEST_STAKING_POOL_ID),
             to_valid_account_id(TEST_OWNER_ID),
             to_valid_account_id(TEST_OPERATOR_ID),
@@ -58,7 +58,7 @@ impl<'a> TestContext<'a> {
         let mut context = new_context(TEST_ACCOUNT_ID);
         testing_env!(context.clone());
 
-        let mut contract = StakeTokenContract::new(
+        let mut contract = Contract::new(
             to_valid_account_id(TEST_STAKING_POOL_ID),
             to_valid_account_id(TEST_OWNER_ID),
             to_valid_account_id(TEST_OPERATOR_ID),
@@ -106,7 +106,7 @@ impl<'a> TestContext<'a> {
 }
 
 impl<'a> Deref for TestContext<'a> {
-    type Target = StakeTokenContract;
+    type Target = Contract;
 
     fn deref(&self) -> &Self::Target {
         &self.contract
@@ -162,7 +162,7 @@ pub fn deserialize_receipts() -> Vec<Receipt> {
         .collect()
 }
 
-pub fn set_env_with_success_promise_result(contract: &mut StakeTokenContract) {
+pub fn set_env_with_success_promise_result(contract: &mut Contract) {
     pub fn promise_result(_result_index: u64) -> PromiseResult {
         PromiseResult::Successful(vec![])
     }
@@ -178,7 +178,7 @@ pub fn set_env_with_success_promise_result(contract: &mut StakeTokenContract) {
 }
 
 pub fn set_env_with_promise_result(
-    contract: &mut StakeTokenContract,
+    contract: &mut Contract,
     promise_result: fn(u64) -> PromiseResult,
 ) {
     pub fn promise_results_count() -> u64 {
@@ -191,7 +191,7 @@ pub fn set_env_with_promise_result(
     });
 }
 
-pub fn set_env_with_failed_promise_result(contract: &mut StakeTokenContract) {
+pub fn set_env_with_failed_promise_result(contract: &mut Contract) {
     pub fn promise_result(_result_index: u64) -> PromiseResult {
         PromiseResult::Failed
     }
