@@ -32,7 +32,7 @@ impl TransferReceiver for TransferReceiverMock {
         msg: String,
     ) -> PromiseOrValue<TokenAmount> {
         log!("{:#?}", msg);
-        let msg = Message::try_from(&msg).expect("invalid msg");
+        let msg = Message::try_from(msg.as_str()).expect("invalid msg");
         match msg {
             Message::Panic => panic!("BOOM!"),
             Message::Accept {
