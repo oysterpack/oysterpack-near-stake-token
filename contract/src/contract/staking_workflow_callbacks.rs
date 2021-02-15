@@ -12,7 +12,7 @@ use near_sdk::{env, near_bindgen, Promise};
 #[near_bindgen]
 impl Contract {
     /// if unstaked balance is non-zero and liquidity is needed for pending withdrawal, then
-    /// [add_liquidity_then_deposit_and_stake](StakeTokenContract::add_liquidity_then_deposit_and_stake)
+    /// [add_liquidity_then_deposit_and_stake](Contract::add_liquidity_then_deposit_and_stake)
     ///
     /// else kickoff the following promise chain:
     /// 1. deposit and stake funds into staking pool
