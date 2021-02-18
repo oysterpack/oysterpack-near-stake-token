@@ -25,3 +25,9 @@ impl YoctoNear {
         self.0 .0
     }
 }
+
+impl Default for YoctoNear {
+    fn default() -> Self {
+        Self(U128(0))
+    }
+}

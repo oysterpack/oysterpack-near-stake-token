@@ -1,13 +1,14 @@
-pub mod account_management;
-pub mod contract_owner;
-pub mod financials;
-mod fungible_token;
-pub mod metadata;
-pub mod operator;
-pub mod redeeming_workflow_callbacks;
+pub(crate) mod account_management;
+pub(crate) mod account_storage;
+pub(crate) mod contract_owner;
+pub(crate) mod financials;
+pub(crate) mod fungible_token;
+pub(crate) mod metadata;
+pub(crate) mod operator;
+pub(crate) mod redeeming_workflow_callbacks;
 pub(crate) mod staking_pool;
-pub mod staking_service;
-pub mod staking_workflow_callbacks;
+pub(crate) mod staking_service;
+pub(crate) mod staking_workflow_callbacks;
 
 pub use staking_service::*;
 

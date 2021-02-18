@@ -1,3 +1,4 @@
+use crate::near::assert_yocto_near_attached;
 use crate::*;
 use crate::{
     core::Hash,
@@ -193,14 +194,6 @@ impl ResolveTransferCall for Contract {
 
         PromiseOrValue::Value(refund_amount)
     }
-}
-
-fn assert_yocto_near_attached() {
-    assert_eq!(
-        env::attached_deposit(),
-        1,
-        "exactly 1 yoctoNEAR must be attached"
-    )
 }
 
 fn assert_token_amount_not_zero(amount: &TokenAmount) {

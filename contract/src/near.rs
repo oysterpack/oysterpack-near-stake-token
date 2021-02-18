@@ -26,3 +26,12 @@ pub const UNSTAKED_NEAR_FUNDS_NUM_EPOCHS_TO_UNLOCK: EpochHeight = EpochHeight(4)
 pub fn log<T: Debug>(event: T) {
     env::log(format!("{:#?}", event).as_bytes());
 }
+
+/// used to protect functions that transfer value against FCAK calls
+pub(crate) fn assert_yocto_near_attached() {
+    assert_eq!(
+        env::attached_deposit(),
+        1,
+        "exactly 1 yoctoNEAR must be attached"
+    )
+}

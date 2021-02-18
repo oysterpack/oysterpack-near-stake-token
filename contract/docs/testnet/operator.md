@@ -4,7 +4,7 @@ near view $CONTRACT contract_state
 
 near view $CONTRACT config
 
-near view $CONTRACT metadata
+near view $CONTRACT metadata --args '{"uri":"http://near.org/contract/metadata/fungible-token"}'
 ```
 
 ### Stateful Func Calls

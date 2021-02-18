@@ -9,6 +9,7 @@ pub mod asserts {
         "operator account ID must not be the contract account ID";
     pub const PREDECESSOR_MUST_BE_OWNER: &str =
         "contract call is only allowed by the contract owner";
+    pub const ATTACHED_DEPOSIT_IS_REQUIRED: &str = "attached deposit is required";
 }
 
 pub mod staking_pool_failures {
