@@ -21,18 +21,7 @@ impl AccountStorage for Contract {
             |account_id| account_id.as_ref().to_string(),
         );
         match self.lookup_registered_account(&account_id) {
-            // register the account
-            None => {
-                assert!(
-                    env::attached_deposit() >= self.account_storage_fee().value(),
-                    INSUFFICIENT_STORAGE_FEE,
-                );
-                let account = Account::new(env::attached_deposit().into());
-                self.save_registered_account(&RegisteredAccount {
-                    account,
-                    id: Hash::from(&account_id),
-                });
-            }
+            None => self._register_account(&account_id),
             // deposit funds into account storage escrow
             Some(mut account) => {
                 account
@@ -88,6 +77,18 @@ impl AccountStorage for Contract {
 }
 
 impl Contract {
+    fn _register_account(&mut self, account_id: &str) {
+        assert!(
+            env::attached_deposit() >= self.account_storage_fee().value(),
+            INSUFFICIENT_STORAGE_FEE,
+        );
+        let account = Account::new(env::attached_deposit().into());
+        self.save_registered_account(&RegisteredAccount {
+            account,
+            id: Hash::from(account_id),
+        });
+    }
+
     /// accounts for changes in storage storage fees, i.e., if storage prices are lowered, then this
     /// will be reflected in the available balance.
     fn _storage_balance_of(&self, account_id: &str) -> AccountStorageBalance {
